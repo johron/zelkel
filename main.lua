@@ -48,7 +48,7 @@ local function rot()
     table.insert(stack, b)
 end
 
-local function dump()
+local function echo()
     print(stack:pop())
 end
 
@@ -73,7 +73,7 @@ end
     sub(),
     rot(),
     sub(),
-    dump()
+    echo()
 }]]
 
 local function print_table(table)
@@ -83,15 +83,27 @@ local function print_table(table)
 end
 
 local function is_alpha(str)
-    return str:match("^[%a]+$") ~= nil
+    return str:match("^[a-zA-Z_]+$") ~= nil
+end
+
+local function check_pattern(str, pat)
+    local value = string.match(str, pat)
+
+    if value then
+        return value
+    else
+        return nil
+    end
 end
 
 local file = io.open("test.sl", "rb")
-if not file then print("no 'test.sl' file") os.exit(1)  end
+if not file then print("No 'test.sl' file") os.exit(1)  end
 local content = file:read("a")
 file:close()
 
 print(content)
+print("div\n")
+
 
 --[[
  - TYPE(val?, ...)
@@ -109,9 +121,8 @@ end
 
 local toks = {}
 local i = 1
-while i - 1 < #chars do
+while i <= #chars do
     local c = chars[i]
-
     if tonumber(c) then
         local num = c
         local j = i + 1
@@ -142,3 +153,40 @@ while i - 1 < #chars do
 end
 
 print_table(toks)
+
+print("div\n")
+
+local p = {
+    int = "^INT%((%-?%d+)%)$",
+    op = "^OP%(([%+%-%*/])%)$",
+    id = "^ID%(([a-zA-Z_]+)%)$"
+}
+
+i = 1
+while i <= #toks do
+    local t = toks[i]
+    if check_pattern(t, p.int) then
+        local value = check_pattern(t, p.int)
+        push(value)
+    elseif check_pattern(t, p.id) then
+        local value = check_pattern(t, p.id)
+        if value == "echo" then
+            echo()
+        elseif value == "peek" then
+            peek()
+        end
+    elseif check_pattern(t, p.op) then
+        local s = check_pattern(t, p.op)
+        if s == "+" then
+            add()
+        elseif s == "-" then
+            sub()
+        elseif s == "*" then
+            mul()
+        elseif s == "/" then
+            div()
+        end
+    end
+
+    i = i + 1
+end
