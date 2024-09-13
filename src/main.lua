@@ -103,8 +103,8 @@ local function check_pattern(str, pat)
     end
 end
 
-local file = io.open("test.sl", "rb")
-if not file then print("No 'test.sl' file") os.exit(1)  end
+local file = io.open("test.stabel", "rb")
+if not file then print("No 'test.stabel' file") os.exit(1)  end
 local content = file:read("a")
 file:close()
 
