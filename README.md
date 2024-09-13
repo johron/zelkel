@@ -29,3 +29,4 @@ int main() {
 - [ ] More stack operations: three way rotation
 - [ ] Identifier can contain numbers, but not start with them, atm only alphabetic characters plus underscore is allowed
 - [ ] Recursion
+- [ ] Remove dependence on c libraies: stdlib.h and stdio.h
