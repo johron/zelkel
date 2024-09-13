@@ -183,8 +183,8 @@ local code = [[
 
 int stack[MAX_SIZE];
 int top = -1;
-int _;
-int __;
+int __a__;
+int __b__;
 
 void push(int item) {
 if (top == MAX_SIZE - 1) {
@@ -230,9 +230,9 @@ while i <= #toks do
                 peek()
             else
                 code = code .. "// " .. t .. "\n"
-                code = code .. "_ = pop();\n"
-                code = code .. "push(_);\n"
-                code = code .. "printf(\"%d\\n\", _);\n"
+                code = code .. "__a__ = pop();\n"
+                code = code .. "push(__a__);\n"
+                code = code .. "printf(\"%d\\n\", __a__);\n"
             end
         end
     elseif check_pattern(t, p.op) then
@@ -242,51 +242,51 @@ while i <= #toks do
                 add()
             else
                 code = code .. "// " .. t .. "\n"
-                code = code .. "_ = pop();\n"
-                code = code .. "push(pop() + _);\n"
+                code = code .. "__a__ = pop();\n"
+                code = code .. "push(pop() + __a__);\n"
             end
         elseif s == "-" then
             if sim then
                 sub()
             else
                 code = code .. "// " .. t .. "\n"
-                code = code .. "_ = pop();\n"
-                code = code .. "push(pop() - _);\n"
+                code = code .. "__a__ = pop();\n"
+                code = code .. "push(pop() - __a__);\n"
             end
         elseif s == "*" then
             if sim then
                 mul()
             else
                 code = code .. "// " .. t .. "\n"
-                code = code .. "_ = pop();\n"
-                code = code .. "push(pop() * _);\n"
+                code = code .. "__a__ = pop();\n"
+                code = code .. "push(pop() * __a__);\n"
             end
         elseif s == "/" then
             if sim then
                 div()
             else
                 code = code .. "// " .. t .. "\n"
-                code = code .. "_ = pop();\n"
-                code = code .. "push(pop() / _);\n"
+                code = code .. "__a__ = pop();\n"
+                code = code .. "push(pop() / __a__);\n"
             end
         elseif s == "@" then
             if sim then
                 rot()
             else
                 code = code .. "// " .. t .. "\n"
-                code = code .. "_ = pop();\n"
-                code = code .. "__ = pop();\n"
-                code = code .. "push(_);\n"
-                code = code .. "push(__);\n"
+                code = code .. "__a__ = pop();\n"
+                code = code .. "__b__ = pop();\n"
+                code = code .. "push(__a__);\n"
+                code = code .. "push(__b__);\n"
             end
         elseif s == ":" then
             if sim then
                 dup()
             else
                 code = code .. "// " .. t .. "\n"
-                code = code .. "_ = pop();\n"
-                code = code .. "push(_);\n"
-                code = code .. "push(_);\n"
+                code = code .. "__a__ = pop();\n"
+                code = code .. "push(__a__);\n"
+                code = code .. "push(__a__);\n"
             end
         else
             print("Unrecognized token " .. t)
