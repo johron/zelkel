@@ -26,3 +26,5 @@ int main() {
 ```
 - [ ] Rewrite in itself
 - [ ] Right now variable definitions are global and variables in differnt functions cant have the same name, do something like (proc name)_(var name)
+- [ ] More stack operations: three way rotation
+- [ ] Identifier can contain numbers, but not start with them, atm only alphabetic characters plus underscore is allowed
