@@ -228,7 +228,7 @@ while i <= #toks do
             code = code .. "printf(\"%d\\n\", __a__);\n"
         elseif value == "end" then
             code = code .. "}\n"
-        elseif value == "then" then
+        elseif value == "in" then
             if not (toks[i - 1] and (check_pattern(toks[i - 1], p.op) == "=" or check_pattern(toks[i - 1], p.op) == "!")) then
                 print("The word `then` must have an equal or not equal symbol")
                 os.exit(1)
@@ -282,7 +282,7 @@ while i <= #toks do
         elseif s == "=" then
             code = code .. "__b__ = pop();\n"
             code = code .. "__a__ = pop();\n"
-            if toks[i + 1] and check_pattern(toks[i + 1], p.id) == "then" then
+            if toks[i + 1] and check_pattern(toks[i + 1], p.id) == "in" then
                 code = code .. "if (__a__ == __b__) {\n"
             else
                 code = code .. "push(__a__ == __b__);\n"

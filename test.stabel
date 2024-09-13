@@ -1,7 +1,7 @@
 4 4 * x def
 
-x 16 = then
+x 16 = in
     1 echo
-! then
+! in
     0 echo
 end
