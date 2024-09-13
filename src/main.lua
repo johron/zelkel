@@ -205,11 +205,10 @@ exit(1);
 }
 return stack[top--];
 }
-
-void main() {
 ]]
 
 local defs = {}
+local procs = {}
 
 i = 1
 while i <= #toks do
@@ -226,21 +225,45 @@ while i <= #toks do
             code = code .. "__a__ = pop();\n"
             code = code .. "push(__a__);\n"
             code = code .. "printf(\"%d\\n\", __a__);\n"
+        elseif value == "proc" then
+            local name = check_pattern(toks[i - 1], p.id)
+            if toks[i - 1] and name then
+                if has_value(defs, name) then
+                    print("Name is in use by a defintion: " .. name)
+                    os.exit(1)
+                end
+                if has_value(procs, name) then
+                    print("Name is in use by another procedure: " .. name)
+                    os.exit(1)
+                end
+
+                code = code .. "void " .. name .. "() {\n"
+                table.insert(procs, name)
+            else
+                print("The word `proc` must have an identifier before it")
+                os.exit(1)
+            end
+        elseif value == "drop" then
+            code = code .. "__a__ = pop();\n"
         elseif value == "end" then
             code = code .. "}\n"
         elseif value == "in" then
-            if not (toks[i - 1] and (check_pattern(toks[i - 1], p.op) == "=" or check_pattern(toks[i - 1], p.op) == "!")) then
-                print("The word `then` must have an equal or not equal symbol")
+            if not (toks[i - 1] and (check_pattern(toks[i - 1], p.op) == "=" or check_pattern(toks[i - 1], p.op) == "!") or check_pattern(toks[i -1], p.id) == "proc") then
+                print("The word `in` cannot initiate a body here")
                 os.exit(1)
             end
         elseif value == "def" then
-            local var = check_pattern(toks[i - 1], p.id)
-            if toks[i - 1] and var then
-                if has_value(defs, var) then
-                    code = code .. var .. " = pop();\n"
+            local name = check_pattern(toks[i - 1], p.id)
+            if toks[i - 1] and name then
+                if has_value(procs, name) then
+                    print("Name is in use by a procedure: " .. name)
+                    os.exit(1)
+                end
+                if has_value(defs, name) then
+                    code = code .. name .. " = pop();\n"
                 else
-                    code = code .. "int " .. var .. " = pop();\n"
-                    table.insert(defs, var)
+                    code = code .. "int " .. name .. " = pop();\n"
+                    table.insert(defs, name)
                 end
             else
                 print("The word `def` must have an identifier before it")
@@ -250,8 +273,15 @@ while i <= #toks do
             if toks[i + 1] and check_pattern(toks[i + 1], p.id) ~= "def" then
                 code = code .. "push(" .. value .. ");\n"
             end
+        elseif has_value(procs, value) then
+            if toks[i + 1] and check_pattern(toks[i + 1], p.id) ~= "proc" then
+                code = code .. value .. "();\n"
+                code = code .. "push(pop());\n"
+            end
         else
-            if not (toks[i + 1] and check_pattern(toks[i + 1], p.id) == "def") then
+            if toks[i + 1] and check_pattern(toks[i + 1], p.id) ~= "def" then
+            elseif toks[i + 1] and check_pattern(toks[i + 1], p.id) ~= "proc" then
+            else
                 print("Unrecognized identifier: " .. value)
                 os.exit(1)
             end
@@ -302,7 +332,6 @@ while i <= #toks do
     i = i + 1
 end
 
-code = code .. "}"
 local out = io.open("test.c", "w")
 if out == nil then
     print("file is nil")

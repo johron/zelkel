@@ -1,7 +1,15 @@
-4 4 * x def
+fib proc in
+    a def
+    b def
+    a
+    a b +
+end
 
-x 16 = in
-    1 echo
-! in
-    0 echo
+main proc in
+    0 1
+    fib peek
+    fib peek
+    fib peek
+    fib peek
+    fib peek
 end
