@@ -103,6 +103,16 @@ local function check_pattern(str, pat)
     end
 end
 
+local function has_value(arr, val)
+    for index, value in ipairs(arr) do
+        if value == val then
+            return true
+        end
+    end
+
+    return false
+end
+
 local file = io.open("test.stabel", "rb")
 if not file then print("No 'test.stabel' file") os.exit(1)  end
 local content = file:read("a")
@@ -148,7 +158,7 @@ while i <= #chars do
         end
         table.insert(toks, "ID(" .. str .. ")")
         i = j - 1
-    elseif c == "+" or c == "-" or c == "*" or c == "/" or c == "@" or c == ":" then
+    elseif c == "+" or c == "-" or c == "*" or c == "/" or c == "@" or c == ":" or c == "=" or c == "!" then
         table.insert(toks, "OP(" .. c .. ")")
     elseif c == " " or c == "\n" then -- disregard
     else
@@ -165,15 +175,9 @@ print("div\n")
 
 local p = {
     int = "^INT%((%-?%d+)%)$",
-    op = "^OP%(([%+%-%*%@%:/])%)$",
+    op = "^OP%(([%+%-%*%@%:%=%!/])%)$",
     id = "^ID%(([a-zA-Z_]+)%)$"
 }
-
-local subc = arg[1]
-local sim = false
-if subc == "s" then
-    sim = true
-end
 
 local code = [[
 #include <stdio.h>
@@ -205,89 +209,86 @@ return stack[top--];
 void main() {
 ]]
 
+local defs = {}
+
 i = 1
 while i <= #toks do
     local t = toks[i]
+    code = code .. "// " .. t .. "\n"
     if check_pattern(t, p.int) then
         local value = check_pattern(t, p.int)
-        if sim then
-            push(value)
-        else
-            code = code .. "// " .. t .. "\n"
-            code = code .. "push(" .. value .. ");\n"
-        end
+        code = code .. "push(" .. value .. ");\n"
     elseif check_pattern(t, p.id) then
         local value = check_pattern(t, p.id)
         if value == "echo" then
-            if sim then
-                echo()
-            else
-                code = code .. "// " .. t .. "\n"
-                code = code .. "printf(\"%d\\n\", pop());\n"
-            end
+            code = code .. "printf(\"%d\\n\", pop());\n"
         elseif value == "peek" then
-            if sim then
-                peek()
+            code = code .. "__a__ = pop();\n"
+            code = code .. "push(__a__);\n"
+            code = code .. "printf(\"%d\\n\", __a__);\n"
+        elseif value == "end" then
+            code = code .. "}\n"
+        elseif value == "then" then
+            if not (toks[i - 1] and (check_pattern(toks[i - 1], p.op) == "=" or check_pattern(toks[i - 1], p.op) == "!")) then
+                print("The word `then` must have an equal or not equal symbol")
+                os.exit(1)
+            end
+        elseif value == "def" then
+            local var = check_pattern(toks[i - 1], p.id)
+            if toks[i - 1] and var then
+                if has_value(defs, var) then
+                    code = code .. var .. " = pop();\n"
+                else
+                    code = code .. "int " .. var .. " = pop();\n"
+                    table.insert(defs, var)
+                end
             else
-                code = code .. "// " .. t .. "\n"
-                code = code .. "__a__ = pop();\n"
-                code = code .. "push(__a__);\n"
-                code = code .. "printf(\"%d\\n\", __a__);\n"
+                print("The word `def` must have an identifier before it")
+                os.exit(1)
+            end
+        elseif has_value(defs, value) then
+            if toks[i + 1] and check_pattern(toks[i + 1], p.id) ~= "def" then
+                code = code .. "push(" .. value .. ");\n"
+            end
+        else
+            if not (toks[i + 1] and check_pattern(toks[i + 1], p.id) == "def") then
+                print("Unrecognized identifier: " .. value)
+                os.exit(1)
             end
         end
     elseif check_pattern(t, p.op) then
         local s = check_pattern(t, p.op)
         if s == "+" then
-            if sim then
-                add()
-            else
-                code = code .. "// " .. t .. "\n"
-                code = code .. "__a__ = pop();\n"
-                code = code .. "push(pop() + __a__);\n"
-            end
+            code = code .. "__a__ = pop();\n"
+            code = code .. "push(pop() + __a__);\n"
         elseif s == "-" then
-            if sim then
-                sub()
-            else
-                code = code .. "// " .. t .. "\n"
-                code = code .. "__a__ = pop();\n"
-                code = code .. "push(pop() - __a__);\n"
-            end
+            code = code .. "__a__ = pop();\n"
+            code = code .. "push(pop() - __a__);\n"
         elseif s == "*" then
-            if sim then
-                mul()
-            else
-                code = code .. "// " .. t .. "\n"
-                code = code .. "__a__ = pop();\n"
-                code = code .. "push(pop() * __a__);\n"
-            end
+            code = code .. "__a__ = pop();\n"
+            code = code .. "push(pop() * __a__);\n"
         elseif s == "/" then
-            if sim then
-                div()
-            else
-                code = code .. "// " .. t .. "\n"
-                code = code .. "__a__ = pop();\n"
-                code = code .. "push(pop() / __a__);\n"
-            end
+            code = code .. "__a__ = pop();\n"
+            code = code .. "push(pop() / __a__);\n"
         elseif s == "@" then
-            if sim then
-                rot()
-            else
-                code = code .. "// " .. t .. "\n"
-                code = code .. "__a__ = pop();\n"
-                code = code .. "__b__ = pop();\n"
-                code = code .. "push(__a__);\n"
-                code = code .. "push(__b__);\n"
-            end
+            code = code .. "__a__ = pop();\n"
+            code = code .. "__b__ = pop();\n"
+            code = code .. "push(__a__);\n"
+            code = code .. "push(__b__);\n"
         elseif s == ":" then
-            if sim then
-                dup()
+            code = code .. "__a__ = pop();\n"
+            code = code .. "push(__a__);\n"
+            code = code .. "push(__a__);\n"
+        elseif s == "=" then
+            code = code .. "__b__ = pop();\n"
+            code = code .. "__a__ = pop();\n"
+            if toks[i + 1] and check_pattern(toks[i + 1], p.id) == "then" then
+                code = code .. "if (__a__ == __b__) {\n"
             else
-                code = code .. "// " .. t .. "\n"
-                code = code .. "__a__ = pop();\n"
-                code = code .. "push(__a__);\n"
-                code = code .. "push(__a__);\n"
+                code = code .. "push(__a__ == __b__);\n"
             end
+        elseif s == "!" then
+            code = code .. "} else {\n"
         else
             print("Unrecognized token " .. t)
             os.exit(1)
@@ -302,10 +303,12 @@ while i <= #toks do
 end
 
 code = code .. "}"
-if not sim then
-    local out = io.open("test.c", "w")
-    out:write(code)
-    out:close()
+local out = io.open("test.c", "w")
+if out == nil then
+    print("file is nil")
+    os.exit(1)
 end
+out:write(code)
+out:close()
 
 os.execute("gcc test.c -o test.out")

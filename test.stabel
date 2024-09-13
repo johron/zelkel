@@ -1,1 +1,7 @@
-10 : * echo
+4 4 * x def
+
+x 16 = then
+    1 echo
+! then
+    0 echo
+end
