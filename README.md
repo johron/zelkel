@@ -23,6 +23,5 @@ int main() {
 
     return 0;
 }
-- [ ] Rewrite in itself
-
 ```
+- [ ] Rewrite in itself
