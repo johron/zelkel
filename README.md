@@ -31,3 +31,5 @@ int main() {
 - [ ] Recursion
 - [ ] Remove dependence on c libraies: stdlib.h and stdio.h
 - [ ] Find a workaround for __a__ and __b__
+- [ ] Fix definitions: they should not push and pop but just be defined with the 
+- [ ] Ekstremt dårlig design på while løkker: fiks må legge til "10 i >" for at den skal gå siden den forventer at bruker skal gi 1 for at løkken skal fortsette, kanskje det ikke er dårlig design?

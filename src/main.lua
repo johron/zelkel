@@ -73,9 +73,11 @@ while i <= #chars do
         end
         table.insert(toks, "ID(" .. str .. ")")
         i = j - 1
-    elseif c == "+" or c == "-" or c == "*" or c == "/" or c == "@" or c == ":" or c == "=" or c == "!" or c == ">" or c == "<" then
+    elseif c == "+" or c == "-" or c == "*" or c == "/" or c == "@" or c == ":" or c == "=" or c == "!" or c == ">" or c == "<" or c == "~" then
         table.insert(toks, "OP(" .. c .. ")")
-    elseif c == " " or c == "\n" then -- disregard
+    elseif c == "\n" then
+        table.insert(toks, "NL")
+    elseif c == " " then -- disregard
     else
         print("Unrecognized character: '" .. c .. "'")
         os.exit(1)
@@ -90,7 +92,7 @@ print("div\n")
 
 local p = {
     int = "^INT%((%-?%d+)%)$",
-    op = "^OP%(([%+%-%*%@%:%=%!%>%</])%)$",
+    op = "^OP%(([%+%-%*%@%:%=%!%>%<%~/])%)$",
     id = "^ID%(([a-zA-Z_]+)%)$"
 }
 
@@ -125,6 +127,7 @@ return stack[top--];
 
 local defs = {}
 local procs = {}
+local line = 1
 
 i = 1
 while i <= #toks do
@@ -145,18 +148,18 @@ while i <= #toks do
             local name = check_pattern(toks[i - 1], p.id)
             if toks[i - 1] and name then
                 if has_value(defs, name) then
-                    print("Name is in use by a defintion: " .. name)
+                    print("Line " .. line .. ": Name is in use by a defintion: " .. name)
                     os.exit(1)
                 end
                 if has_value(procs, name) then
-                    print("Name is in use by another procedure: " .. name)
+                    print("Line " .. line .. ": Name is in use by another procedure: " .. name)
                     os.exit(1)
                 end
 
-                code = code .. "void " .. name .. "() {\n"
+                code = code .. "void " .. name .. "()"
                 table.insert(procs, name)
             else
-                print("The word `proc` must have an identifier before it")
+                print("Line " .. line .. ": The word `proc` must have an identifier before it")
                 os.exit(1)
             end
         elseif value == "drop" then
@@ -164,21 +167,37 @@ while i <= #toks do
         elseif value == "end" then
             code = code .. "}\n"
         elseif value == "in" then
-            local op = check_pattern(toks[i - 1], p.op)
             local id = check_pattern(toks[i - 1], p.id)
-            if toks[i - 1] and not (op == "=" or op == "!" or op == "<" or op == ">" or id == "proc" or id == "else") then
-                print("The word `in` cannot initiate a body here")
+            if toks[i - 1] and not (id == "proc" or id == "else" or id == "if" or id == "while") then
+                print("Line " .. line .. ": The word `in` cannot initiate a body here")
+                os.exit(1)
+            end
+            code = code .. "{\n"
+        elseif value == "if" then
+            local op = check_pattern(toks[i - 1], p.op)
+            if toks[i - 1] and (toks[i + 1] and check_pattern(toks[i+1], p.id) == "in") then
+                code = code .. "if (pop() == 1)"
+            else
+                print("Line " .. line .. ": The word `if` shouldn't be here")
+                os.exit(1)
+            end
+        elseif value == "while" then
+            local op = check_pattern(toks[i - 1], p.op)
+            if toks[i - 1] and (toks[i + 1] and check_pattern(toks[i+1], p.id) == "in") then
+                code = code .. "while (pop() == 1)"
+            else
+                print("Line " .. line .. ": The word `while` shouldn't be here")
                 os.exit(1)
             end
         elseif value == "else" then
             if toks[i + 1] and check_pattern(toks[i + 1], p.id) == "in" then
-                code = code .. "} else {\n"
+                code = code .. "} else"
             end
         elseif value == "def" then
             local name = check_pattern(toks[i - 1], p.id)
             if toks[i - 1] and name then
                 if has_value(procs, name) then
-                    print("Name is in use by a procedure: " .. name)
+                    print("Line " .. line .. ": Name is in use by a procedure: " .. name)
                     os.exit(1)
                 end
                 if has_value(defs, name) then
@@ -188,7 +207,7 @@ while i <= #toks do
                     table.insert(defs, name)
                 end
             else
-                print("The word `def` must have an identifier before it")
+                print("Line " .. line .. ": word `def` must have an identifier before it")
                 os.exit(1)
             end
         elseif has_value(defs, value) then
@@ -204,7 +223,7 @@ while i <= #toks do
             if toks[i + 1] and check_pattern(toks[i + 1], p.id) ~= "def" then
             elseif toks[i + 1] and check_pattern(toks[i + 1], p.id) ~= "proc" then
             else
-                print("Unrecognized identifier: " .. value)
+                print("Line " .. line .. ": Unrecognized identifier: " .. value)
                 os.exit(1)
             end
         end
@@ -227,6 +246,12 @@ while i <= #toks do
             code = code .. "__b__ = pop();\n"
             code = code .. "push(__a__);\n"
             code = code .. "push(__b__);\n"
+        elseif s == "~" then
+            code = code .. "__a__ = pop();\n"
+            code = code .. "__b__ = pop();\n"
+            code = code .. "push(__a__);\n"
+            code = code .. "push(__b__);\n"
+            code = code .. "push(__b__);\n"
         elseif s == ":" then
             code = code .. "__a__ = pop();\n"
             code = code .. "push(__a__);\n"
@@ -234,15 +259,16 @@ while i <= #toks do
         elseif s == "=" or s == ">" or s == "<" or s == "!" then
             code = code .. "__b__ = pop();\n"
             code = code .. "__a__ = pop();\n"
-            if toks[i + 1] and check_pattern(toks[i + 1], p.id) == "in" then
-                code = code .. "if (__a__ " .. s .. "= __b__) {\n"
-            else
-                code = code .. "push(__a__ " .. s .. "= __b__);\n"
-            end
+            code = code .. "push(__a__ " .. s .. "= __b__);\n"
         else
-            print("Unrecognized token " .. t)
+            print("Line " .. line .. ": Unrecognized token " .. t)
             os.exit(1)
         end
+    elseif t == "NL" then
+        line = line + 1
+    else
+        print("Line " .. line .. ": Unrecognized token " .. t)
+        os.exit(1)
     end
 
     if i < #toks then

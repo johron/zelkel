@@ -1,7 +1,12 @@
 main proc in
-    2 1 > in
-        1 echo 
-    else in
-        0 echo
+    4000000 N def
+    0 1
+    ~ N < while in
+        a def
+        b def
+        a echo
+        b a b +
+        ~ N <
     end
+    drop drop
 end
