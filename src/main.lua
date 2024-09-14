@@ -1,88 +1,3 @@
-local stack = {}
-
-function stack:push(value)
-    table.insert(stack, value)
-end
-
-function stack:pop()
-    return table.remove(stack)
-end
-
-local function push(number)
-    stack:push(number)
-end
-
-local function add()
-    local a = stack:pop()
-    local b = stack:pop()
-
-    table.insert(stack, b + a)
-end
-
-local function sub()
-    local a = stack:pop()
-    local b = stack:pop()
-
-    table.insert(stack, b - a)
-end
-
-local function mul()
-    local a = stack:pop()
-    local b = stack:pop()
-
-    table.insert(stack, b * a)
-end
-
-local function div()
-    local a = stack:pop()
-    local b = stack:pop()
-
-    table.insert(stack, b / a)
-end
-
-local function rot()
-    local a = stack:pop()
-    local b = stack:pop()
-
-    table.insert(stack, a)
-    table.insert(stack, b)
-end
-
-local function dup()
-    local a = stack:pop()
-
-    table.insert(stack, a)
-    table.insert(stack, a)
-end
-
-local function echo()
-    print(stack:pop())
-end
-
-local function peek()
-    local a = stack:pop()
-    stack:push(a)
-    print(a)
-end
-
---[[local program = {
-    push(5),
-    push(5),
-    add(),
-    push(3),
-    mul(),
-    peek(),
-    push(2),
-    rot(),
-    div(),
-    push(5),
-    push(2),
-    sub(),
-    rot(),
-    sub(),
-    echo()
-}]]
-
 local function print_table(table)
     for i in pairs(table) do
         print(table[i])
@@ -158,7 +73,7 @@ while i <= #chars do
         end
         table.insert(toks, "ID(" .. str .. ")")
         i = j - 1
-    elseif c == "+" or c == "-" or c == "*" or c == "/" or c == "@" or c == ":" or c == "=" or c == "!" then
+    elseif c == "+" or c == "-" or c == "*" or c == "/" or c == "@" or c == ":" or c == "=" or c == "!" or c == ">" or c == "<" then
         table.insert(toks, "OP(" .. c .. ")")
     elseif c == " " or c == "\n" then -- disregard
     else
@@ -175,7 +90,7 @@ print("div\n")
 
 local p = {
     int = "^INT%((%-?%d+)%)$",
-    op = "^OP%(([%+%-%*%@%:%=%!/])%)$",
+    op = "^OP%(([%+%-%*%@%:%=%!%>%</])%)$",
     id = "^ID%(([a-zA-Z_]+)%)$"
 }
 
@@ -205,6 +120,7 @@ exit(1);
 }
 return stack[top--];
 }
+
 ]]
 
 local defs = {}
@@ -248,9 +164,15 @@ while i <= #toks do
         elseif value == "end" then
             code = code .. "}\n"
         elseif value == "in" then
-            if not (toks[i - 1] and (check_pattern(toks[i - 1], p.op) == "=" or check_pattern(toks[i - 1], p.op) == "!") or check_pattern(toks[i -1], p.id) == "proc") then
+            local op = check_pattern(toks[i - 1], p.op)
+            local id = check_pattern(toks[i - 1], p.id)
+            if toks[i - 1] and not (op == "=" or op == "!" or op == "<" or op == ">" or id == "proc" or id == "else") then
                 print("The word `in` cannot initiate a body here")
                 os.exit(1)
+            end
+        elseif value == "else" then
+            if toks[i + 1] and check_pattern(toks[i + 1], p.id) == "in" then
+                code = code .. "} else {\n"
             end
         elseif value == "def" then
             local name = check_pattern(toks[i - 1], p.id)
@@ -309,16 +231,14 @@ while i <= #toks do
             code = code .. "__a__ = pop();\n"
             code = code .. "push(__a__);\n"
             code = code .. "push(__a__);\n"
-        elseif s == "=" then
+        elseif s == "=" or s == ">" or s == "<" or s == "!" then
             code = code .. "__b__ = pop();\n"
             code = code .. "__a__ = pop();\n"
             if toks[i + 1] and check_pattern(toks[i + 1], p.id) == "in" then
-                code = code .. "if (__a__ == __b__) {\n"
+                code = code .. "if (__a__ " .. s .. "= __b__) {\n"
             else
-                code = code .. "push(__a__ == __b__);\n"
+                code = code .. "push(__a__ " .. s .. "= __b__);\n"
             end
-        elseif s == "!" then
-            code = code .. "} else {\n"
         else
             print("Unrecognized token " .. t)
             os.exit(1)

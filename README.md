@@ -30,3 +30,4 @@ int main() {
 - [ ] Identifier can contain numbers, but not start with them, atm only alphabetic characters plus underscore is allowed
 - [ ] Recursion
 - [ ] Remove dependence on c libraies: stdlib.h and stdio.h
+- [ ] Find a workaround for __a__ and __b__
