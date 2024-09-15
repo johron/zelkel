@@ -18,7 +18,12 @@ local function has_value(arr, val)
     return false
 end
 
-local file = io.open("test.stabel", "rb")
+local function printf(...)
+    print(string.format(...))
+end
+
+local file_name = "test.stabel"
+local file = io.open(file_name, "rb")
 if not file then print("No 'test.stabel' file") os.exit(1)  end
 local content = file:read("a")
 file:close()
@@ -80,10 +85,15 @@ print_table(toks)
 
 print("div\n")
 
+local line = 1
+
 local function tok(t)
+    if t == nil then
+        return nil
+    end
     local patterns = {
         int = "^INT%((%-?%d+)%)$",
-        op = "^OP%(([%+%-%*%@%:%=%!%>%<%~/])%)$",
+        op = "^OP%(([%+%-%*%@%:%=%!%>%</])%)$",
         id = "^ID%(([a-zA-Z_]+)%)$"
     }
 
@@ -97,8 +107,8 @@ local function tok(t)
     return nil
 end
 
-local function f(str, ...)
-    return string.format(str, ...)
+local function f(...)
+    return string.format(...)
 end
 
 local code_str = [[
@@ -134,9 +144,8 @@ local function code(toadd)
     code_str = code_str .. toadd
 end
 
-local defs = {}
-local procs = {}
-local line = 1
+local r_ends = 0
+local ends = 0
 
 i = 1
 while i <= #toks do
@@ -144,20 +153,88 @@ while i <= #toks do
 
     local p, v = tok(t)
     if p == "int" then
-        code(f("push(%s);\n"))
+        code(f("push(%s);\n", v))
     elseif p == "id" then
-        
+        if v == "echo" then
+            code("printf(\"%d\\n\", pop());\n")
+        elseif v == "proc" then
+            local pat, name = tok(toks[i + 1])
+            if pat ~= "id" or name == nil then
+                printf("%s:%s: The token after the procedure definition is not valid", file_name, line)
+                os.exit(1)
+            end
+
+            local pat, val = tok(toks[i + 2])
+            if pat ~= "id" or val ~= "in" then
+                printf("%s:%s: Missing `in` to open procedure body", file_name, line)
+                os.exit(1)
+            end
+
+            code(f("void %s() {\n", name))
+
+            i = i + 2
+            r_ends = r_ends + 1
+        elseif v == "if" then
+            local condition = {}
+            local has_in = false
+            local j = i + 1
+            while j <= #toks do
+                local pat, val = tok(toks[j])
+                if pat == "id" and val == "in" then
+                    has_in = true
+                    break
+                end
+                table.insert(condition, val)
+                j = j + 1
+            end
+
+            if has_in == false then
+                printf("%s%s: Missing `in` to open if statement body")
+                os.exit(1)
+            end
+
+            print(table.concat(condition, " "))
+            -- TODO: make the condition into something that c can understand, ignore for now
+
+            i = j
+            r_ends = r_ends + 1
+        elseif v == "end" then
+            ends = ends + 1
+        elseif v == "end" then
+            if ends <= 0 then
+                printf("%s:%s: Unexpected `end` statement", file_name, line)
+                os.exit(1)
+            end
+
+            code("}\n")
+            ends = ends - 1
+        elseif v == "else" then
+            if ends <= 0 then
+                printf("%s:%s: Unexpected `else` statement", file_name, line)
+                os.exit(1)
+            end
+
+            code("} else {\n")
+        else
+            printf("%s:%s: Token `%s` not recognized", file_name, line, v)  line = line + 1
+            os.exit(1)
+        end
+    elseif t == "NL" then
+        line = line + 1
+    else
+        printf("%s:%s: Token `%s` not recognized", file_name, line, t)
+        os.exit(1)
     end
 
     i = i + 1
 end
 
---local out = io.open("test.c", "w")
---if out == nil then
---    print("file is nil")
---    os.exit(1)
---end
---out:write(code)
---out:close()
---
+local out = io.open("test.c", "w")
+if out == nil then
+    print("file is nil")
+    os.exit(1)
+end
+out:write(code_str)
+out:close()
+
 --os.execute("gcc test.c -o test.out")

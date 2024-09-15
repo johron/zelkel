@@ -5,7 +5,7 @@ proc main in
 
     def i 0 end
     while 1 1 + in
-        1 echo
+        : echo
         def i 1 i + end
     end
 end
