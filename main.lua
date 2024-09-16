@@ -189,7 +189,7 @@ while i <= #toks do
             end
 
             if has_in == false then
-                printf("%s%s: Missing `in` to open if statement body")
+                printf("%s:%s: Missing `in` to open if statement body", file_name, line)
                 os.exit(1)
             end
 
@@ -198,16 +198,6 @@ while i <= #toks do
 
             i = j
             r_ends = r_ends + 1
-        elseif v == "end" then
-            ends = ends + 1
-        elseif v == "end" then
-            if ends <= 0 then
-                printf("%s:%s: Unexpected `end` statement", file_name, line)
-                os.exit(1)
-            end
-
-            code("}\n")
-            ends = ends - 1
         elseif v == "else" then
             if ends <= 0 then
                 printf("%s:%s: Unexpected `else` statement", file_name, line)
@@ -215,8 +205,45 @@ while i <= #toks do
             end
 
             code("} else {\n")
+        elseif v == "end" then
+            if r_ends == 0 then
+                printf("%s:%s: Unexpected `end` statement", file_name, line)
+                os.exit(1)
+            end
+
+            code("}\n")
+            ends = ends - 1
+        elseif v == "var" or v == "let" then
+            local expr = {}
+            local has_end = false
+            local j = i + 1
+            while j <= #toks do
+                local pat, val = tok(toks[j])
+                if pat == "id" and val == "end" then
+                    has_end = true
+                    break
+                end
+                table.insert(expr, val)
+                j = j + 1
+            end
+
+            if has_end == false then
+                printf("%s:%s: Missing `end` to close variable definition", file_name, line)
+                os.exit(1)
+            end
+
+            print(table.concat(expr, " ")) --TODO: implement this, ignore for now
+
+            if v == "var" then
+                -- mutable
+            elseif v == "let" then
+                -- immutable
+            end
+
+            i = j
+            r_ends = r_ends + 1
         else
-            printf("%s:%s: Token `%s` not recognized", file_name, line, v)  line = line + 1
+            printf("%s:%s: Identifier `%s` not recognized", file_name, line, v)  line = line + 1
             os.exit(1)
         end
     elseif t == "NL" then
@@ -227,6 +254,15 @@ while i <= #toks do
     end
 
     i = i + 1
+end
+
+if r_ends ~= ends then
+    if r_ends > ends then
+        print("Missing `end` to close an `in` body")
+    else
+        print("Too many `end`s compared to `in`s") -- finn en måte å få linje nummer til `in` som ikke ble lukket, kanskje bytt dette systemet til å sjekke etter end i parser
+    end
+    os.exit(1)
 end
 
 local out = io.open("test.c", "w")
