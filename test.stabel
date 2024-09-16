@@ -3,9 +3,9 @@ proc main in
         12 echo
     end
 
-    var i 0 end
+    let i 0 end
     while i 10 < in
         i echo
-        var i 1 i + end
+        let i 1 i + end
     end
 end

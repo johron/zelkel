@@ -68,8 +68,12 @@ while i <= #chars do
         end
         table.insert(toks, "ID(" .. str .. ")")
         i = j - 1
-    elseif c == "+" or c == "-" or c == "*" or c == "/" or c == "@" or c == ":" or c == "=" or c == "!" or c == ">" or c == "<" or c == "~" then
+    elseif c == "@" or c == ":" or c == "~" then
         table.insert(toks, "OP(" .. c .. ")")
+    elseif c == "+" or c == "-" or c == "*" or c == "/" then
+        table.insert(toks, "AROP(" .. c .. ")")
+    elseif c == "=" or c == "!" or c == ">" or c == "<" then
+        table.insert(toks, "RAOP(" .. c .. ")")
     elseif c == "\n" then
         table.insert(toks, "NL")
     elseif c == " " then -- disregard
@@ -92,8 +96,10 @@ local function tok(t)
         return nil
     end
     local patterns = {
-        int = "^INT%((%-?%d+)%)$",
-        op = "^OP%(([%+%-%*%@%:%=%!%>%</])%)$",
+        int = "^INT%(([0-9]+)%)$",
+        op = "^OP%(([%@%:%~])%)$",
+        arop = "^AROP%(([%+%-%*%/])%)$",
+        raop = "^RAOP%(([%=%!%>%<])%)$",
         id = "^ID%(([a-zA-Z_]+)%)$"
     }
 
@@ -114,14 +120,11 @@ end
 local code_str = [[
 #include <stdio.h>
 #include <stdlib.h>
-
 #define MAX_SIZE 255
-
 int stack[MAX_SIZE];
 int top = -1;
 int __a__;
 int __b__;
-
 void push(int item) {
 if (top == MAX_SIZE - 1) {
 printf("Stack Overflow\n");
@@ -129,7 +132,6 @@ exit(1);
 }
 stack[++top] = item;
 }
-
 int pop() {
 if (top == -1) {
 printf("Stack Underflow\n");
@@ -137,128 +139,201 @@ exit(1);
 }
 return stack[top--];
 }
-
 ]]
-
-local function code(toadd)
-    code_str = code_str .. toadd
-end
 
 local r_ends = 0
 local ends = 0
 
-i = 1
-while i <= #toks do
-    local t = toks[i]
-
-    local p, v = tok(t)
-    if p == "int" then
-        code(f("push(%s);\n", v))
-    elseif p == "id" then
-        if v == "echo" then
-            code("printf(\"%d\\n\", pop());\n")
-        elseif v == "proc" then
-            local pat, name = tok(toks[i + 1])
-            if pat ~= "id" or name == nil then
-                printf("%s:%s: The token after the procedure definition is not valid", file_name, line)
-                os.exit(1)
-            end
-
-            local pat, val = tok(toks[i + 2])
-            if pat ~= "id" or val ~= "in" then
-                printf("%s:%s: Missing `in` to open procedure body", file_name, line)
-                os.exit(1)
-            end
-
-            code(f("void %s() {\n", name))
-
-            i = i + 2
-            r_ends = r_ends + 1
-        elseif v == "if" then
-            local condition = {}
-            local has_in = false
-            local j = i + 1
-            while j <= #toks do
-                local pat, val = tok(toks[j])
-                if pat == "id" and val == "in" then
-                    has_in = true
-                    break
-                end
-                table.insert(condition, val)
-                j = j + 1
-            end
-
-            if has_in == false then
-                printf("%s:%s: Missing `in` to open if statement body", file_name, line)
-                os.exit(1)
-            end
-
-            print(table.concat(condition, " "))
-            -- TODO: make the condition into something that c can understand, ignore for now
-
-            i = j
-            r_ends = r_ends + 1
-        elseif v == "else" then
-            if ends <= 0 then
-                printf("%s:%s: Unexpected `else` statement", file_name, line)
-                os.exit(1)
-            end
-
-            code("} else {\n")
-        elseif v == "end" then
-            if r_ends == 0 then
-                printf("%s:%s: Unexpected `end` statement", file_name, line)
-                os.exit(1)
-            end
-
-            code("}\n")
-            ends = ends - 1
-        elseif v == "var" or v == "let" then
-            local expr = {}
-            local has_end = false
-            local j = i + 1
-            while j <= #toks do
-                local pat, val = tok(toks[j])
-                if pat == "id" and val == "end" then
-                    has_end = true
-                    break
-                end
-                table.insert(expr, val)
-                j = j + 1
-            end
-
-            if has_end == false then
-                printf("%s:%s: Missing `end` to close variable definition", file_name, line)
-                os.exit(1)
-            end
-
-            print(table.concat(expr, " ")) --TODO: implement this, ignore for now
-
-            if v == "var" then
-                -- mutable
-            elseif v == "let" then
-                -- immutable
-            end
-
-            i = j
-            r_ends = r_ends + 1
-        else
-            printf("%s:%s: Identifier `%s` not recognized", file_name, line, v)  line = line + 1
-            os.exit(1)
+local function parse(arr)
+    local ret = ""
+    local function code(toadd)
+        if ret ~= "" and ret:sub(-1) ~= "\n" then
+            ret = ret .. "\n"
         end
-    elseif t == "NL" then
-        line = line + 1
-    else
-        printf("%s:%s: Token `%s` not recognized", file_name, line, t)
-        os.exit(1)
+        ret = ret .. toadd
     end
 
-    i = i + 1
+    i = 1
+    while i <= #arr do
+        local t = arr[i]
+
+        local p, v = tok(t)
+        if p == "int" then
+            code(f("push(%s);", v))
+        elseif p == "id" then
+            if v == "echo" then
+                code("printf(\"%d\\n\", pop());")
+            elseif v == "proc" then
+                local pat, name = tok(arr[i + 1])
+                if pat ~= "id" or name == nil then
+                    printf("%s:%s: The token after the procedure definition is not valid", file_name, line)
+                    os.exit(1)
+                end
+
+                local pat, val = tok(arr[i + 2])
+                if pat ~= "id" or val ~= "in" then
+                    printf("%s:%s: Missing `in` to open procedure body", file_name, line)
+                    os.exit(1)
+                end
+
+                code(f("void %s() {", name))
+
+                i = i + 2
+                r_ends = r_ends + 1
+            elseif v == "if" then
+                local condition = {}
+                local has_in = false
+                local j = i + 1
+                while j <= #arr do
+                    local pat, val = tok(arr[j])
+                    if pat == "id" and val == "in" then
+                        has_in = true
+                        break
+                    end
+                    table.insert(condition, arr[j])
+                    j = j + 1
+                end
+
+                if has_in == false then
+                    printf("%s:%s: Missing `in` to open if statement body", file_name, line)
+                    os.exit(1)
+                end
+
+                code(parse(condition))
+                code("if (pop() == 1) {")
+
+                i = j
+                r_ends = r_ends + 1
+            elseif v == "else" then
+                if ends <= 0 then
+                    printf("%s:%s: Unexpected `else` statement", file_name, line)
+                    os.exit(1)
+                end
+
+                code("} else {")
+                elseif v == "if" then
+                local condition = {}
+                local has_in = false
+                local j = i + 1
+                while j <= #arr do
+                    local pat, val = tok(arr[j])
+                    if pat == "id" and val == "in" then
+                        has_in = true
+                        break
+                    end
+                    table.insert(condition, arr[j])
+                    j = j + 1
+                end
+
+                if has_in == false then
+                    printf("%s:%s: Missing `in` to open if statement", file_name, line)
+                    os.exit(1)
+                end
+
+                code(parse(condition))
+                code("if (pop() == 1) {")
+
+                i = j
+                r_ends = r_ends + 1
+            elseif v == "while" then
+                local condition = {}
+                local has_in = false
+                local j = i + 1
+                while j <= #arr do
+                    local pat, val = tok(arr[j])
+                    if pat == "id" and val == "in" then
+                        has_in = true
+                        break
+                    end
+                    table.insert(condition, arr[j])
+                    j = j + 1
+                end
+
+                if has_in == false then
+                    printf("%s:%s: Missing `in` to open while", file_name, line)
+                    os.exit(1)
+                end
+
+                code(parse(condition))
+                code("while (pop() == 1) {")
+
+                i = j
+                r_ends = r_ends + 1
+            elseif v == "end" then
+                if r_ends == 0 then
+                    printf("%s:%s: Unexpected `end` statement", file_name, line)
+                    os.exit(1)
+                end
+
+                code("}")
+                ends = ends + 1
+            elseif v == "let" then
+                local pat, name = tok(arr[i + 1])
+                if pat ~= "id" or name == nil then
+                    printf("%s:%s: The token after the variable definition is not valid", file_name, line)
+                    os.exit(1)
+                end
+
+                local expr = {}
+                local has_end = false
+                local j = i + 2
+                while j <= #arr do
+                    local pat, val = tok(arr[j])
+                    if pat == "id" and val == "end" then
+                        has_end = true
+                        break
+                    end
+                    table.insert(expr, arr[j])
+                    j = j + 1
+                end
+
+                if has_end == false then
+                    printf("%s:%s: Missing `end` to close variable definition", file_name, line)
+                    os.exit(1)
+                end
+
+                code(parse(expr))
+                code(f("int %s = pop();", name))
+
+                i = j
+                r_ends = r_ends + 1
+            else
+                printf("%s:%s: Identifier `%s` not recognized", file_name, line, v)
+                os.exit(1)
+            end
+        elseif p == "raop" then
+            if v == "=" or v == "!" then
+                code(f("push(pop() %s= pop());", v))
+            elseif v == "<" then
+                code(f("push(pop() > pop());", v)) -- this is not an error, this is on purpose
+            elseif v == ">" then
+                code(f("push(pop() < pop());", v)) -- this is not an error, this is on purpose
+            else
+                printf("%s:%s: Token `%s` not recognized rational operator", file_name, line, v)
+                os.exit(1)
+            end
+        elseif t == "NL" then
+            line = line + 1
+        else
+            printf("%s:%s: Token `%s` not recognized", file_name, line, t)
+            os.exit(1)
+        end
+
+        --if t ~= "NL" then
+        --    code(f("// %s", t))
+        --end
+
+        i = i + 1
+    end
+
+    return ret
 end
+
+code_str = code_str .. parse(toks)
 
 if r_ends ~= ends then
     if r_ends > ends then
-        print("Missing `end` to close an `in` body")
+        print("Missing `end` to close `in` body")
     else
         print("Too many `end`s compared to `in`s") -- finn en måte å få linje nummer til `in` som ikke ble lukket, kanskje bytt dette systemet til å sjekke etter end i parser
     end
