@@ -1,9 +1,3 @@
-local function print_table(table)
-    for i in pairs(table) do
-        print(table[i])
-    end
-end
-
 local function is_alpha(str)
     return str:match("^[a-zA-Z_]+$") ~= nil
 end
@@ -30,16 +24,6 @@ file:close()
 
 print(content)
 print("div\n")
-
-
---[[
- - TYPE(val?, ...)
- -
- - INT(val) > integer
- - ID(val) > identifier
- - OP(+|-|*|/)
- - ]]
-
 
 local chars = {}
 for i = 1, #content do
@@ -85,7 +69,7 @@ while i <= #chars do
     i = i + 1
 end
 
-print_table(toks)
+print(table.concat(toks, "\n"))
 
 print("div\n")
 
@@ -340,10 +324,6 @@ local function parse(arr)
             printf("%s:%s: Token `%s` not recognized", file_name, line, t)
             os.exit(1)
         end
-
-        --if t ~= "NL" then
-        --    code(f("// %s", t))
-        --end
 
         i = i + 1
     end

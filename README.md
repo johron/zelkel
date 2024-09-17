@@ -27,5 +27,4 @@ int main() {
 - [ ] Rewrite in itself
 - [ ] More stack operations: three way rotation
 - [ ] Identifier can contain numbers, but not start with them, atm only alphabetic characters plus underscore is allowed
-- [x] Recursion
 - [ ] Remove dependence on c libraies: stdlib.h and stdio.h
