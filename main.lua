@@ -224,14 +224,8 @@ local function parse(arr)
                     os.exit(1)
                 end
 
-                local rand = ""
-                for i = 1, 30 do
-                    if math.random() > math.random() then
-                        rand = rand .. string.char(math.random(97, 122))
-                    else
-                        rand = rand .. string.upper(string.char(math.random(97, 122)))
-                    end
-                end
+                
+                local ident = "while_i" .. i
 
                 local parsed, _, including_names = parse(condition)
                 local def_including_names = ""
@@ -240,8 +234,8 @@ local function parse(arr)
                 end
                 including_names = table.concat(including_names, ", ")
 
-                before_str = before_str .. f("int %s(%s) {%sreturn pop();}\n", rand, def_including_names, parsed:gsub("\n", ""))
-                code(f("while (%s(%s) == 1) {", rand, including_names))
+                before_str = before_str .. f("int %s(%s) {%sreturn pop();}\n", ident, def_including_names, parsed:gsub("\n", ""))
+                code(f("while (%s(%s) == 1) {", ident, including_names))
 
                 i = j
                 r_ends = r_ends + 1
