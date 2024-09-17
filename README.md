@@ -25,11 +25,7 @@ int main() {
 }
 ```
 - [ ] Rewrite in itself
-- [ ] Right now variable definitions are global and variables in differnt functions cant have the same name, do something like (proc name)_(var name)
 - [ ] More stack operations: three way rotation
 - [ ] Identifier can contain numbers, but not start with them, atm only alphabetic characters plus underscore is allowed
 - [x] Recursion
 - [ ] Remove dependence on c libraies: stdlib.h and stdio.h
-- [ ] Fix definitions: they should not push and pop but just be defined with the 
-- [ ] Ekstremt dårlig design på while løkker: fiks må legge til "10 i >" for at den skal gå siden den forventer at bruker skal gi 1 for at løkken skal fortsette, kanskje det ikke er dårlig design?
-- [ ] Find a workaround for __a__ and __b__

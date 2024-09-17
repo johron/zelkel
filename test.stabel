@@ -4,7 +4,7 @@ proc main in
     end
 
     let i 0 end
-    while i 10 < in
+    while i 11 < in
         i echo
         let i 1 i + end
     end

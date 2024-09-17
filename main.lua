@@ -144,8 +144,12 @@ return stack[top--];
 local r_ends = 0
 local ends = 0
 
+local names = {}
+
 local function parse(arr)
+    local before_str = ""
     local ret = ""
+    local including = {}
     local function code(toadd)
         if ret ~= "" and ret:sub(-1) ~= "\n" then
             ret = ret .. "\n"
@@ -170,6 +174,11 @@ local function parse(arr)
                     os.exit(1)
                 end
 
+                if has_value(names, name) then
+                    printf("%s:%s: '%s' is already defined", file_name, line, name)
+                    os.exit(1)
+                end
+
                 local pat, val = tok(arr[i + 2])
                 if pat ~= "id" or val ~= "in" then
                     printf("%s:%s: Missing `in` to open procedure body", file_name, line)
@@ -178,6 +187,7 @@ local function parse(arr)
 
                 code(f("void %s() {", name))
 
+                table.insert(names, name)
                 i = i + 2
                 r_ends = r_ends + 1
             elseif v == "if" then
@@ -199,8 +209,20 @@ local function parse(arr)
                     os.exit(1)
                 end
 
-                code(parse(condition))
-                code("if (pop() == 1) {")
+                local rand = ""
+                for i = 1, 30 do
+                    rand = rand .. string.char(math.random(97, 122))
+                end
+
+                local parsed, _, including_names = parse(condition)
+                local def_including_names = ""
+                if table.concat(including_names, " ") ~= "" then
+                    def_including_names = "int " .. table.concat(including_names, ", int ")
+                end
+                including_names = table.concat(including_names, ", ")
+
+                before_str = before_str .. f("int %s(%s) {%sreturn pop();}\n", rand, def_including_names, parsed:gsub("\n", ""))
+                code(f("if (%s(%s) == 1) {", rand, including_names))
 
                 i = j
                 r_ends = r_ends + 1
@@ -211,30 +233,6 @@ local function parse(arr)
                 end
 
                 code("} else {")
-                elseif v == "if" then
-                local condition = {}
-                local has_in = false
-                local j = i + 1
-                while j <= #arr do
-                    local pat, val = tok(arr[j])
-                    if pat == "id" and val == "in" then
-                        has_in = true
-                        break
-                    end
-                    table.insert(condition, arr[j])
-                    j = j + 1
-                end
-
-                if has_in == false then
-                    printf("%s:%s: Missing `in` to open if statement", file_name, line)
-                    os.exit(1)
-                end
-
-                code(parse(condition))
-                code("if (pop() == 1) {")
-
-                i = j
-                r_ends = r_ends + 1
             elseif v == "while" then
                 local condition = {}
                 local has_in = false
@@ -254,8 +252,24 @@ local function parse(arr)
                     os.exit(1)
                 end
 
-                code(parse(condition))
-                code("while (pop() == 1) {")
+                local rand = ""
+                for i = 1, 30 do
+                    if math.random() > math.random() then
+                        rand = rand .. string.char(math.random(97, 122))
+                    else
+                        rand = rand .. string.upper(string.char(math.random(97, 122)))
+                    end
+                end
+
+                local parsed, _, including_names = parse(condition)
+                local def_including_names = ""
+                if table.concat(including_names, " ") ~= "" then
+                    def_including_names = "int " .. table.concat(including_names, ", int ")
+                end
+                including_names = table.concat(including_names, ", ")
+
+                before_str = before_str .. f("int %s(%s) {%sreturn pop();}\n", rand, def_including_names, parsed:gsub("\n", ""))
+                code(f("while (%s(%s) == 1) {", rand, including_names))
 
                 i = j
                 r_ends = r_ends + 1
@@ -293,10 +307,18 @@ local function parse(arr)
                 end
 
                 code(parse(expr))
-                code(f("int %s = pop();", name))
 
+                if has_value(names, name) then
+                    code(f("%s = pop();", name))
+                else
+                    code(f("int %s = pop();", name))
+                end
+
+                table.insert(names, name)
                 i = j
-                r_ends = r_ends + 1
+            elseif has_value(names, v) then
+                code(f("push(%s);", v))
+                table.insert(including, v)
             else
                 printf("%s:%s: Identifier `%s` not recognized", file_name, line, v)
                 os.exit(1)
@@ -312,6 +334,18 @@ local function parse(arr)
                 printf("%s:%s: Token `%s` not recognized rational operator", file_name, line, v)
                 os.exit(1)
             end
+        elseif p == "arop" then
+            if v == "+" then -- they are turned around since because
+                code(f("push(pop() + pop());"))
+            elseif v == "-" then
+                code(f("__a__ = pop();"))
+                code(f("push(pop() - __a__);"))
+            elseif v == "*" then
+                code(f("push(pop() * pop());"))
+            elseif v == "/" then
+                code(f("__a__ = pop();"))
+                code(f("push(pop() / __a__);"))
+            end
         elseif t == "NL" then
             line = line + 1
         else
@@ -326,12 +360,15 @@ local function parse(arr)
         i = i + 1
     end
 
-    return ret
+    return ret, before_str, including
 end
 
-code_str = code_str .. parse(toks)
+
+local ret, before_str, _ = parse(toks)
+code_str = code_str .. before_str .. ret
 
 if r_ends ~= ends then
+    print(r_ends, ends)
     if r_ends > ends then
         print("Missing `end` to close `in` body")
     else
@@ -348,4 +385,4 @@ end
 out:write(code_str)
 out:close()
 
---os.execute("gcc test.c -o test.out")
+os.execute("gcc test.c -o test.out")
