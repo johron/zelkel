@@ -6,6 +6,10 @@ proc main in
     let i 0 end
     while i 11 < in
         i echo
-        let i 1 i + end
+        if i 4 = in
+            let i 10 end
+        else
+            let i 1 i + end
+        end
     end
 end
