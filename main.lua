@@ -81,7 +81,7 @@ local function tok(t)
     end
     local patterns = {
         int = "^INT%(([0-9]+)%)$",
-        op = "^OP%(([%@%:%~])%)$",
+        op = "^OP%(([%@%:])%)$",
         arop = "^AROP%(([%+%-%*%/])%)$",
         raop = "^RAOP%(([%=%!%>%<])%)$",
         id = "^ID%(([a-zA-Z_]+)%)$"
@@ -224,7 +224,6 @@ local function parse(arr)
                     os.exit(1)
                 end
 
-                
                 local ident = "while_i" .. i
 
                 local parsed, _, including_names = parse(condition)
@@ -297,7 +296,7 @@ local function parse(arr)
             elseif v == ">" then
                 code(f("push(pop() < pop());", v)) -- this is not an error, this is on purpose
             else
-                printf("%s:%s: Token `%s` not recognized rational operator", file_name, line, v)
+                printf("%s:%s: Rational operator `%s` not recognized", file_name, line, v)
                 os.exit(1)
             end
         elseif p == "arop" then
@@ -311,6 +310,23 @@ local function parse(arr)
             elseif v == "/" then
                 code(f("__a__ = pop();"))
                 code(f("push(pop() / __a__);"))
+            else
+                printf("%s:%s: Arithmetic operator `%s` not recognized", file_name, line, v)
+                os.exit(1)
+            end
+        elseif p == "op" then
+            if v == "@" then
+                code(f("__a__ = pop();"))
+                code(f("__b__ = pop();"))
+                code(f("push(__a__);"))
+                code(f("push(__b__);"))
+            elseif v == ":" then
+                code(f("__a__ = pop();"))
+                code(f("push(__a__);"))
+                code(f("push(__a__);"))
+            else
+                printf("%s:%s: Stack operator `%s` not recognized", file_name, line, v)
+                os.exit(1)
             end
         elseif t == "NL" then
             line = line + 1
