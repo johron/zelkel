@@ -165,7 +165,7 @@ local function parse(arr)
 
                 local pat, val = tok(arr[i + 2])
                 if pat ~= "id" or val ~= "in" then
-                    printf("%s:%s: Missing `in` to open procedure body", file_name, line)
+                    printf("%s:%s: Missing `in` to open procedure", file_name, line)
                     os.exit(1)
                 end
 
@@ -189,7 +189,7 @@ local function parse(arr)
                 end
 
                 if has_in == false then
-                    printf("%s:%s: Missing `in` to open if statement body", file_name, line)
+                    printf("%s:%s: Missing `in` to open if statement", file_name, line)
                     os.exit(1)
                 end
 
@@ -204,7 +204,14 @@ local function parse(arr)
                     os.exit(1)
                 end
 
+                local pat, val = tok(arr[i + 1])
+                if pat ~= "id" or val ~= "in" then
+                    printf("%s:%s: Missing `in` to open else", file_name, line)
+                    os.exit(1)
+                end
+
                 code("} else {")
+                i = i + 1
             elseif v == "while" then
                 local condition = {}
                 local has_in = false
@@ -300,7 +307,7 @@ local function parse(arr)
                 os.exit(1)
             end
         elseif p == "arop" then
-            if v == "+" then -- they are turned around since because
+            if v == "+" then
                 code(f("push(pop() + pop());"))
             elseif v == "-" then
                 code(f("__a__ = pop();"))

@@ -8,7 +8,7 @@ proc main in
         i echo
         if i 4 = in
             let i 3 : * end
-        else
+        else in
             let i 1 i + end
         end
     end
