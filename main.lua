@@ -84,7 +84,7 @@ local function tok(t)
         op = "^OP%(([%@%:])%)$",
         arop = "^AROP%(([%+%-%*%/])%)$",
         raop = "^RAOP%(([%=%!%>%<])%)$",
-        id = "^ID%(([a-zA-Z_]+)%)$"
+        id = "^ID%(([a-zA-Z_][a-zA-Z0-9_]*)%)$"
     }
 
     for pattern in pairs(patterns) do

@@ -25,6 +25,7 @@ int main() {
 }
 ```
 - [ ] Rewrite in itself
-- [ ] More stack operations: three way rotation
-- [ ] Identifier can contain numbers, but not start with them, atm only alphabetic characters plus underscore is allowed
+- [x] Identifier can contain numbers, but not start with them, atm only alphabetic characters plus underscore is allowed
 - [ ] Remove dependence on c libraies: stdlib.h and stdio.h
+- [ ] Cannot run functions as they are not parsed correctly with the names variable
+- [ ] Implement more data types: strings, floats. Upgrade the stack to store pointers and then translate them to correct type

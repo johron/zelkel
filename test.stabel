@@ -1,7 +1,14 @@
+proc test in
+    let i 87 end
+    i echo
+end
+
 proc main in
     if 1 2 @ > in
         12 echo
     end
+
+    test
 
     let i 0 end
     while i 11 < in
