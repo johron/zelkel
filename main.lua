@@ -128,7 +128,9 @@ return stack[top--];
 local r_ends = 0
 local ends = 0
 
-local names = {}
+local imut_vars = {}
+local mut_vars = {}
+local funcs = {}
 
 local function parse(arr)
     local before_str = ""
@@ -158,7 +160,7 @@ local function parse(arr)
                     os.exit(1)
                 end
 
-                if has_value(names, name) then
+                if has_value(mut_vars, name) or has_value(funcs, name) then
                     printf("%s:%s: '%s' is already defined", file_name, line, name)
                     os.exit(1)
                 end
@@ -171,7 +173,7 @@ local function parse(arr)
 
                 code(f("void %s() {", name))
 
-                table.insert(names, name)
+                table.insert(funcs, name)
                 i = i + 2
                 r_ends = r_ends + 1
             elseif v == "if" then
@@ -280,17 +282,20 @@ local function parse(arr)
 
                 code(parse(expr))
 
-                if has_value(names, name) then
+                print(table.concat(mut_vars, " "))
+                if has_value(mut_vars, name) then
                     code(f("%s = pop();", name))
                 else
                     code(f("int %s = pop();", name))
                 end
 
-                table.insert(names, name)
+                table.insert(mut_vars, name)
                 i = j
-            elseif has_value(names, v) then
+            elseif has_value(mut_vars, v) then
                 code(f("push(%s);", v))
                 table.insert(including, v)
+            elseif has_value(funcs, v) then
+                code(f("%s();", v))
             else
                 printf("%s:%s: Identifier `%s` not recognized", file_name, line, v)
                 os.exit(1)
