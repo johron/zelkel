@@ -274,12 +274,12 @@ local function parse(arr)
 
                 local ident = "while_i" .. i
 
-                local parsed, _, including_names = parse(condition)
+                local parsed, _, including_names_table = parse(condition)
                 local def_including_names = ""
-                if table.concat(including_names, " ") ~= "" then
-                    def_including_names = "int " .. table.concat(including_names, ", int ")
+                if table.concat(including_names_table, " ") ~= "" then
+                    def_including_names = "int " .. table.concat(including_names_table, ", int ")
                 end
-                including_names = table.concat(including_names, ", ")
+                local including_names = table.concat(including_names_table, ", ")
 
                 before_str = before_str .. f("int %s(%s) {%sreturn pop();}\n", ident, def_including_names, parsed:gsub("\n", ""))
                 code(f("while (%s(%s) == 1) {", ident, including_names))
