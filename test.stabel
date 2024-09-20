@@ -1,5 +1,5 @@
 proc test in
-    let i 87 end
+    mut i 87 end
     i echo
 end
 
@@ -10,13 +10,13 @@ proc main in
 
     test
 
-    let i 0 end
+    mut i 0 end
     while i 11 < in
         i echo
         if i 4 = in
-            let i 3 : * end
+            mut i 3 : * end
         else in
-            let i 1 i + end
+            mut i 1 i + end
         end
     end
 end

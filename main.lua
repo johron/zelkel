@@ -296,7 +296,7 @@ local function parse(arr)
                 code("}")
                 exit_scope(line)
                 ends = ends + 1
-            elseif v == "let" then
+            elseif v == "mut" then
                 local pat, name = tok(arr[i + 1])
                 if pat ~= "id" or name == nil then
                     printf("%s:%s: The token after the variable definition is not valid", file_name, line)
