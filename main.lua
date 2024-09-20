@@ -1,10 +1,19 @@
+local file_name = "test.stabel"
+local file = io.open(file_name, "rb")
+if not file then print("No 'test.stabel' file") os.exit(1)  end
+local content = file:read("a")
+file:close()
+
+print(content)
+print("div\n")
+
 local function is_alpha(str)
     return str:match("^[a-zA-Z_]+$") ~= nil
 end
 
 local function has_value(arr, val)
-    for index, value in ipairs(arr) do
-        if value == val then
+    for _, v in ipairs(arr) do
+        if v == val then
             return true
         end
     end
@@ -16,14 +25,42 @@ local function printf(...)
     print(string.format(...))
 end
 
-local file_name = "test.stabel"
-local file = io.open(file_name, "rb")
-if not file then print("No 'test.stabel' file") os.exit(1)  end
-local content = file:read("a")
-file:close()
+local scope_stack = {}
 
-print(content)
-print("div\n")
+local function enter_scope(line)
+    table.insert(scope_stack, {mut_vars = {}, imut_vars = {}, line = line})
+end
+
+local function exit_scope(line)
+    if #scope_stack == 0 then
+        printf("%s:%s: Unexpected `end` statement", file_name, line)
+        os.exit(1)
+    end
+    table.remove(scope_stack)
+end
+
+local function current_scope()
+    return scope_stack[#scope_stack] or {mut_vars = {}, imut_vars = {}}
+end
+
+local function has_variable_in_scope(name)
+    for i = #scope_stack, 1, -1 do
+        local scope = scope_stack[i]
+        if has_value(scope.mut_vars, name) or has_value(scope.imut_vars, name) then
+            return true
+        end
+    end
+    return false
+end
+
+local function add_variable_to_scope(name, mutable)
+    local scope = current_scope()
+    if mutable then
+        table.insert(scope.mut_vars, name)
+    else
+        table.insert(scope.imut_vars, name)
+    end
+end
 
 local chars = {}
 for i = 1, #content do
@@ -128,9 +165,8 @@ return stack[top--];
 local r_ends = 0
 local ends = 0
 
-local imut_vars = {}
-local mut_vars = {}
 local funcs = {}
+local vars = {}
 
 local function parse(arr)
     local before_str = ""
@@ -160,7 +196,7 @@ local function parse(arr)
                     os.exit(1)
                 end
 
-                if has_value(mut_vars, name) or has_value(funcs, name) then
+                if has_value(vars, name) or has_value(funcs, name) then
                     printf("%s:%s: '%s' is already defined", file_name, line, name)
                     os.exit(1)
                 end
@@ -172,6 +208,7 @@ local function parse(arr)
                 end
 
                 code(f("void %s() {", name))
+                enter_scope(line)
 
                 table.insert(funcs, name)
                 i = i + 2
@@ -197,6 +234,7 @@ local function parse(arr)
 
                 code(parse(condition))
                 code(f("if (pop() == 1) {"))
+                enter_scope(line)
 
                 i = j
                 r_ends = r_ends + 1
@@ -213,6 +251,7 @@ local function parse(arr)
                 end
 
                 code("} else {")
+                enter_scope(line)
                 i = i + 1
             elseif v == "while" then
                 local condition = {}
@@ -244,6 +283,7 @@ local function parse(arr)
 
                 before_str = before_str .. f("int %s(%s) {%sreturn pop();}\n", ident, def_including_names, parsed:gsub("\n", ""))
                 code(f("while (%s(%s) == 1) {", ident, including_names))
+                enter_scope(line)
 
                 i = j
                 r_ends = r_ends + 1
@@ -254,6 +294,7 @@ local function parse(arr)
                 end
 
                 code("}")
+                exit_scope(line)
                 ends = ends + 1
             elseif v == "let" then
                 local pat, name = tok(arr[i + 1])
@@ -275,23 +316,23 @@ local function parse(arr)
                     j = j + 1
                 end
 
-                if has_end == false then
+                if not has_end then
                     printf("%s:%s: Missing `end` to close variable definition", file_name, line)
                     os.exit(1)
                 end
 
                 code(parse(expr))
 
-                print(table.concat(mut_vars, " "))
-                if has_value(mut_vars, name) then
+                if has_variable_in_scope(name) then
                     code(f("%s = pop();", name))
                 else
                     code(f("int %s = pop();", name))
+                    add_variable_to_scope(name, true)
                 end
 
-                table.insert(mut_vars, name)
+                table.insert(vars, name)
                 i = j
-            elseif has_value(mut_vars, v) then
+            elseif has_variable_in_scope(v) then
                 code(f("push(%s);", v))
                 table.insert(including, v)
             elseif has_value(funcs, v) then
@@ -353,16 +394,15 @@ local function parse(arr)
     return ret, before_str, including
 end
 
-
 local ret, before_str, _ = parse(toks)
 code_str = code_str .. before_str .. ret
 
 if r_ends ~= ends then
-    print(r_ends, ends)
     if r_ends > ends then
-        print("Missing `end` to close `in` body")
+        local last_scope = scope_stack[#scope_stack]
+        printf("%s:%s: Missing `end` to close `in` body", file_name, last_scope.line)
     else
-        print("Too many `end`s compared to `in`s") -- finn en måte å få linje nummer til `in` som ikke ble lukket, kanskje bytt dette systemet til å sjekke etter end i parser
+        printf("Too many `end`s compared to `in`s")
     end
     os.exit(1)
 end
