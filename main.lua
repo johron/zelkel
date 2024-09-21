@@ -1,6 +1,6 @@
-local file_name = "test.stabel"
+local file_name = "test.zk"
 local file = io.open(file_name, "rb")
-if not file then print("No 'test.stabel' file") os.exit(1)  end
+if not file then print("No 'test.zk' file") os.exit(1)  end
 local content = file:read("a")
 file:close()
 

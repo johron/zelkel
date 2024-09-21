@@ -1,4 +1,4 @@
-# Stabel
+# Zelkel
 
 ## Todo
 - way to implement multi type stack 
