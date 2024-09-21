@@ -165,7 +165,7 @@ return stack[top--];
 local r_ends = 0
 local ends = 0
 
-local funcs = {}
+local procs = {}
 local vars = {}
 
 local function parse(arr)
@@ -196,7 +196,7 @@ local function parse(arr)
                     os.exit(1)
                 end
 
-                if has_value(vars, name) or has_value(funcs, name) then
+                if has_value(vars, name) or has_value(procs, name) then
                     printf("%s:%s: '%s' is already defined", file_name, line, name)
                     os.exit(1)
                 end
@@ -210,7 +210,7 @@ local function parse(arr)
                 code(f("void %s() {", name))
                 enter_scope(line)
 
-                table.insert(funcs, name)
+                table.insert(procs, name)
                 i = i + 2
                 r_ends = r_ends + 1
             elseif v == "if" then
@@ -303,6 +303,11 @@ local function parse(arr)
                     os.exit(1)
                 end
 
+                if has_value(procs, name) then
+                    printf("%s:%s: Procedure with same name already defined", file_name, line)
+                    os.exit(1)
+                end
+
                 local expr = {}
                 local has_end = false
                 local j = i + 2
@@ -335,7 +340,7 @@ local function parse(arr)
             elseif has_variable_in_scope(v) then
                 code(f("push(%s);", v))
                 table.insert(including, v)
-            elseif has_value(funcs, v) then
+            elseif has_value(procs, v) then
                 code(f("%s();", v))
             else
                 printf("%s:%s: Identifier `%s` not recognized", file_name, line, v)
