@@ -27,3 +27,7 @@ int main() {
 - [ ] Rewrite in itself
 - [ ] Remove dependence on c libraies: stdlib.h and stdio.h
 - [ ] Implement more data types: strings, floats. Upgrade the stack to store pointers and then translate them to correct type
+
+## Idea
+- For the multitype stack. The value will be pused onto a array of pointers. And when a operator, procedure, whatever needs to use it it will turn the
+pointer into what it needs.

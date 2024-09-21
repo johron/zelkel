@@ -4,6 +4,8 @@ if not file then print("No 'test.zk' file") os.exit(1)  end
 local content = file:read("a")
 file:close()
 
+local indent = ""
+
 print(content)
 print("div\n")
 
@@ -29,6 +31,8 @@ local scope_stack = {}
 
 local function enter_scope(line)
     table.insert(scope_stack, {mut_vars = {}, imut_vars = {}, line = line})
+    indent = indent .. "    "
+    printf("enter '%s'", indent)
 end
 
 local function exit_scope(line)
@@ -37,6 +41,8 @@ local function exit_scope(line)
         os.exit(1)
     end
     table.remove(scope_stack)
+    indent = indent:sub(1, -5)
+    printf("exit  '%s'", indent)
 end
 
 local function current_scope()
@@ -186,10 +192,10 @@ local function parse(arr)
     local ret = ""
     local including = {}
     local function code(toadd)
-        if ret ~= "" and ret:sub(-1) ~= "\n" then
+        if ret ~= "" then
             ret = ret .. "\n"
         end
-        ret = ret .. toadd
+        ret = ret .. indent .. toadd
     end
 
     i = 1
@@ -266,8 +272,10 @@ local function parse(arr)
                     os.exit(1)
                 end
 
+                exit_scope(line)
                 code("} else {")
                 enter_scope(line)
+
                 i = i + 1
             elseif v == "while" then
                 local condition = {}
@@ -297,7 +305,7 @@ local function parse(arr)
                 end
                 local including_names = table.concat(including_names_table, ", ")
 
-                before_str = before_str .. f("int %s(%s) {%sreturn pop();}\n", ident, def_including_names, parsed:gsub("\n", ""))
+                before_str = before_str .. f("int %s(%s) {%sreturn pop();}\n", ident, def_including_names, parsed:gsub("\n", ""):gsub("    ", ""))
                 code(f("while (%s(%s) == 1) {", ident, including_names))
                 enter_scope(line)
 
@@ -309,8 +317,8 @@ local function parse(arr)
                     os.exit(1)
                 end
 
-                code("}")
                 exit_scope(line)
+                code("}")
                 ends = ends + 1
             elseif v == "mut" then
                 local pat, name = tok(arr[i + 1])
