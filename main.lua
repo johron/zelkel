@@ -80,6 +80,18 @@ while i <= #chars do
         end
         table.insert(toks, "INT(" .. num .. ")")
         i = j - 1
+    elseif c == "\"" then
+        local str = c
+        local j = i + 1
+        while chars[j] or chars[j] == "\"" do
+            str = str .. chars[j]
+            if chars[j] == "\"" then
+                break
+            end
+            j = j + 1
+        end
+        table.insert(toks, "STR(" .. str .. ")")
+        i = j
     elseif is_alpha(c) then
         local str = c
         local j = i + 1
@@ -118,6 +130,7 @@ local function tok(t)
     end
     local patterns = {
         int = "^INT%(([0-9]+)%)$",
+        str = "^STR%((\".-\")%)$",
         op = "^OP%(([%@%:])%)$",
         arop = "^AROP%(([%+%-%*%/])%)$",
         raop = "^RAOP%(([%=%!%>%<])%)$",
@@ -186,6 +199,9 @@ local function parse(arr)
         local p, v = tok(t)
         if p == "int" then
             code(f("push(%s);", v))
+        elseif p == "str" then
+            print("here")
+            print(v)
         elseif p == "id" then
             if v == "echo" then
                 code("printf(\"%d\\n\", pop());")
