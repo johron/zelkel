@@ -4,8 +4,6 @@ if not file then print("No 'test.zk' file") os.exit(1)  end
 local content = file:read("a")
 file:close()
 
-local indent = ""
-
 print(content)
 print("div\n")
 
@@ -31,8 +29,6 @@ local scope_stack = {}
 
 local function enter_scope(line)
     table.insert(scope_stack, {mut_vars = {}, imut_vars = {}, line = line})
-    --indent = indent .. "    "
-    printf("enter '%s'", indent)
 end
 
 local function exit_scope(line)
@@ -41,8 +37,6 @@ local function exit_scope(line)
         os.exit(1)
     end
     table.remove(scope_stack)
-    --indent = indent:sub(1, -5)
-    printf("exit  '%s'", indent)
 end
 
 local function current_scope()
@@ -153,293 +147,304 @@ local function tok(t)
     return nil
 end
 
-local function f(...)
-    return string.format(...)
-end
-
-local code_str = [[
-BITS 64
-section .text
-echo:
-    mov r9, -3689348814741910323
-    sub rsp, 40
-    mov BYTE [rsp+31], 10
-    lea rcx, [rsp+30]
-.L2:
-    mov rax, rdi
-    lea r8, [rsp+32]
-    mul r9
-    mov rax, rdi
-    sub r8, rcx
-    shr rdx, 3
-    lea rsi, [rdx+rdx*4]
-    add rsi, rsi
-    sub rax, rsi
-    add eax, 48
-    mov BYTE [rcx], al
-    mov rax, rdi
-    mov rdi, rdx
-    mov rdx, rcx
-    sub rcx, 1
-    cmp rax, 9
-    ja .L2
-    lea rax, [rsp+32]
-    mov edi, 1
-    sub rdx, rax
-    xor eax, eax
-    lea rsi, [rsp+32+rdx]
-    mov rdx, r8
-    mov rax, 1
-    syscall
-    add rsp, 40
-    ret
-global main
-]]
-
 local r_ends = 0
 local ends = 0
 
 local procs = {}
 local vars = {}
 
-local function parse(arr)
-    local before_str = ""
-    local ret = ""
-    local including = {}
-    local function code(toadd)
-        if ret ~= "" then
-            ret = ret .. "\n"
-        end
-        ret = ret .. indent .. toadd
-    end
+local current_reg = 0
+local literal_count = 0
+local string_literals = {}
+local llvm_ir = {}
+local stack = {}
 
-    i = 1
-    while i <= #arr do
-        local t = arr[i]
+local function next_reg()
+    current_reg = current_reg + 1
+    return "%r" .. current_reg
+end
 
-        local p, v = tok(t)
-        if p == "int" then
-            code(f("mov rax, %s", v))
-        elseif p == "str" then
-            print("here")
-            print(v)
-        elseif p == "id" then
-            if v == "echo" then
-                code("pop rdi")
-                code("call echo")
-            elseif v == "proc" then
-                local pat, name = tok(arr[i + 1])
-                if pat ~= "id" or name == nil then
-                    printf("%s:%s: The token after the procedure definition is not valid", file_name, line)
-                    os.exit(1)
-                end
+local function emit(instr)
+    table.insert(llvm_ir, instr)
+end
 
-                if has_value(vars, name) or has_value(procs, name) then
-                    printf("%s:%s: '%s' is already defined", file_name, line, name)
-                    os.exit(1)
-                end
+local function next_literal_name()
+    literal_count = literal_count + 1
+    return "%.str" .. literal_count
+end
 
-                local pat, val = tok(arr[i + 2])
-                if pat ~= "id" or val ~= "in" then
-                    printf("%s:%s: Missing `in` to open procedure", file_name, line)
-                    os.exit(1)
-                end
+local function store_string_literal(value)
+    local literal_name = next_literal_name()
+    table.insert(string_literals, literal_name .. " = constant [" .. (#value + 1) .. " x i8] c\"" .. value .. "\\00\"")
+    return literal_name
+end
 
-                code(f("%s:", name))
-                enter_scope(line)
+local function push(value)
+    local reg = next_reg()
+    emit(reg .. " = alloca i32")
+    emit("store i32 " .. value .. ", i32* " .. reg)
+    table.insert(stack, {reg = reg, type = "i32"})
+end
 
-                table.insert(procs, name)
-                i = i + 2
-                r_ends = r_ends + 1
-            elseif v == "if" then
-                local condition = {}
-                local has_in = false
-                local j = i + 1
-                while j <= #arr do
-                    local pat, val = tok(arr[j])
-                    if pat == "id" and val == "in" then
-                        has_in = true
-                        break
-                    end
-                    table.insert(condition, arr[j])
-                    j = j + 1
-                end
+local function push_string(value)
+    local literal_name = store_string_literal(value)
+    local reg = next_reg()
+    emit(reg .. " = getelementptr [" .. (#value + 1) .. " x i8], [" .. (#value + 1) .. " x i8]* " .. literal_name .. ", i32 0, i32 0")
+    table.insert(stack, {reg = reg, type = "i8*"})
+end
 
-                if has_in == false then
-                    printf("%s:%s: Missing `in` to open if statement", file_name, line)
-                    os.exit(1)
-                end
+local function pop()
+    return table.remove(stack)
+end
 
-                code(parse(condition))
-                code(f("if (pop() == 1) {"))
-                enter_scope(line)
+emit("declare i32 @printf(i8*, ...)")
+table.insert(string_literals, "@.int_fmt = constant [4 x i8] c\"%d\\0A\\00\"")
 
-                i = j
-                r_ends = r_ends + 1
-            elseif v == "else" then
-                if ends <= 0 then
-                    printf("%s:%s: Unexpected `else` statement", file_name, line)
-                    os.exit(1)
-                end
+i = 1
+while i <= #toks do
+    local t = toks[i]
 
-                local pat, val = tok(arr[i + 1])
-                if pat ~= "id" or val ~= "in" then
-                    printf("%s:%s: Missing `in` to open else", file_name, line)
-                    os.exit(1)
-                end
-
-                exit_scope(line)
-                code("} else {")
-                enter_scope(line)
-
-                i = i + 1
-            elseif v == "while" then
-                local condition = {}
-                local has_in = false
-                local j = i + 1
-                while j <= #arr do
-                    local pat, val = tok(arr[j])
-                    if pat == "id" and val == "in" then
-                        has_in = true
-                        break
-                    end
-                    table.insert(condition, arr[j])
-                    j = j + 1
-                end
-
-                if has_in == false then
-                    printf("%s:%s: Missing `in` to open while", file_name, line)
-                    os.exit(1)
-                end
-
-                local ident = "while_i" .. i
-
-                local parsed, _, including_names_table = parse(condition)
-                local def_including_names = ""
-                if table.concat(including_names_table, " ") ~= "" then
-                    def_including_names = "int " .. table.concat(including_names_table, ", int ")
-                end
-                local including_names = table.concat(including_names_table, ", ")
-
-                before_str = before_str .. f("int %s(%s) {%sreturn pop();}\n", ident, def_including_names, parsed:gsub("\n", ""):gsub("    ", ""))
-                code(f("while (%s(%s) == 1) {", ident, including_names))
-                enter_scope(line)
-
-                i = j
-                r_ends = r_ends + 1
-            elseif v == "end" then
-                if r_ends == 0 then
-                    printf("%s:%s: Unexpected `end` statement", file_name, line)
-                    os.exit(1)
-                end
-
-                exit_scope(line)
-                ends = ends + 1
-            elseif v == "mut" then
-                local pat, name = tok(arr[i + 1])
-                if pat ~= "id" or name == nil then
-                    printf("%s:%s: The token after the variable definition is not valid", file_name, line)
-                    os.exit(1)
-                end
-
-                if has_value(procs, name) then
-                    printf("%s:%s: Procedure with same name already defined", file_name, line)
-                    os.exit(1)
-                end
-
-                local expr = {}
-                local has_end = false
-                local j = i + 2
-                while j <= #arr do
-                    local pat, val = tok(arr[j])
-                    if pat == "id" and val == "end" then
-                        has_end = true
-                        break
-                    end
-                    table.insert(expr, arr[j])
-                    j = j + 1
-                end
-
-                if not has_end then
-                    printf("%s:%s: Missing `end` to close variable definition", file_name, line)
-                    os.exit(1)
-                end
-
-                code(parse(expr))
-
-                if has_variable_in_scope(name) then
-                    code(f("%s = pop();", name))
-                else
-                    code(f("int %s = pop();", name))
-                    add_variable_to_scope(name, true)
-                end
-
-                table.insert(vars, name)
-                i = j
-            elseif has_variable_in_scope(v) then
-                code(f("push(%s);", v))
-                table.insert(including, v)
-            elseif has_value(procs, v) then
-                code(f("call %s", v))
-            else
-                printf("%s:%s: Identifier `%s` not recognized", file_name, line, v)
+    local p, v = tok(t)
+    if p == "int" then
+        emit("; INT(" .. v .. ")")
+        push(v)
+    elseif p == "str" then
+        emit("; STR(" .. v .. ")")
+        push_string(v)
+    elseif p == "id" then
+        emit("; ID(" .. v .. ")")
+        if v == "echo" then
+            local loaded_value = next_reg()
+            emit(loaded_value .. " = load i32, i32* " .. pop().reg)
+            emit("call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.int_fmt, i32 0, i32 0), i32 " .. loaded_value .. ")")
+        elseif v == "puts" then
+            local loaded_value = next_reg()
+            emit(loaded_value .. " = load i32, i32* " .. pop().reg)
+            emit("call i32 (i8*, ...) @printf(i8* " .. loaded_value .. ")")
+        elseif v == "proc" then
+            local pat, name = tok(toks[i + 1])
+            if pat ~= "id" or name == nil then
+                printf("%s:%s: The token after the procedure definition is not valid", file_name, line)
                 os.exit(1)
             end
-        elseif p == "raop" then
-            if v == "=" or v == "!" then
-                code(f("push(pop() %s= pop());", v))
-            elseif v == "<" then
-                code(f("push(pop() > pop());", v)) -- this is not an error, this is on purpose
-            elseif v == ">" then
-                code(f("push(pop() < pop());", v)) -- this is not an error, this is on purpose
-            else
-                printf("%s:%s: Rational operator `%s` not recognized", file_name, line, v)
+
+            if has_value(vars, name) or has_value(procs, name) then
+                printf("%s:%s: '%s' is already defined", file_name, line, name)
                 os.exit(1)
             end
-        elseif p == "arop" then
-            if v == "+" then
-                code(f("push(pop() + pop());"))
-            elseif v == "-" then
-                code(f("__a__ = pop();"))
-                code(f("push(pop() - __a__);"))
-            elseif v == "*" then
-                code(f("push(pop() * pop());"))
-            elseif v == "/" then
-                code(f("__a__ = pop();"))
-                code(f("push(pop() / __a__);"))
-            else
-                printf("%s:%s: Arithmetic operator `%s` not recognized", file_name, line, v)
+
+            local pat, val = tok(toks[i + 2])
+            if pat ~= "id" or val ~= "in" then
+                printf("%s:%s: Missing `in` to open procedure", file_name, line)
                 os.exit(1)
             end
-        elseif p == "op" then
-            if v == "@" then
-                code(f("__a__ = pop();"))
-                code(f("__b__ = pop();"))
-                code(f("push(__a__);"))
-                code(f("push(__b__);"))
-            elseif v == ":" then
-                code(f("__a__ = pop();"))
-                code(f("push(__a__);"))
-                code(f("push(__a__);"))
-            else
-                printf("%s:%s: Stack operator `%s` not recognized", file_name, line, v)
+
+            emit("define i32 @" .. name .. "() {")
+            enter_scope(line)
+
+            table.insert(procs, name)
+            i = i + 2
+            r_ends = r_ends + 1
+        elseif v == "if" then
+            local condition = {}
+            local has_in = false
+            local j = i + 1
+            while j <= #toks do
+                local pat, val = tok(toks[j])
+                if pat == "id" and val == "in" then
+                    has_in = true
+                    break
+                end
+                table.insert(condition, toks[j])
+                j = j + 1
+            end
+
+            if has_in == false then
+                printf("%s:%s: Missing `in` to open if statement", file_name, line)
                 os.exit(1)
             end
-        elseif t == "NL" then
-            line = line + 1
+
+            --code(parse(condition))
+            --code(f("if (pop() == 1) {"))
+            enter_scope(line)
+
+            i = j
+            r_ends = r_ends + 1
+        elseif v == "else" then
+            if ends <= 0 then
+                printf("%s:%s: Unexpected `else` statement", file_name, line)
+                os.exit(1)
+            end
+
+            local pat, val = tok(toks[i + 1])
+            if pat ~= "id" or val ~= "in" then
+                printf("%s:%s: Missing `in` to open else", file_name, line)
+                os.exit(1)
+            end
+
+            exit_scope(line)
+            --code("} else {")
+            enter_scope(line)
+
+            i = i + 1
+        elseif v == "while" then
+            local condition = {}
+            local has_in = false
+            local j = i + 1
+            while j <= #toks do
+                local pat, val = tok(toks[j])
+                if pat == "id" and val == "in" then
+                    has_in = true
+                    break
+                end
+                table.insert(condition, toks[j])
+                j = j + 1
+            end
+
+            if has_in == false then
+                printf("%s:%s: Missing `in` to open while", file_name, line)
+                os.exit(1)
+            end
+
+            --local ident = "while_i" .. i
+
+            --local parsed, _, including_names_table = parse(condition)
+            --local def_including_names = ""
+            --if table.concat(including_names_table, " ") ~= "" then
+            --    def_including_names = "int " .. table.concat(including_names_table, ", int ")
+            --end
+            --local including_names = table.concat(including_names_table, ", ")
+
+            --before_str = before_str .. f("int %s(%s) {%sreturn pop();}\n", ident, def_including_names, parsed:gsub("\n", ""):gsub("    ", ""))
+            --code(f("while (%s(%s) == 1) {", ident, including_names))
+            --enter_scope(line)
+
+            i = j
+            r_ends = r_ends + 1
+        elseif v == "end" then
+            if r_ends == 0 then
+                printf("%s:%s: Unexpected `end` statement", file_name, line)
+                os.exit(1)
+            end
+
+            exit_scope(line)
+            if i == #toks then
+                emit("ret i32 0")
+            end
+            emit("}")
+            ends = ends + 1
+        elseif v == "mut" then
+            local pat, name = tok(toks[i + 1])
+            if pat ~= "id" or name == nil then
+                printf("%s:%s: The token after the variable definition is not valid", file_name, line)
+                os.exit(1)
+            end
+
+            if has_value(procs, name) then
+                printf("%s:%s: Procedure with same name already defined", file_name, line)
+                os.exit(1)
+            end
+
+            local expr = {}
+            local has_end = false
+            local j = i + 2
+            while j <= #toks do
+                local pat, val = tok(toks[j])
+                if pat == "id" and val == "end" then
+                    has_end = true
+                    break
+                end
+                table.insert(expr, toks[j])
+                j = j + 1
+            end
+
+            if not has_end then
+                printf("%s:%s: Missing `end` to close variable definition", file_name, line)
+                os.exit(1)
+            end
+
+            --code(parse(expr))
+--
+            --if has_variable_in_scope(name) then
+            --    code(f("%s = pop();", name))
+            --else
+            --    code(f("int %s = pop();", name))
+            --    add_variable_to_scope(name, true)
+            --end
+
+            table.insert(vars, name)
+            i = j
+        elseif has_variable_in_scope(v) then
+            --code(f("push(%s);", v))
+            --table.insert(including, v)
+        elseif has_value(procs, v) then
+            --code(f("call %s", v))
         else
-            printf("%s:%s: Token `%s` not recognized", file_name, line, t)
+            printf("%s:%s: Identifier `%s` not recognized", file_name, line, v)
+            os.exit(1)
+        end
+    elseif p == "raop" then
+        emit("; RAOP(" .. v .. ")")
+        --if v == "=" or v == "!" then
+        --    code(f("push(pop() %s= pop());", v))
+        --elseif v == "<" then
+        --    code(f("push(pop() > pop());", v)) -- this is not an error, this is on purpose
+        --elseif v == ">" then
+        --    code(f("push(pop() < pop());", v)) -- this is not an error, this is on purpose
+        --else
+        --    printf("%s:%s: Rational operator `%s` not recognized", file_name, line, v)
+        --    os.exit(1)
+        --end
+    elseif p == "arop" then
+        local b = pop()
+        local a = pop()
+
+        local loaded_a = next_reg()
+        local loaded_b = next_reg()
+
+        emit("; AROP(" .. v .. ")")
+        emit(loaded_a .. " = load i32, i32* " .. a.reg)
+        emit(loaded_b .. " = load i32, i32* " .. b.reg)
+
+        local result = next_reg()
+        if v == "+" then
+            emit(result .. " = add i32 " .. loaded_a .. ", " .. loaded_b)
+        elseif v == "-" then
+            emit(result .. " = sub i32 " .. loaded_a .. ", " .. loaded_b)
+        elseif v == "*" then
+            emit(result .. " = mul i32 " .. loaded_a .. ", " .. loaded_b)
+        elseif v == "/" then
+            emit(result .. " = div i32 " .. loaded_a .. ", " .. loaded_b)
+        else
+            printf("%s:%s: Arithmetic operator `%s` not recognized", file_name, line, v)
             os.exit(1)
         end
 
-        i = i + 1
+        push(result)
+    elseif p == "op" then
+        emit("; OP(" .. v .. ")")
+        --if v == "@" then
+        --    code(f("__a__ = pop();"))
+        --    code(f("__b__ = pop();"))
+        --    code(f("push(__a__);"))
+        --    code(f("push(__b__);"))
+        --elseif v == ":" then
+        --    code(f("__a__ = pop();"))
+        --    code(f("push(__a__);"))
+        --    code(f("push(__a__);"))
+        --else
+        --    printf("%s:%s: Stack operator `%s` not recognized", file_name, line, v)
+        --    os.exit(1)
+        --end
+    elseif t == "NL" then
+        line = line + 1
+    else
+        printf("%s:%s: Token `%s` not recognized", file_name, line, t)
+        os.exit(1)
     end
 
-    return ret, before_str, including
+    i = i + 1
 end
-
-local ret, before_str, _ = parse(toks)
-code_str = code_str .. before_str .. ret
 
 if r_ends ~= ends then
     if r_ends > ends then
@@ -451,17 +456,17 @@ if r_ends ~= ends then
     os.exit(1)
 end
 
-code_str = code_str .. [[
-
-mov rax, 60
-xor rdi, rdi
-syscall
-]]
-
-local out = io.open("test.asm", "w")
+local out = io.open("out/test.ll", "w")
 if out == nil then
     print("file is nil")
     os.exit(1)
 end
-out:write(code_str)
+
+local ir = table.concat(string_literals, "\n") .. table.concat(llvm_ir, "\n")
+
+out:write(ir)
 out:close()
+
+os.execute("llvm-as out/test.ll -o out/test.bc")
+os.execute("llc out/test.bc -o out/test.s")
+os.execute("clang out/test.s -o out/test")
