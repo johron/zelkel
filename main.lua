@@ -206,7 +206,7 @@ while i <= #toks do
 
     local p, v = tok(t)
     if p == "int" then
-        emit("; INT(" .. v .. ")")
+        emit("; " .. t)
         push(v)
     elseif p == "str" then
         if v == nil then
@@ -224,7 +224,7 @@ while i <= #toks do
             os.exit(1)
         end
 
-        emit("; STR(" .. v .. ")")
+        emit("; " .. t)
         local str = v:match("^\"(.*)\"$"):gsub("\\n", "\\0A")
         local length = #str + 1
         for _ in string.gmatch(str, "\\0A") do
@@ -234,7 +234,7 @@ while i <= #toks do
         print(str)
         push_string(str, length)
     elseif p == "id" then
-        emit("; ID(" .. v .. ")")
+        emit("; " .. t)
         if v == "echo" then
             local loaded_value = next_reg()
             emit(loaded_value .. " = load i32, i32* " .. pop().reg)
@@ -407,7 +407,7 @@ while i <= #toks do
             os.exit(1)
         end
     elseif p == "raop" then
-        emit("; RAOP(" .. v .. ")")
+        emit("; " .. t)
         --if v == "=" or v == "!" then
         --    code(f("push(pop() %s= pop());", v))
         --elseif v == "<" then
@@ -425,7 +425,7 @@ while i <= #toks do
         local loaded_a = next_reg()
         local loaded_b = next_reg()
 
-        emit("; AROP(" .. v .. ")")
+        emit("; " .. t)
         emit(loaded_a .. " = load i32, i32* " .. a.reg)
         emit(loaded_b .. " = load i32, i32* " .. b.reg)
 
@@ -445,7 +445,7 @@ while i <= #toks do
 
         push(result)
     elseif p == "op" then
-        emit("; OP(" .. v .. ")")
+        emit("; " .. t)
         --if v == "@" then
         --    code(f("__a__ = pop();"))
         --    code(f("__b__ = pop();"))
