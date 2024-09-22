@@ -1,22 +1,3 @@
-proc test in
-    mut i 87 end
-    i echo
-end
-
 proc main in
-    if 1 2 @ > in
-        12 echo
-    end
-
-    test
-
-    mut i 0 end
-    while i 11 < in
-        i echo
-        if i 4 = in
-            mut i 3 : * end
-        else in
-            mut i 1 i + end
-        end
-    end
+    1 echo
 end
