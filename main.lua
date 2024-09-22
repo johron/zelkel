@@ -170,12 +170,12 @@ end
 
 local function next_literal_name()
     literal_count = literal_count + 1
-    return "%.str" .. literal_count
+    return "@.str" .. literal_count
 end
 
-local function store_string_literal(value)
+local function store_string_literal(value, length)
     local literal_name = next_literal_name()
-    table.insert(string_literals, literal_name .. " = constant [" .. (#value + 1) .. " x i8] c\"" .. value .. "\\00\"")
+    table.insert(string_literals, literal_name .. " = constant [" .. length .. " x i8] c\"" .. value .. "\\00\"")
     return literal_name
 end
 
@@ -186,10 +186,10 @@ local function push(value)
     table.insert(stack, {reg = reg, type = "i32"})
 end
 
-local function push_string(value)
-    local literal_name = store_string_literal(value)
+local function push_string(value, length)
+    local literal_name = store_string_literal(value, length)
     local reg = next_reg()
-    emit(reg .. " = getelementptr [" .. (#value + 1) .. " x i8], [" .. (#value + 1) .. " x i8]* " .. literal_name .. ", i32 0, i32 0")
+    emit(reg .. " = getelementptr [" .. length .. " x i8], [" .. length .. " x i8]* " .. literal_name .. ", i32 0, i32 0")
     table.insert(stack, {reg = reg, type = "i8*"})
 end
 
@@ -209,8 +209,30 @@ while i <= #toks do
         emit("; INT(" .. v .. ")")
         push(v)
     elseif p == "str" then
+        if v == nil then
+            printf("%s:%s: String value is nil", file_name, line)
+            os.exit(1)
+        end
+
+        if v:sub(1, 1) ~= "\"" then
+            printf("%s:%s: String does not lead with '\"'", file_name, line)
+            os.exit(1)
+        end
+
+        if v:sub(-1) ~= "\"" then
+            printf("%s:%s: String must end with '\"'", file_name, line)
+            os.exit(1)
+        end
+
         emit("; STR(" .. v .. ")")
-        push_string(v)
+        local str = v:match("^\"(.*)\"$"):gsub("\\n", "\\0A")
+        local length = #str + 1
+        for _ in string.gmatch(str, "\\0A") do
+            print("newline")
+            length = length - 2
+        end
+        print(str)
+        push_string(str, length)
     elseif p == "id" then
         emit("; ID(" .. v .. ")")
         if v == "echo" then
@@ -218,9 +240,10 @@ while i <= #toks do
             emit(loaded_value .. " = load i32, i32* " .. pop().reg)
             emit("call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.int_fmt, i32 0, i32 0), i32 " .. loaded_value .. ")")
         elseif v == "puts" then
+            local value = pop()
             local loaded_value = next_reg()
-            emit(loaded_value .. " = load i32, i32* " .. pop().reg)
-            emit("call i32 (i8*, ...) @printf(i8* " .. loaded_value .. ")")
+            emit(loaded_value .. " = load i32, i32* " .. value.reg)
+            emit("call i32 (i8*, ...) @printf(i8* " .. value.reg .. ")")
         elseif v == "proc" then
             local pat, name = tok(toks[i + 1])
             if pat ~= "id" or name == nil then
