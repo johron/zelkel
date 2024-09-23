@@ -74,10 +74,11 @@ end
 
 local function parse(toks, file)
     local line = 1
-    local pos = 1
+    local ir = {}
+    local i = 1
 
     local function current()
-        return toks[pos]
+        return toks[i]
     end
 
     local function expect(type, value)
@@ -89,32 +90,73 @@ local function parse(toks, file)
             error(file, line, string.format("Expected '%s' with value '%s', but found '%s' with value '%s'", type, value, t.type, t.value))
         end
 
-        pos = pos + 1
+        i = i + 1
         return t
     end
 
-    local i = 1
+    local function emit(instr)
+        table.insert(ir, instr)
+    end
+
     while i <= #toks do
         local t = toks[i].type
         local v = toks[i].value
 
         if t == "identifier" then
+            i = i + 1
             if v == "fn" then
-                print("hier")
-                expect("identifier")
-                print("hier2")
+                local name = expect("identifier").value
                 expect("parenthesis", "(")
-                print("hier3")
+
+                local args = {}
+                while i <= #toks and toks[i].value ~= ")" do
+                    table.insert(args, toks[i])
+                    i = i + 1
+                end
+
+                print("TODO: implement args to functions")
+
+                expect("parenthesis", ")")
+                expect("punctuation", ":")
+                local type = expect("identifier").value
+                expect("parenthesis", "{")
+
+                if type == "int" then
+                    emit(string.format("define i32 @%s() {", name))
+                elseif type == "void" then
+                    emit(string.format("define void @%s() {", name))
+                else
+                    error(file, line, string.format("Unrecognized return type: '%s'", type))
+                end
+            elseif v == "echo" then
+                expect("parenthesis", "(")
+                print("TODO: parse expression inside here")
+                local int = expect("integer").value
+                expect("parenthesis", ")")
+                expect("punctuation", ";")
+
+                emit("call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.int_fmt, i32 0, i32 0), i32 " .. int .. ")")
             else
-                error(file, line, "TODO: implement adding variables here and other stuff")
+                print("TODO: implement adding variables here and other stuff")
+                error(file, line, string.format("Unexpected identifier found during parsing: '%s'", v))
+            end
+        elseif t == "parenthesis" then
+            i = i + 1
+            if v == "}" then
+                expect("punctuation", ";")
+                emit("}")
+            else
+                error(file, line, string.format("Unexpected punctuation found during parsing: '%s'", v))
             end
         elseif t == "newline" then
             line = line + 1
             i = i + 1
         else
-            error(file, line, string.format("Unexpected token found during parsing: {type = '%s', value = '%s'}", t, v))
+            error(file, line, string.format("Unexpected token found during parsing: '%s'", v))
         end
     end
+
+    return ir
 end
 
 local file_name = "test.zk"
@@ -127,4 +169,5 @@ local toks = lex(content, file_name)
 for _, tok in ipairs(toks) do
     print(string.format("{type = '%s', value = '%s'}", tok.type, tok.value))
 end
-parse(toks, file_name)
+local ir = parse(toks, file_name)
+print(table.concat(ir, "\n"))
