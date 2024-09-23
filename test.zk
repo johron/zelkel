@@ -1,4 +1,8 @@
+proc foo in
+    12 2 * echo
+end
+
 proc main in
-    "1+1 = " puts
-    1 1 + echo
+    foo
+    "hei\n" puts
 end

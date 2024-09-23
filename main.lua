@@ -197,7 +197,7 @@ local function pop()
     return table.remove(stack)
 end
 
-emit("declare i32 @printf(i8*, ...)")
+emit("declare void @printf(i8*, ...)")
 table.insert(string_literals, "@.int_fmt = constant [4 x i8] c\"%d\\0A\\00\"")
 
 i = 1
@@ -228,7 +228,6 @@ while i <= #toks do
         local str = v:match("^\"(.*)\"$"):gsub("\\n", "\\0A")
         local length = #str + 1
         for _ in string.gmatch(str, "\\0A") do
-            print("newline")
             length = length - 2
         end
         print(str)
@@ -262,7 +261,7 @@ while i <= #toks do
                 os.exit(1)
             end
 
-            emit("define i32 @" .. name .. "() {")
+            emit("define void @" .. name .. "() {")
             enter_scope(line)
 
             table.insert(procs, name)
@@ -351,9 +350,7 @@ while i <= #toks do
             end
 
             exit_scope(line)
-            if i == #toks then
-                emit("ret i32 0")
-            end
+            emit("ret void")
             emit("}")
             ends = ends + 1
         elseif v == "mut" then
@@ -402,6 +399,7 @@ while i <= #toks do
             --table.insert(including, v)
         elseif has_value(procs, v) then
             --code(f("call %s", v))
+            emit("call void @" .. v .. "()")
         else
             printf("%s:%s: Identifier `%s` not recognized", file_name, line, v)
             os.exit(1)
