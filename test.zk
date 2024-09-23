@@ -1,8 +1,3 @@
-proc foo in
-    12 2 * echo
-end
-
-proc main in
-    foo
-    "hei\n" puts
-end
+fn main(): void {
+    echo(1);
+};
