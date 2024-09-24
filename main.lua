@@ -83,11 +83,16 @@ local function parse(toks, file)
 
     local function expect(type, value)
         local t = current()
-        if t.type ~= type then
-            error(file, line, string.format("Expected '%s', but found '%s'", type, t.type))
+        if t.type == "newline" then
+            i = i + 1
+            line = line + 1
+            return expect(type, value)
         end
+
         if value ~= nil and t.value ~= value then
             error(file, line, string.format("Expected '%s' with value '%s', but found '%s' with value '%s'", type, value, t.type, t.value))
+        elseif t.type ~= type then
+            error(file, line, string.format("Expected '%s', but found '%s' with value '%s'", type, t.type, t.value))
         end
 
         i = i + 1
@@ -95,10 +100,57 @@ local function parse(toks, file)
     end
 
     local function parse_expression()
-        print("TODO: implement parse_expression")
         -- check for variable reference, function call with non void return value, just a value no operators,
         -- check for mathematical expressions that can include all this aswell
-        return {}
+
+        local function parse_primary()
+            local t = current()
+            if t.type == "identifier" then
+                i = i + 1
+                return {type = "variable", name = t.value}
+            elseif t.type == "integer" then
+                i = i + 1
+                return {type = "integer", value = t.value}
+            elseif t.type == "parenthesis" and t.value == "(" then
+                i = i + 1
+                local expr = parse_expression()
+                expect("parenthesis", ")")
+                return expr
+            else
+                error(file, line, string.format("Unexpected token in primary expression: '%s'", t.value))
+            end
+        end
+
+        local function parse_unary()
+            local t = current()
+            if t.type == "operator" and (t.value == "-" or t.value == "+") then
+                i = i + 1
+                local expr = parse_unary()
+                return {type = "unary_expression", operator = t.value, operand = expr}
+            else
+                return parse_primary()
+            end
+        end
+
+        local function parse_term()
+            local expr = parse_unary()
+            while i <= #toks and current().type == "operator" and (current().value == "*" or current().value == "/") do
+                local op = current().value
+                i = i + 1
+                local right = parse_unary()
+                expr = {type = "binary_expression", operator = op, left = expr, right = right}
+            end
+            return expr
+        end
+
+        local expr = parse_term()
+        while i <= #toks and current().type == "operator" and (current().value == "+" or current().value == "-") do
+            local op = current().value
+            i = i + 1
+            local right = parse_term()
+            expr = {type = "binary_expression", operator = op, left = expr, right = right}
+        end
+        return expr
     end
 
     local function parse_function_declaration_args()
@@ -123,8 +175,7 @@ local function parse(toks, file)
     end
 
     local function parse_function_call_args()
-        print("TODO: implement parse_function_call_args")
-        return {}
+        error("TODO: implement parse_function_call_args")
     end
 
     local function parse_function_call()
@@ -153,11 +204,11 @@ local function parse(toks, file)
             str = "immutable"
         end
 
-        local name = expect("identifier")
+        local name = expect("identifier").value
         expect("operator", "=")
 
         local expr = parse_expression()
-        expect(";")
+        expect("punctuation", ";")
 
         return {
             type = str .. "_variable_assignment",
@@ -166,10 +217,17 @@ local function parse(toks, file)
         }
     end
 
-    local parse_statement
-    local parse_function_declaration
+    local function parse_body()
+        local body = {}
+        while i <= #toks and current().type ~= "parenthesis" and current().value ~= "}" do
+            table.insert(body, parse_statement())
+            i = i + 1
+        end
 
-    parse_function_declaration = function()
+        return body
+    end
+
+    local function parse_function_declaration()
         expect("identifier", "fn")
         local name = expect("identifier").value
         expect("parenthesis", "(")
@@ -185,7 +243,7 @@ local function parse(toks, file)
             error(file, line, string.format("Unrecognized return type: '%s'", type))
         end
 
-        local stmt = parse_statement()
+        local body = parse_body()
         expect("parenthesis", "}")
         expect("punctuation", ";")
 
@@ -194,11 +252,11 @@ local function parse(toks, file)
             name = name,
             args = args,
             returns = type,
-            body = stmt
+            body = body
         }
     end
 
-    parse_statement = function()
+    function parse_statement()
         local type = current().type
         local value = current().value
 
@@ -212,11 +270,12 @@ local function parse(toks, file)
             -- elseif is variable reference
             -- elseif is function call
             else
-                error(file, line, string.format("Unrecognized token found while parsing statement: '%s'", value))
+                error(file, line, string.format("Unexpected token found while parsing statement: '%s'", value))
             end
         elseif type == "newline" then
             line = line + 1
             i = i + 1
+            return parse_statement()
         else
             error(file, line, string.format("Unexpected token found while parsing statement: '%s'", value))
         end
@@ -243,17 +302,6 @@ for _, tok in ipairs(toks) do
 end
 
 local ast = parse(toks, file_name)
-local function print_table(t, indent)
-    indent = indent or 0
-    local indent_str = string.rep("  ", indent)
-    for k, v in pairs(t) do
-        if type(v) == "table" then
-            print(indent_str .. "{")
-            print_table(v, indent + 1)
-            print(indent_str .. "}")
-        else
-            print(indent_str .. tostring(v))
-        end
-    end
-end
-print_table(ast)
+
+local inspect = require("inspect")
+print(inspect(ast))

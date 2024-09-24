@@ -1,6 +1,4 @@
 fn main(): void {
-    let value = 5 + 7;
-    print_num(value);
-
-    return;
+    let x = 5;
+    let y = x + 1;
 };
