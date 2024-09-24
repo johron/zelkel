@@ -1,4 +1,4 @@
 fn main(): void {
-    let x = 5;
-    let y = x + 1;
+    const x = 1 + 2 + 3;
+    
 };
