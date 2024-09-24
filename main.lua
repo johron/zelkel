@@ -96,12 +96,30 @@ local function parse(toks, file)
 
     local function parse_expression()
         print("TODO: implement parse_expression")
+        -- check for variable reference, function call with non void return value, just a value no operators,
+        -- check for mathematical expressions that can include all this aswell
         return {}
     end
 
     local function parse_function_declaration_args()
-        print("TODO: implement parse_function_declaration_args")
-        return {}
+        local args = {}
+
+        local start = i
+        while i <= #toks and not toks[i].type == "parenthesis" do
+            if i ~= start then
+                expect("punctuation", ",")
+            elseif toks[i] and toks[i] ~= "identifier" then
+                return {}
+            end
+
+            local name = expect("identifier")
+            expect("punctuation", ":")
+            local type = expect("identifier")
+
+            table.insert(args, {name, type})
+        end
+
+        return args
     end
 
     local function parse_function_call_args()
@@ -109,15 +127,54 @@ local function parse(toks, file)
         return {}
     end
 
-    local function parse_function_declaration()
+    local function parse_function_call()
         local name = expect("identifier").value
         expect("parenthesis", "(")
 
-        local args = {}
-        while i <= #toks and toks[i].value ~= ")" do
-            table.insert(args, toks[i])
-            i = i + 1
+        local args = parse_function_call_args()
+
+        expect("parenthesis", ")")
+        expect("punctuation", ";")
+
+        return {
+            type = "function_call",
+            name = name,
+            args = args
+        }
+    end
+
+    local function parse_variable_assignment(mutable)
+        local str = ""
+        if mutable == true then
+            expect("identifier", "let")
+            str = "mutable"
+        else
+            expect("identifier", "const")
+            str = "immutable"
         end
+
+        local name = expect("identifier")
+        expect("operator", "=")
+
+        local expr = parse_expression()
+        expect(";")
+
+        return {
+            type = str .. "_variable_assignment",
+            name = name,
+            value = expr
+        }
+    end
+
+    local parse_statement
+    local parse_function_declaration
+
+    parse_function_declaration = function()
+        expect("identifier", "fn")
+        local name = expect("identifier").value
+        expect("parenthesis", "(")
+
+        local args = parse_function_declaration_args()
 
         expect("parenthesis", ")")
         expect("punctuation", ":")
@@ -128,47 +185,41 @@ local function parse(toks, file)
             error(file, line, string.format("Unrecognized return type: '%s'", type))
         end
 
-        return {
-            type = "function_declaration",
-            name = name,
-            args = parse_function_declaration_args(),
-            returns = type,
-        }
-    end
-
-    local function parse_function_call()
-        local name = expect("identifier").value
-        expect("parenthesis", "(")
-
-        local args = {}
-        while i <= #toks and toks[i].value ~= ")" do
-            table.insert(args, toks[i])
-            i = i + 1
-        end
-
-        expect("parenthesis", ")")
+        local stmt = parse_statement()
+        expect("parenthesis", "}")
         expect("punctuation", ";")
 
         return {
-            type = "function_call",
+            type = "function_declaration",
             name = name,
-            args = parse_function_call_args()
+            args = args,
+            returns = type,
+            body = stmt
         }
     end
 
-    local function parse_constant_variable_assignment()
-        print("TODO: implement parse_constant_variable_assignment")
-        return {}
-    end
+    parse_statement = function()
+        local type = current().type
+        local value = current().value
 
-    local function parse_mutable_variable_assignment()
-        print("TODO: implement parse_mutable_variable_assignment")
-        return {}
-    end
-
-    local function parse_statement()
-        print("TODO: implement parse_statement")
-        return {}
+        if type == "identifier" then
+            if value == "fn" then
+                return parse_function_declaration()
+            elseif value == "let" then
+                return parse_variable_assignment(true)
+            elseif value == "const" then
+                return parse_variable_assignment(false)
+            -- elseif is variable reference
+            -- elseif is function call
+            else
+                error(file, line, string.format("Unrecognized token found while parsing statement: '%s'", value))
+            end
+        elseif type == "newline" then
+            line = line + 1
+            i = i + 1
+        else
+            error(file, line, string.format("Unexpected token found while parsing statement: '%s'", value))
+        end
     end
 
     while i <= #toks do
