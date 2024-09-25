@@ -77,6 +77,8 @@ local function parse(toks, file)
     local ast = {}
     local i = 1
 
+    -- add scopes and stuff to decalre functions and variables
+
     local function current()
         return toks[i]
     end
@@ -100,7 +102,19 @@ local function parse(toks, file)
     end
 
     local function parse_function_call_args()
-        error("TODO: implement parse_function_call_args")
+        local args = {}
+        local start = i
+        while i <= #toks and toks[i].type ~= "parenthesis" and toks[i].value ~= ")" do
+            if i ~= start then
+                expect("punctuation", ",")
+            elseif toks[i + 1].type == "parenthesis" and toks[i + 1].value == ")" then
+                return {}
+            end
+
+            table.insert(args, parse_expression())
+        end
+
+        return args
     end
 
     local function parse_function_call()
@@ -110,7 +124,6 @@ local function parse(toks, file)
         local args = parse_function_call_args()
 
         expect("parenthesis", ")")
-        expect("punctuation", ";")
 
         return {
             type = "function_call",
@@ -119,71 +132,13 @@ local function parse(toks, file)
         }
     end
 
-    local function parse_expression()
-        -- check for variable reference, function call with non void return value, just a value no operators,
-        -- check for mathematical expressions that can include all this aswell
-
-        local function parse_primary()
-            local t = current()
-            if t.type == "identifier" then
-                i = i + 1
-                if toks[i + 1].type == "parenthesis" and toks[i + 1].value == "(" then
-                    return parse_function_call()
-                else
-                    return {type = "variable", name = t.value}
-                end
-            elseif t.type == "integer" then
-                i = i + 1
-                return {type = "integer", value = t.value}
-            elseif t.type == "parenthesis" and t.value == "(" then
-                i = i + 1
-                local expr = parse_expression()
-                expect("parenthesis", ")")
-                return expr
-            else
-                error(file, line, string.format("Unexpected token in primary expression: '%s'", t.value))
-            end
-        end
-
-        local function parse_unary()
-            local t = current()
-            if t.type == "operator" and (t.value == "-" or t.value == "+") then
-                i = i + 1
-                local expr = parse_unary()
-                return {type = "unary_expression", operator = t.value, operand = expr}
-            else
-                return parse_primary()
-            end
-        end
-
-        local function parse_term()
-            local expr = parse_unary()
-            while i <= #toks and current().type == "operator" and (current().value == "*" or current().value == "/") do
-                local op = current().value
-                i = i + 1
-                local right = parse_unary()
-                expr = {type = "binary_expression", operator = op, left = expr, right = right}
-            end
-            return expr
-        end
-
-        local expr = parse_term()
-        while i <= #toks and current().type == "operator" and (current().value == "+" or current().value == "-") do
-            local op = current().value
-            i = i + 1
-            local right = parse_term()
-            expr = {type = "binary_expression", operator = op, left = expr, right = right}
-        end
-        return expr
-    end
-
     local function parse_function_declaration_args()
         local args = {}
         local start = i
         while i <= #toks and toks[i].type ~= "parenthesis" and toks[i].value ~= ")" do
             if i ~= start then
                 expect("punctuation", ",")
-            elseif toks[i].type ~= "identifier" then
+            elseif toks[i + 1].type == "parenthesis" and toks[i + 1].value == ")" then
                 return {}
             end
 
@@ -211,7 +166,9 @@ local function parse(toks, file)
         expect("operator", "=")
 
         local expr = parse_expression()
+        print("here1")
         expect("punctuation", ";")
+        print("here2")
 
         return {
             type = str .. "_variable_assignment",
@@ -270,6 +227,61 @@ local function parse(toks, file)
         }
     end
 
+    function parse_expression()
+        local function parse_primary()
+            local t = current()
+            if t.type == "identifier" then
+                if toks[i + 1].type == "parenthesis" and toks[i + 1].value == "(" then
+                    return parse_function_call()
+                else
+                    i = i + 1
+                    return {type = "variable", name = t.value}
+                end
+            elseif t.type == "integer" then
+                i = i + 1
+                return {type = "integer", value = t.value}
+            elseif t.type == "parenthesis" and t.value == "(" then
+                i = i + 1
+                local expr = parse_expression()
+                expect("parenthesis", ")")
+                return expr
+            else
+                error(file, line, string.format("Unexpected token in primary expression: '%s'", t.value))
+            end
+        end
+
+        local function parse_unary()
+            local t = current()
+            if t.type == "operator" and (t.value == "-" or t.value == "+") then
+                i = i + 1
+                local expr = parse_unary()
+                return {type = "unary_expression", operator = t.value, operand = expr}
+            else
+                return parse_primary()
+            end
+        end
+
+        local function parse_term()
+            local expr = parse_unary()
+            while i <= #toks and current().type == "operator" and (current().value == "*" or current().value == "/") do
+                local op = current().value
+                i = i + 1
+                local right = parse_unary()
+                expr = {type = "binary_expression", operator = op, left = expr, right = right}
+            end
+            return expr
+        end
+
+        local expr = parse_term()
+        while i <= #toks and current().type == "operator" and (current().value == "+" or current().value == "-") do
+            local op = current().value
+            i = i + 1
+            local right = parse_term()
+            expr = {type = "binary_expression", operator = op, left = expr, right = right}
+        end
+        return expr
+    end
+
     function parse_statement()
         local type = current().type
         local value = current().value
@@ -286,7 +298,7 @@ local function parse(toks, file)
             -- elseif is variable reference
             -- elseif is function call
             else
-                error(file, line, string.format("Unexpected token found while parsing statement: '%s'", value))
+                error(file, line, string.format("Unexpected identifier found while parsing statement: '%s'", value))
             end
         elseif type == "newline" then
             line = line + 1
