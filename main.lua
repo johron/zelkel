@@ -52,7 +52,7 @@ local function lex(input, file)
         elseif is_in_table(c, {"+", "-", "*", "/", "="}) then
             table.insert(toks, {type = "operator", value = c})
             i = i + 1
-        elseif is_in_table(c, {";", ":"}) then
+        elseif is_in_table(c, {";", ":", ","}) then
             table.insert(toks, {type = "punctuation", value = c})
             i = i + 1
         elseif is_in_table(c, {"(", ")", "{", "}"}) then
@@ -99,6 +99,26 @@ local function parse(toks, file)
         return t
     end
 
+    local function parse_function_call_args()
+        error("TODO: implement parse_function_call_args")
+    end
+
+    local function parse_function_call()
+        local name = expect("identifier").value
+        expect("parenthesis", "(")
+
+        local args = parse_function_call_args()
+
+        expect("parenthesis", ")")
+        expect("punctuation", ";")
+
+        return {
+            type = "function_call",
+            name = name,
+            args = args
+        }
+    end
+
     local function parse_expression()
         -- check for variable reference, function call with non void return value, just a value no operators,
         -- check for mathematical expressions that can include all this aswell
@@ -107,7 +127,11 @@ local function parse(toks, file)
             local t = current()
             if t.type == "identifier" then
                 i = i + 1
-                return {type = "variable", name = t.value}
+                if toks[i + 1].type == "parenthesis" and toks[i + 1].value == "(" then
+                    return parse_function_call()
+                else
+                    return {type = "variable", name = t.value}
+                end
             elseif t.type == "integer" then
                 i = i + 1
                 return {type = "integer", value = t.value}
@@ -155,43 +179,22 @@ local function parse(toks, file)
 
     local function parse_function_declaration_args()
         local args = {}
-
         local start = i
-        while i <= #toks and not toks[i].type == "parenthesis" do
+        while i <= #toks and toks[i].type ~= "parenthesis" and toks[i].value ~= ")" do
             if i ~= start then
                 expect("punctuation", ",")
-            elseif toks[i] and toks[i] ~= "identifier" then
+            elseif toks[i].type ~= "identifier" then
                 return {}
             end
 
-            local name = expect("identifier")
+            local name = expect("identifier").value
             expect("punctuation", ":")
-            local type = expect("identifier")
+            local type = expect("identifier").value
 
-            table.insert(args, {name, type})
+            table.insert(args, {name = name, type = type})
         end
 
         return args
-    end
-
-    local function parse_function_call_args()
-        error("TODO: implement parse_function_call_args")
-    end
-
-    local function parse_function_call()
-        local name = expect("identifier").value
-        expect("parenthesis", "(")
-
-        local args = parse_function_call_args()
-
-        expect("parenthesis", ")")
-        expect("punctuation", ";")
-
-        return {
-            type = "function_call",
-            name = name,
-            args = args
-        }
     end
 
     local function parse_variable_assignment(mutable)
@@ -213,7 +216,7 @@ local function parse(toks, file)
         return {
             type = str .. "_variable_assignment",
             name = name,
-            value = expr
+            expression = expr
         }
     end
 
@@ -256,6 +259,17 @@ local function parse(toks, file)
         }
     end
 
+    local function parse_function_return()
+        expect("identifier", "return")
+        local expr = parse_expression()
+        expect("punctuation", ";")
+
+        return {
+            type = "function_return",
+            expression = expr
+        }
+    end
+
     function parse_statement()
         local type = current().type
         local value = current().value
@@ -267,6 +281,8 @@ local function parse(toks, file)
                 return parse_variable_assignment(true)
             elseif value == "const" then
                 return parse_variable_assignment(false)
+            elseif value == "return" then
+                return parse_function_return()
             -- elseif is variable reference
             -- elseif is function call
             else
