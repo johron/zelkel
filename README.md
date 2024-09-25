@@ -3,7 +3,7 @@
 ## TODO
 - [ ] Rewrite in itself
 - [ ] Finish parser
-- [ ] Make llvm emitter, codege
+- [ ] Make llvm emitter, codegen
 - [ ] Fix this:
 ```zk
 fn main(): void {
