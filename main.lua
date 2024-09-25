@@ -77,7 +77,57 @@ local function parse(toks, file)
     local ast = {}
     local i = 1
 
-    -- add scopes and stuff to decalre functions and variables
+    local scope_stack = {}
+
+    local function current_scope()
+        return scope_stack[#scope_stack] or {mut_vars = {}, imut_vars = {}, functions = {}}
+    end
+
+    local function enter_scope()
+        print(table.concat(current_scope(), " "))
+        table.insert(scope_stack, current_scope())
+    end
+
+    local function exit_scope()
+        if #scope_stack == 0 then
+            error(file, line, string.format("Unexpected token found: '}'"))
+        end
+        table.remove(scope_stack)
+    end
+
+    local function has_variable_in_scope(name)
+        for j = #scope_stack, 1, -1 do
+            local scope = scope_stack[j]
+            if is_in_table(name, scope.mut_vars) or is_in_table(name, scope.imut_vars) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function add_variable_to_scope(name, mutable)
+        local scope = current_scope()
+        if mutable then
+            table.insert(scope.mut_vars, name)
+        else
+            table.insert(scope.imut_vars, name)
+        end
+    end
+
+    local function has_function_in_scope(name)
+        for j = #scope_stack, 1, -1 do
+            local scope = scope_stack[j]
+            if is_in_table(name, scope.functions) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function add_function_to_scope(name)
+        local scope = current_scope()
+        table.insert(scope.functions, name)
+    end
 
     local function current()
         return toks[i]
@@ -146,6 +196,7 @@ local function parse(toks, file)
             expect("punctuation", ":")
             local type = expect("identifier").value
 
+            add_variable_to_scope(name, false)
             table.insert(args, {name = name, type = type})
         end
 
@@ -166,10 +217,9 @@ local function parse(toks, file)
         expect("operator", "=")
 
         local expr = parse_expression()
-        print("here1")
         expect("punctuation", ";")
-        print("here2")
 
+        add_variable_to_scope(name, mutable)
         return {
             type = str .. "_variable_assignment",
             name = name,
@@ -183,13 +233,16 @@ local function parse(toks, file)
             table.insert(body, parse_statement())
             i = i + 1
         end
-
         return body
     end
 
     local function parse_function_declaration()
         expect("identifier", "fn")
         local name = expect("identifier").value
+
+        add_function_to_scope(name)
+        enter_scope()
+
         expect("parenthesis", "(")
 
         local args = parse_function_declaration_args()
@@ -206,6 +259,7 @@ local function parse(toks, file)
         local body = parse_body()
         expect("parenthesis", "}")
         expect("punctuation", ";")
+        exit_scope()
 
         return {
             type = "function_declaration",
@@ -232,9 +286,15 @@ local function parse(toks, file)
             local t = current()
             if t.type == "identifier" then
                 if toks[i + 1].type == "parenthesis" and toks[i + 1].value == "(" then
+                    if not has_function_in_scope(t.value) then
+                        error(file, line, string.format("Function not defined in current scope: '%s'", t.value))
+                    end
                     return parse_function_call()
                 else
                     i = i + 1
+                    if not has_variable_in_scope(t.value) then
+                        error(file, line, string.format("Variable not defined in current scope: '%s'", t.value))
+                    end
                     return {type = "variable", name = t.value}
                 end
             elseif t.type == "integer" then

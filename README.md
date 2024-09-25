@@ -18,3 +18,4 @@ fn main(): void {
 };
 This works
 ```
+-[ ] Fix line number not being counted correctly, skipping
