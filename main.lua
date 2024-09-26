@@ -33,8 +33,6 @@ local function lex(input, file)
     local i = 1
     while i <= #chars do
         local c = chars[i]
-        print("<" .. c .. ">")
-
         if is_alpha(c) then
             local v = ""
             while i <= #chars and (is_alpha(chars[i]) or is_digit(chars[i])) do
@@ -49,8 +47,22 @@ local function lex(input, file)
                 i = i + 1
             end
             table.insert(toks, {type = "integer", value = tonumber(v)})
+        elseif c == "\"" then
+            i = i + 1
+            local v = ""
+            while i <= #chars and chars[i] ~= "\"" do
+                v = v .. chars[i]
+                i = i + 1
+            end
+            print(v)
         elseif is_in_table(c, {"+", "-", "*", "/", "="}) then
-            table.insert(toks, {type = "operator", value = c})
+            local cmt = ""
+            if c == "/" and chars[i + 1] == "/" then
+                repeat i = i + 1
+                until chars[i] == "\n" or i <= chars[i]
+            else
+                table.insert(toks, {type = "operator", value = c})
+            end
             i = i + 1
         elseif is_in_table(c, {";", ":", ","}) then
             table.insert(toks, {type = "punctuation", value = c})
@@ -95,7 +107,7 @@ local function parse(toks, file)
 
     local function exit_scope()
         if #scope_stack == 0 then
-            error(file, line, string.format("Unexpected token found: '}'"))
+            error(file, line, string.format("Scope out of bounds"))
         end
         table.remove(scope_stack)
     end
@@ -135,7 +147,11 @@ local function parse(toks, file)
     end
 
     local function current()
-        return toks[i]
+        if toks[i] then
+            return toks[i]
+        else
+            error(file, line, "Tokens out of bounds")
+        end
     end
 
     local function expect(type, value)
@@ -157,13 +173,15 @@ local function parse(toks, file)
     end
 
     local function parse_function_call_args()
+        if toks[i].type == "parenthesis" and toks[i].value == ")" then
+            return {}
+        end
+
         local args = {}
         local start = i
-        while i <= #toks and toks[i].type ~= "parenthesis" and toks[i].value ~= ")" do
+        while i <= #toks and current().type ~= "parenthesis" and current().value ~= ")" do
             if i ~= start then
                 expect("punctuation", ",")
-            elseif toks[i + 1].type == "parenthesis" and toks[i + 1].value == ")" then
-                return {}
             end
 
             table.insert(args, parse_expression())
@@ -231,14 +249,25 @@ local function parse(toks, file)
         return {
             type = str .. "_variable_assignment",
             name = name,
-            expression = expr
+            value = expr
         }
     end
 
     local function parse_body()
         local body = {}
-        while i <= #toks and current().type ~= "parenthesis" and current().value ~= "}" do
-            table.insert(body, parse_statement())
+        while i <= #toks and (current().type ~= "parenthesis" or current().value ~= "}") do
+            if current().type == "newline" and current().value == "\n" then
+                line = line + 1
+                i = i + 1
+            end
+            if current().type == "parenthesis" or current().value == "}" then
+                return body
+            end
+
+            local stmt = parse_statement()
+            if stmt ~= nil then
+                table.insert(body, stmt)
+            end
         end
         return body
     end
@@ -282,12 +311,17 @@ local function parse(toks, file)
 
     local function parse_function_return()
         expect("identifier", "return")
-        local expr = parse_expression()
+
+        local expr = {}
+        if current().type ~= "punctuation" and current().value ~= ";" then
+            expr = parse_expression()
+        end
+
         expect("punctuation", ";")
 
         return {
             type = "function_return",
-            expression = expr
+            value = expr
         }
     end
 
@@ -301,10 +335,10 @@ local function parse(toks, file)
                     end
                     return parse_function_call()
                 else
-                    i = i + 1
                     if not has_variable_in_scope(t.value) then
                         error(file, line, string.format("Variable not defined in current scope: '%s'", t.value))
                     end
+                    i = i + 1
                     return {type = "variable", name = t.value}
                 end
             elseif t.type == "integer" then
@@ -366,17 +400,12 @@ local function parse(toks, file)
             elseif value == "return" then
                 return parse_function_return()
             else
-                return parse_expression()
-                --error(file, line, string.format("Unexpected identifier found while parsing statement: '%s'", value))
+                local expr = parse_expression()
+                expect("punctuation", ";")
+                return expr
             end
-        elseif type == "newline" then
+        elseif type == "newline" and value == "\n" then
             line = line + 1
-            i = i + 1
-            return parse_statement()
-        elseif type == "parenthesis" and value == "}" then
-            i = i + 1
-            return nil
-        elseif type == "punctuation" and value == ";" then
             i = i + 1
             return nil
         else
@@ -396,7 +425,6 @@ local function parse(toks, file)
         if node then
             table.insert(ast, node)
         end
-        i = i + 1
     end
 
     exit_scope()
@@ -411,10 +439,6 @@ local content = file:read("a")
 file:close()
 
 local toks = lex(content, file_name)
-for _, tok in ipairs(toks) do
-    print(string.format("{type = '%s', value = '%s'}", tok.type, tok.value))
-end
-
 local ast = parse(toks, file_name)
 
 local inspect = require("inspect")

@@ -1,9 +1,4 @@
-fn add(a: int, b: int): int {
-    return a + b;  
-};
-
 fn main(): void {
-    const x = add(4, 3);
-    echo(x);
+    puts("Hello, world!\n");
     return;
 };
