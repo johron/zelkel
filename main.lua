@@ -80,12 +80,17 @@ local function parse(toks, file)
     local scope_stack = {}
 
     local function current_scope()
-        return scope_stack[#scope_stack] or {mut_vars = {}, imut_vars = {}, functions = {}}
+        return scope_stack[#scope_stack] or scope_stack[#scope_stack - 1] or {mut_vars = {}, imut_vars = {}, functions = {}}
     end
 
     local function enter_scope()
-        print(table.concat(current_scope(), " "))
-        table.insert(scope_stack, current_scope())
+        local parent_scope = current_scope()
+        local new_scope = {
+            mut_vars = {table.unpack(parent_scope.mut_vars)},
+            imut_vars = {table.unpack(parent_scope.imut_vars)},
+            functions = {table.unpack(parent_scope.functions)}
+        }
+        table.insert(scope_stack, new_scope)
     end
 
     local function exit_scope()
@@ -136,8 +141,8 @@ local function parse(toks, file)
     local function expect(type, value)
         local t = current()
         if t.type == "newline" then
-            i = i + 1
             line = line + 1
+            i = i + 1
             return expect(type, value)
         end
 
@@ -214,6 +219,9 @@ local function parse(toks, file)
         end
 
         local name = expect("identifier").value
+        if has_variable_in_scope(name) then
+            error(file, line, string.format("Variable already defined in current scope: '%s'", name))
+        end
         expect("operator", "=")
 
         local expr = parse_expression()
@@ -231,7 +239,6 @@ local function parse(toks, file)
         local body = {}
         while i <= #toks and current().type ~= "parenthesis" and current().value ~= "}" do
             table.insert(body, parse_statement())
-            i = i + 1
         end
         return body
     end
@@ -239,6 +246,9 @@ local function parse(toks, file)
     local function parse_function_declaration()
         expect("identifier", "fn")
         local name = expect("identifier").value
+        if has_function_in_scope(name) then
+            error(file, line, string.format("Function already declared in current scope: '%s'", name))
+        end
 
         add_function_to_scope(name)
         enter_scope()
@@ -355,25 +365,38 @@ local function parse(toks, file)
                 return parse_variable_assignment(false)
             elseif value == "return" then
                 return parse_function_return()
-            -- elseif is variable reference
-            -- elseif is function call
             else
-                error(file, line, string.format("Unexpected identifier found while parsing statement: '%s'", value))
+                return parse_expression()
+                --error(file, line, string.format("Unexpected identifier found while parsing statement: '%s'", value))
             end
         elseif type == "newline" then
             line = line + 1
             i = i + 1
             return parse_statement()
+        elseif type == "parenthesis" and value == "}" then
+            i = i + 1
+            return nil
+        elseif type == "punctuation" and value == ";" then
+            i = i + 1
+            return nil
         else
             error(file, line, string.format("Unexpected token found while parsing statement: '%s'", value))
         end
     end
 
+    
+
+    enter_scope()
+
     while i <= #toks do
         local node = parse_statement()
-        table.insert(ast, node)
+        if node then
+            table.insert(ast, node)
+        end
         i = i + 1
     end
+
+    exit_scope()
 
     return ast
 end
