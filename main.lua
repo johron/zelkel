@@ -41,12 +41,19 @@ local function lex(input, file)
             end
             table.insert(toks, {type = "identifier", value = v})
         elseif is_digit(c) then
+            local found_dot = false
+            local type = "integer"
             local v = ""
-            while i <= #chars and is_digit(chars[i]) do
+            while i <= #chars and (is_digit(chars[i]) or (chars[i] == "." and found_dot == false)) do
+                if chars[i] == "." then
+                    found_dot = true
+                    type = "float"
+                end
                 v = v .. chars[i]
                 i = i + 1
             end
-            table.insert(toks, {type = "integer", value = tonumber(v)})
+
+            table.insert(toks, {type = type, value = tonumber(v)})
         elseif c == "\"" then
             local v = ""
             i = i + 1
@@ -247,6 +254,9 @@ local function parse(toks, file)
         if has_variable_in_scope(name) then
             error(file, line, string.format("Variable already defined in current scope: '%s'", name))
         end
+
+        expect("punctuation", ":")
+        local value_type = expect("identifier").value
         expect("operator", "=")
 
         local expr = parse_expression()
@@ -256,6 +266,7 @@ local function parse(toks, file)
         return {
             type = str .. "_variable_assignment",
             name = name,
+            value_type = value_type,
             value = expr
         }
     end
@@ -311,7 +322,7 @@ local function parse(toks, file)
             type = "function_declaration",
             name = name,
             args = args,
-            returns = type,
+            return_type = type,
             body = body
         }
     end
@@ -351,6 +362,9 @@ local function parse(toks, file)
             elseif t.type == "integer" then
                 i = i + 1
                 return {type = "integer", value = t.value}
+            elseif t.type == "float" then
+                i = i + 1
+                return {type = "float", value = t.value}
             elseif t.type == "string" then
                 i = i + 1
                 return {type = "string", value = t.value}

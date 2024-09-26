@@ -1,4 +1,4 @@
 fn main(): void {
-    puts("Hello, world!\n");
+    const x: float = (5 - 2)/0.5;
     return;
 };
