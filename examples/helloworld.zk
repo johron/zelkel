@@ -1,0 +1,4 @@
+fn main(): void {
+    puts("Hello, world!\n");
+    return;
+};

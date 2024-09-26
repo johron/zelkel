@@ -48,18 +48,26 @@ local function lex(input, file)
             end
             table.insert(toks, {type = "integer", value = tonumber(v)})
         elseif c == "\"" then
-            i = i + 1
             local v = ""
-            while i <= #chars and chars[i] ~= "\"" do
+            i = i + 1
+            while i <= #chars do
+                if chars[i] == "\"" then
+                    i = i + 1
+                    break
+                end
                 v = v .. chars[i]
                 i = i + 1
             end
-            print(v)
+            table.insert(toks, {type = "string", value = v})
         elseif is_in_table(c, {"+", "-", "*", "/", "="}) then
             local cmt = ""
             if c == "/" and chars[i + 1] == "/" then
-                repeat i = i + 1
-                until chars[i] == "\n" or i <= chars[i]
+                while i <= #chars and chars[i] ~= "\n" do
+                    i = i + 1
+                end
+                if chars[i] == "\n" then
+                    line = line + 1
+                end
             else
                 table.insert(toks, {type = "operator", value = c})
             end
@@ -183,7 +191,6 @@ local function parse(toks, file)
             if i ~= start then
                 expect("punctuation", ",")
             end
-
             table.insert(args, parse_expression())
         end
 
@@ -344,6 +351,9 @@ local function parse(toks, file)
             elseif t.type == "integer" then
                 i = i + 1
                 return {type = "integer", value = t.value}
+            elseif t.type == "string" then
+                i = i + 1
+                return {type = "string", value = t.value}
             elseif t.type == "parenthesis" and t.value == "(" then
                 i = i + 1
                 local expr = parse_expression()
@@ -415,6 +425,7 @@ local function parse(toks, file)
 
     local function add_standard_functions()
         add_function_to_scope("echo")
+        add_function_to_scope("puts")
     end
 
     enter_scope()
