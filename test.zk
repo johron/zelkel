@@ -4,6 +4,6 @@ fn add(a: int, b: int): int {
 
 fn main(): void {
     const x = add(4, 3);
-    print_num(x);
+    echo(x);
     return;
 };

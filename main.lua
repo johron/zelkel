@@ -384,9 +384,12 @@ local function parse(toks, file)
         end
     end
 
-    
+    local function add_standard_functions()
+        add_function_to_scope("echo")
+    end
 
     enter_scope()
+    add_standard_functions()
 
     while i <= #toks do
         local node = parse_statement()
