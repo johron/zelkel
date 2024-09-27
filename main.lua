@@ -1,7 +1,4 @@
-local function error(file, line, msg)
-    print(string.format("%s:%s: %s", file, line, msg))
-    os.exit(1)
-end
+local inspect = require("inspect") -- debugging
 
 local function is_in_table(v, t)
     for _, j in ipairs(t) do
@@ -16,6 +13,11 @@ end
 local function lex(input, file)
     local toks = {}
     local line = 1
+
+    local function error(msg)
+        print(string.format("%s:%s: %s", file, line, msg))
+        os.exit(1)
+    end
 
     local function is_alpha(c)
         return c:match("[a-zA-Z_]")
@@ -92,7 +94,7 @@ local function lex(input, file)
         elseif c == " " then -- disregard
             i = i + 1
         else
-            error(file, line, string.format("Unexpected character found by lexer: '%s'", c))
+            error(string.format("Unexpected character found by lexer: '%s'", c))
         end
     end
 
@@ -103,6 +105,11 @@ local function parse(toks, file)
     local line = 1
     local ast = {}
     local i = 1
+
+    local function error(msg)
+        print(string.format("%s:%s: %s", file, line, msg))
+        os.exit(1)
+    end
 
     local scope_stack = {}
 
@@ -122,7 +129,7 @@ local function parse(toks, file)
 
     local function exit_scope()
         if #scope_stack == 0 then
-            error(file, line, string.format("Scope out of bounds"))
+            error(string.format("Scope out of bounds"))
         end
         table.remove(scope_stack)
     end
@@ -177,7 +184,7 @@ local function parse(toks, file)
         if toks[i] then
             return toks[i]
         else
-            error(file, line, "Attempt to access token out of bounds, could be missing '}'")
+            error("Attempt to access token out of bounds, could be missing '}'")
         end
     end
 
@@ -190,9 +197,9 @@ local function parse(toks, file)
         end
 
         if value ~= nil and t.value ~= value then
-            error(file, line, string.format("Expected '%s', but found '%s'", value, t.value))
+            error(string.format("Expected '%s', but found '%s'", value, t.value))
         elseif t.type ~= type then
-            error(file, line, string.format("Expected '%s', but found '%s'", type, t.value))
+            error(string.format("Expected '%s', but found '%s'", type, t.value))
         end
 
         i = i + 1
@@ -264,11 +271,15 @@ local function parse(toks, file)
 
         local name = expect("identifier").value
         if has_variable_in_scope(name) then
-            error(file, line, string.format("Variable already defined in current scope: '%s'", name))
+            error(string.format("Variable already defined in current scope: '%s'", name))
         end
 
         expect("punctuation", ":")
         local value_type = expect("identifier").value
+        if value_type == "void" then
+            error("Cannot set variable value type as void")
+        end
+
         expect("operator", "=")
 
         local expr = parse_expression()
@@ -279,7 +290,7 @@ local function parse(toks, file)
             type = str .. "_variable_assignment",
             name = name,
             value_type = value_type,
-            value = expr
+            expression = expr
         }
     end
 
@@ -293,7 +304,7 @@ local function parse(toks, file)
         return {
             type = "mutable_variable_reassignment",
             name = name,
-            value = expr
+            expression = expr
         }
     end
 
@@ -320,7 +331,7 @@ local function parse(toks, file)
         expect("identifier", "fn")
         local name = expect("identifier").value
         if has_function_in_scope(name) then
-            error(file, line, string.format("Function already declared in current scope: '%s'", name))
+            error(string.format("Function already declared in current scope: '%s'", name))
         end
 
         add_function_to_scope(name)
@@ -333,10 +344,11 @@ local function parse(toks, file)
         expect("parenthesis", ")")
         expect("punctuation", ":")
         local type = expect("identifier").value
+
         expect("parenthesis", "{")
 
         if not is_in_table(type, {"void", "int"}) then
-            error(file, line, string.format("Unrecognized return type: '%s'", type))
+            error(string.format("Unrecognized return type: '%s'", type))
         end
 
         local body = parse_body()
@@ -347,13 +359,15 @@ local function parse(toks, file)
             type = "function_declaration",
             name = name,
             args = args,
-            return_type = type,
+            value_type = type,
             body = body
         }
     end
 
     local function parse_function_return()
         expect("identifier", "return")
+        expect("punctuation", ":")
+        local value_type = expect("identifier").value
 
         local expr = {}
         if current().type ~= "punctuation" and current().value ~= ";" then
@@ -364,7 +378,8 @@ local function parse(toks, file)
 
         return {
             type = "function_return",
-            value = expr
+            value_type = value_type,
+            expression = expr
         }
     end
 
@@ -374,12 +389,12 @@ local function parse(toks, file)
             if t.type == "identifier" then
                 if toks[i + 1].type == "parenthesis" and toks[i + 1].value == "(" then
                     if not has_function_in_scope(t.value) then
-                        error(file, line, string.format("Function not defined in current scope: '%s'", t.value))
+                        error(string.format("Function not defined in current scope: '%s'", t.value))
                     end
                     return parse_function_call()
                 else
                     if not has_variable_in_scope(t.value) then
-                        error(file, line, string.format("Variable not defined in current scope: '%s'", t.value))
+                        error(string.format("Variable not defined in current scope: '%s'", t.value))
                     end
                     i = i + 1
                     return {type = "variable", name = t.value}
@@ -404,9 +419,9 @@ local function parse(toks, file)
                 return parse_primary()
             elseif t.type == "parenthesis" and t.value == "}" then
                 i = i + 1
-                error(file, line, string.format("Unexpected token in primary expression: '%s', could be missing ';' on line above", t.value))
+                error(string.format("Unexpected token in primary expression: '%s', could be missing ';' on line above", t.value))
             else
-                error(file, line, string.format("Unexpected token in primary expression: '%s'", t.value))
+                error(string.format("Unexpected token in primary expression: '%s'", t.value))
             end
         end
 
@@ -471,7 +486,7 @@ local function parse(toks, file)
             i = i + 1
             return nil
         else
-            error(file, line, string.format("Unexpected token found while parsing statement: '%s'", value))
+            error(string.format("Unexpected token found while parsing statement: '%s'", value))
         end
     end
 
@@ -495,6 +510,200 @@ local function parse(toks, file)
     return ast
 end
 
+local function generate_llvm(ast, file)
+    local llvm = {}
+    local var_counter = 0
+    local indent = 0
+
+    local function error(msg)
+        print(string.format("%s: %s", file, msg))
+        os.exit(1)
+    end
+
+    local function new_var()
+        var_counter = var_counter + 1
+        return "%t" .. var_counter
+    end
+
+    local function emit(str)
+        if str == "}" then
+            indent = indent - 1
+        end
+
+        local indent_str = string.rep("    ", indent)
+        table.insert(llvm, indent_str .. str)
+        
+        if str:sub(-1) == ":" then
+            indent = indent + 1
+        end
+    end
+
+    local function generate_expression(expression)
+        if expression.type == "binary_expression" then
+            local left = expression.left
+            local right = expression.right
+            local operator = expression.operator
+            local left_var = generate_expression(left)
+            local right_var = generate_expression(right)
+            local result_var = new_var()
+
+            if operator == "+" then
+                emit(string.format("%s = add i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == "-" then
+                emit(string.format("%s = sub i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == "*" then
+                emit(string.format("%s = mul i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == "/" then
+                emit(string.format("%s = sdiv i32 %s, %s", result_var, left_var, right_var))
+            else
+                error(string.format("Unsupported binary operator: '%s'", operator))
+            end
+
+            return result_var
+        elseif expression.type == "integer" then
+            return tostring(expression.value)
+        elseif expression.type == "float" then
+            local result_var = new_var()
+            emit(string.format("%s = fadd double 0.0, %f", result_var, expression.value))
+            return result_var
+        elseif expression.type == "variable" then
+            return "%" .. expression.name
+        elseif expression.type == "unary_expression" then
+            local operand_var = generate_expression(expression.operand)
+            local result_var = new_var()
+
+            if expression.operator == "-" then
+                emit(string.format("%s = sub i32 0, %s", result_var, operand_var))
+            elseif expression.operator == "+" then
+                return operand_var
+            else
+                error(string.format("Unsupported unary operator: '%s'", expression.operator))
+            end
+
+            return result_var
+        else
+            error(string.format("Unsupported expression type: '%s'", expression.type))
+        end
+    end
+
+    local function generate_assignment(assignment)
+        local expr = generate_expression(assignment.expression)
+        local value_type = assignment.value_type
+        if assignment.type == "immutable_variable_assignment" or assignment.type == "mutable_variable_assignment" then
+            if value_type == "int" then
+                emit(string.format("%%%s = alloca i32", assignment.name))
+            elseif value_type == "float" then
+                emit(string.format("%%%s = alloca double", assignment.name))
+            elseif value_type == "string" then
+                emit(string.format("%%%s = alloca i8*", assignment.name))
+            else
+                error(string.format("Unsupported value type: '%s'", value_type))
+            end
+            emit("store i32 " .. expr .. ", i32* %" .. assignment.name)
+        elseif assignment.type == "mutable_variable_reassignment" then
+            error("TODO: implement mutable_variable_reassignment")
+        else
+            error(string.format("Unsupported assignment type: '%s'", assignment.type))
+        end
+    end
+
+    local function generate_body(body)
+        local i = 1
+        while i <= #body do
+            generate_statement(body[i])
+            i = i + 1
+        end
+    end
+
+    local function generate_function_declaration(func)
+        local name = func.name
+        local args = func.args
+        local body = func.body
+        local value_type = func.value_type
+
+        local args_str = ""
+        local i = 1
+        while i <= #args do
+            if i ~= 1 then
+                args_str = args_str .. ", "
+            end
+
+            local arg = args[i]
+            if arg.type == "int" then
+                args_str = args_str .. "i32 " .. arg.name
+            elseif arg.type == "float" then
+                args_str = args_str .. "double " .. arg.name
+            elseif arg.type == "string" then
+                error("TODO: implement string argument type generate_function_declaration")
+                args_str = args_str .. "i8* " .. arg.name
+            end
+
+            i = i + 1
+        end
+
+        local type = ""
+        if value_type == "int" then
+            type = "i32"
+        elseif value_type == "float" then
+            type = "double"
+        elseif value_type == "void" then
+            type = "void"
+        else
+            error("TODO: implement argument types generate_function_declaration")
+        end
+
+        emit(string.format("define %s @%s(%s) {", type, name, args_str))
+        emit("entry:")
+        generate_body(body)
+        emit("}")
+    end
+
+    local function generate_function_return(statement)
+        local expression = statement.expression
+        local value_type = statement.value_type
+
+        local type = "void"
+        if value_type == "int" then
+            type = "i32"
+        elseif value_type == "float" then
+            type = "double"
+        elseif value_type == "string" then
+            error("TODO: implement string type generate_function_return")
+            type = "i8*"
+        end
+
+        if type == "void" then
+            emit(string.format("ret void"))
+        else
+            local expr = generate_expression(expression)
+            emit(string.format("ret %s %s", type, expr))
+        end
+    end
+
+    function generate_statement(statement)
+        local type = statement.type
+        if type == "function_declaration" then
+            generate_function_declaration(statement)
+        elseif type == "immutable_variable_assignment" or type == "mutable_variable_assignment" or type == "mutable_variable_reassignment" then
+            generate_assignment(statement)
+        elseif type == "function_return" then
+            generate_function_return(statement)
+        else
+            error(string.format("Unrecognized statement type found: '%s'", type))
+        end
+    end
+
+    emit("@.int_fmt = constant [4 x i8] c\"%d\\0A\\00\"") -- should only be included if used?
+    emit("declare i32 @printf(i8*, ...)") -- should only be included if used?
+    emit("")
+
+    for _, node in ipairs(ast) do
+        generate_statement(node)
+    end
+
+    return table.concat(llvm, "\n")
+end
+
 local file_name = "test.zk"
 local file = io.open(file_name, "rb")
 if not file then print("No 'test.zk' file") os.exit(1)  end
@@ -504,5 +713,15 @@ file:close()
 local toks = lex(content, file_name)
 local ast = parse(toks, file_name)
 
-local inspect = require("inspect")
 print(inspect(ast))
+
+local llvm = generate_llvm(ast, file_name)
+
+local out = io.open("out/test.ll", "w")
+if out == nil then
+    print("file is nil")
+    os.exit(1)
+end
+
+out:write(llvm)
+out:close()

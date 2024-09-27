@@ -1,5 +1,4 @@
 fn main(): void {
-    let x: int = 5;
-    x = x + 2;
-    return;
+    const x: int = 5+5;
+    return: void;
 }
