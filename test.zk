@@ -2,4 +2,4 @@ fn main(): void {
     let x: int = 5;
     x = x + 2;
     return;
-};
+}

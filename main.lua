@@ -130,13 +130,23 @@ local function parse(toks, file)
     local function has_variable_in_scope(name)
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
-            if is_in_table(name, scope.mut_vars) then
-                return true, true
-            elseif is_in_table(name, scope.imut_vars) then
-                return true, false
+            if is_in_table(name, scope.mut_vars) or is_in_table(name, scope.imut_vars) then
+                return true
             end
         end
-        return false, false
+        return false
+    end
+
+    local function variable_in_scope_is_mutable(name)
+        for j = #scope_stack, 1, -1 do
+            local scope = scope_stack[j]
+            if is_in_table(name, scope.mut_vars) then
+                return true
+            elseif is_in_table(name, scope.imut_vars) then
+                return false
+            end
+        end
+        return false
     end
 
     local function add_variable_to_scope(name, mutable)
@@ -167,7 +177,7 @@ local function parse(toks, file)
         if toks[i] then
             return toks[i]
         else
-            error(file, line, "Tokens out of bounds")
+            error(file, line, "Attempt to access token out of bounds, could be missing '}'")
         end
     end
 
@@ -180,9 +190,9 @@ local function parse(toks, file)
         end
 
         if value ~= nil and t.value ~= value then
-            error(file, line, string.format("Expected '%s' with value '%s', but found '%s' with value '%s'", type, value, t.type, t.value))
+            error(file, line, string.format("Expected '%s', but found '%s'", value, t.value))
         elseif t.type ~= type then
-            error(file, line, string.format("Expected '%s', but found '%s' with value '%s'", type, t.type, t.value))
+            error(file, line, string.format("Expected '%s', but found '%s'", type, t.value))
         end
 
         i = i + 1
@@ -253,8 +263,7 @@ local function parse(toks, file)
         end
 
         local name = expect("identifier").value
-        local has_var, is_mutable = has_variable_in_scope(name)
-        if has_var then
+        if has_variable_in_scope(name) then
             error(file, line, string.format("Variable already defined in current scope: '%s'", name))
         end
 
@@ -276,10 +285,6 @@ local function parse(toks, file)
 
     local function parse_variable_reassignment()
         local name = expect("identifier").value
-        local has_var, is_mutable = has_variable_in_scope(name)
-        if not has_var or not is_mutable then
-            error(file, line, string.format("Variable is not mutable: '%s'", name))
-        end
 
         expect("operator", "=")
         local expr = parse_expression()
@@ -336,7 +341,6 @@ local function parse(toks, file)
 
         local body = parse_body()
         expect("parenthesis", "}")
-        expect("punctuation", ";")
         exit_scope()
 
         return {
@@ -374,8 +378,7 @@ local function parse(toks, file)
                     end
                     return parse_function_call()
                 else
-                    local has_var, is_mutable = has_variable_in_scope(t.value)
-                    if not has_var then
+                    if not has_variable_in_scope(t.value) then
                         error(file, line, string.format("Variable not defined in current scope: '%s'", t.value))
                     end
                     i = i + 1
@@ -395,6 +398,13 @@ local function parse(toks, file)
                 local expr = parse_expression()
                 expect("parenthesis", ")")
                 return expr
+            elseif t.type == "newline" and t.value == "\n" then
+                i = i + 1
+                line = line + 1
+                return parse_primary()
+            elseif t.type == "parenthesis" and t.value == "}" then
+                i = i + 1
+                error(file, line, string.format("Unexpected token in primary expression: '%s', could be missing ';' on line above", t.value))
             else
                 error(file, line, string.format("Unexpected token in primary expression: '%s'", t.value))
             end
@@ -413,7 +423,7 @@ local function parse(toks, file)
 
         local function parse_term()
             local expr = parse_unary()
-            while i <= #toks and current().type == "operator" and (current().value == "*" or current().value == "/") do
+            while i <= #toks and current().type == "operator" and (current().value == "*" or current().value == "/") and current().type ~= "punctuation" and current().value ~= ";" do
                 local op = current().value
                 i = i + 1
                 local right = parse_unary()
@@ -423,12 +433,18 @@ local function parse(toks, file)
         end
 
         local expr = parse_term()
-        while i <= #toks and current().type == "operator" and (current().value == "+" or current().value == "-") do
+        while i <= #toks and current().type == "operator" and (current().value == "+" or current().value == "-") and current().type ~= "punctuation" and current().value ~= ";" do
             local op = current().value
             i = i + 1
             local right = parse_term()
             expr = {type = "binary_expression", operator = op, left = expr, right = right}
         end
+        return expr
+    end
+
+    local function parse_expression_as_statement()
+        local expr = parse_expression()
+        expect("punctuation", ";")
         return expr
     end
 
@@ -445,12 +461,10 @@ local function parse(toks, file)
                 return parse_variable_assignment(false)
             elseif value == "return" then
                 return parse_function_return()
-            elseif has_variable_in_scope(value) == true then
+            elseif has_variable_in_scope(value) and variable_in_scope_is_mutable(value) then
                 return parse_variable_reassignment()
             else
-                local expr = parse_expression()
-                expect("punctuation", ";")
-                return expr
+                return parse_expression_as_statement()
             end
         elseif type == "newline" and value == "\n" then
             line = line + 1
