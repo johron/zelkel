@@ -282,9 +282,9 @@ local function parse(toks, file)
         end
 
         expect("operator", "=")
-
         local expr = parse_expression()
         expect("punctuation", ";")
+
         return {
             type = "mutable_variable_reassignment",
             name = name,
