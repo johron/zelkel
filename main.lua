@@ -130,11 +130,13 @@ local function parse(toks, file)
     local function has_variable_in_scope(name)
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
-            if is_in_table(name, scope.mut_vars) or is_in_table(name, scope.imut_vars) then
-                return true
+            if is_in_table(name, scope.mut_vars) then
+                return true, true
+            elseif is_in_table(name, scope.imut_vars) then
+                return true, false
             end
         end
-        return false
+        return false, false
     end
 
     local function add_variable_to_scope(name, mutable)
@@ -251,7 +253,8 @@ local function parse(toks, file)
         end
 
         local name = expect("identifier").value
-        if has_variable_in_scope(name) then
+        local has_var, is_mutable = has_variable_in_scope(name)
+        if has_var then
             error(file, line, string.format("Variable already defined in current scope: '%s'", name))
         end
 
@@ -267,6 +270,24 @@ local function parse(toks, file)
             type = str .. "_variable_assignment",
             name = name,
             value_type = value_type,
+            value = expr
+        }
+    end
+
+    local function parse_variable_reassignment()
+        local name = expect("identifier").value
+        local has_var, is_mutable = has_variable_in_scope(name)
+        if not has_var or not is_mutable then
+            error(file, line, string.format("Variable is not mutable: '%s'", name))
+        end
+
+        expect("operator", "=")
+
+        local expr = parse_expression()
+        expect("punctuation", ";")
+        return {
+            type = "mutable_variable_reassignment",
+            name = name,
             value = expr
         }
     end
@@ -353,7 +374,8 @@ local function parse(toks, file)
                     end
                     return parse_function_call()
                 else
-                    if not has_variable_in_scope(t.value) then
+                    local has_var, is_mutable = has_variable_in_scope(t.value)
+                    if not has_var then
                         error(file, line, string.format("Variable not defined in current scope: '%s'", t.value))
                     end
                     i = i + 1
@@ -423,6 +445,8 @@ local function parse(toks, file)
                 return parse_variable_assignment(false)
             elseif value == "return" then
                 return parse_function_return()
+            elseif has_variable_in_scope(value) == true then
+                return parse_variable_reassignment()
             else
                 local expr = parse_expression()
                 expect("punctuation", ";")

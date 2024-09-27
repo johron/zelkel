@@ -1,4 +1,5 @@
 fn main(): void {
-    const x: float = (5 - 2)/0.5;
+    let x: int = 5;
+    x = 2;
     return;
 };
