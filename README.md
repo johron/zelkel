@@ -2,5 +2,5 @@
 
 ## TODO
 - [ ] Rewrite in itself
-- [ ] Finish parser
+- [x] Finish parser
 - [ ] Make llvm emitter, codegen
