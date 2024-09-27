@@ -168,6 +168,7 @@ local function parse(toks, file)
     local function has_function_in_scope(name)
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
+            print(inspect(scope.functions))
             if is_in_table(name, scope.functions) then
                 return true
             end
@@ -177,6 +178,7 @@ local function parse(toks, file)
 
     local function add_function_to_scope(name)
         local scope = current_scope()
+        --table.insert(scope.functions, name)
         table.insert(scope.functions, name)
     end
 
@@ -234,7 +236,7 @@ local function parse(toks, file)
         return {
             type = "function_call",
             name = name,
-            args = args
+            args = args,
         }
     end
 
@@ -532,57 +534,9 @@ local function generate_llvm(ast, file)
 
         local indent_str = string.rep("    ", indent)
         table.insert(llvm, indent_str .. str)
-        
+
         if str:sub(-1) == ":" then
             indent = indent + 1
-        end
-    end
-
-    local function generate_expression(expression)
-        if expression.type == "binary_expression" then
-            local left = expression.left
-            local right = expression.right
-            local operator = expression.operator
-            local left_var = generate_expression(left)
-            local right_var = generate_expression(right)
-            local result_var = new_var()
-
-            if operator == "+" then
-                emit(string.format("%s = add i32 %s, %s", result_var, left_var, right_var))
-            elseif operator == "-" then
-                emit(string.format("%s = sub i32 %s, %s", result_var, left_var, right_var))
-            elseif operator == "*" then
-                emit(string.format("%s = mul i32 %s, %s", result_var, left_var, right_var))
-            elseif operator == "/" then
-                emit(string.format("%s = sdiv i32 %s, %s", result_var, left_var, right_var))
-            else
-                error(string.format("Unsupported binary operator: '%s'", operator))
-            end
-
-            return result_var
-        elseif expression.type == "integer" then
-            return tostring(expression.value)
-        elseif expression.type == "float" then
-            local result_var = new_var()
-            emit(string.format("%s = fadd double 0.0, %f", result_var, expression.value))
-            return result_var
-        elseif expression.type == "variable" then
-            return "%" .. expression.name
-        elseif expression.type == "unary_expression" then
-            local operand_var = generate_expression(expression.operand)
-            local result_var = new_var()
-
-            if expression.operator == "-" then
-                emit(string.format("%s = sub i32 0, %s", result_var, operand_var))
-            elseif expression.operator == "+" then
-                return operand_var
-            else
-                error(string.format("Unsupported unary operator: '%s'", expression.operator))
-            end
-
-            return result_var
-        else
-            error(string.format("Unsupported expression type: '%s'", expression.type))
         end
     end
 
@@ -662,7 +616,7 @@ local function generate_llvm(ast, file)
         local expression = statement.expression
         local value_type = statement.value_type
 
-        local type = "void"
+        local type = ""
         if value_type == "int" then
             type = "i32"
         elseif value_type == "float" then
@@ -670,6 +624,10 @@ local function generate_llvm(ast, file)
         elseif value_type == "string" then
             error("TODO: implement string type generate_function_return")
             type = "i8*"
+        elseif value_type == "void" then
+            type = "void"
+        else
+            error(string.format("Unexpected value type: '%s'", value_type))
         end
 
         if type == "void" then
@@ -677,6 +635,73 @@ local function generate_llvm(ast, file)
         else
             local expr = generate_expression(expression)
             emit(string.format("ret %s %s", type, expr))
+        end
+    end
+
+    function generate_expression(expression)
+        if expression.type == "binary_expression" then
+            local left = expression.left
+            local right = expression.right
+            local operator = expression.operator
+            local left_var = generate_expression(left)
+            local right_var = generate_expression(right)
+            local result_var = new_var()
+
+            if operator == "+" then
+                emit(string.format("%s = add i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == "-" then
+                emit(string.format("%s = sub i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == "*" then
+                emit(string.format("%s = mul i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == "/" then
+                emit(string.format("%s = sdiv i32 %s, %s", result_var, left_var, right_var))
+            else
+                error(string.format("Unsupported binary operator: '%s'", operator))
+            end
+
+            return result_var
+        elseif expression.type == "integer" then
+            return tostring(expression.value)
+        elseif expression.type == "float" then
+            local result_var = new_var()
+            emit(string.format("%s = fadd double 0.0, %f", result_var, expression.value))
+            return result_var
+        elseif expression.type == "variable" then
+            return "%" .. expression.name
+        elseif expression.type == "function_call" then
+            local args = expression.args
+            local name = expression.name
+
+            local args_str = ""
+            local i = 1
+            while i <= #args do
+                if i ~= 1 then
+                    args_str = args_str .. ", "
+                end
+
+                local arg = args[i]
+                local expr = generate_expression(arg)
+                args_str = args_str .. expr
+                i = i +1
+            end
+
+            error("TODO: implement value_type in function_call code gen")
+            emit(string.format("call %s @%s(%s)", type, name, args_str))
+        elseif expression.type == "unary_expression" then
+            local operand_var = generate_expression(expression.operand)
+            local result_var = new_var()
+
+            if expression.operator == "-" then
+                emit(string.format("%s = sub i32 0, %s", result_var, operand_var))
+            elseif expression.operator == "+" then
+                return operand_var
+            else
+                error(string.format("Unsupported unary operator: '%s'", expression.operator))
+            end
+
+            return result_var
+        else
+            error(string.format("Unsupported expression type: '%s'", expression.type))
         end
     end
 
