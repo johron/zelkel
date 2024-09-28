@@ -1,4 +1,7 @@
 fn main(): void {
+    const a: int = 1;
+    const b: int = 1;
+    const c: int = a + b;
     println("Hello, world!");
     return;
 }
