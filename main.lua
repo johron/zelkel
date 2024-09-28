@@ -168,18 +168,30 @@ local function parse(toks, file)
     local function has_function_in_scope(name)
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
-            print(inspect(scope.functions))
-            if is_in_table(name, scope.functions) then
-                return true
+            for _, func in ipairs(scope.functions) do
+                if func.name == name then
+                    return true
+                end
             end
         end
         return false
     end
 
-    local function add_function_to_scope(name)
+    local function add_function_to_scope(name, value_type)
         local scope = current_scope()
-        --table.insert(scope.functions, name)
-        table.insert(scope.functions, name)
+        table.insert(scope.functions, {name = name, value_type = value_type})
+    end
+
+    local function function_in_scope_value_type(name)
+        for j = #scope_stack, 1, -1 do
+            local scope = scope_stack[j]
+            for _, func in ipairs(scope.functions) do
+                if func.name == name then
+                    return func.value_type
+                end
+            end
+        end
+        return nil
     end
 
     local function current()
@@ -233,32 +245,14 @@ local function parse(toks, file)
 
         expect("parenthesis", ")")
 
+        local value_type = function_in_scope_value_type(name)
+
         return {
             type = "function_call",
             name = name,
             args = args,
+            value_type = value_type
         }
-    end
-
-    local function parse_function_declaration_args()
-        local args = {}
-        local start = i
-        while i <= #toks and toks[i].type ~= "parenthesis" and toks[i].value ~= ")" do
-            if i ~= start then
-                expect("punctuation", ",")
-            elseif toks[i + 1].type == "parenthesis" and toks[i + 1].value == ")" then
-                return {}
-            end
-
-            local name = expect("identifier").value
-            expect("punctuation", ":")
-            local type = expect("identifier").value
-
-            add_variable_to_scope(name, false)
-            table.insert(args, {name = name, type = type})
-        end
-
-        return args
     end
 
     local function parse_variable_assignment(mutable)
@@ -329,6 +323,28 @@ local function parse(toks, file)
         return body
     end
 
+    local function parse_function_declaration_args()
+        local args = {}
+        local vars = {}
+        local start = i
+        while i <= #toks and toks[i].type ~= "parenthesis" and toks[i].value ~= ")" do
+            if i ~= start then
+                expect("punctuation", ",")
+            elseif toks[i + 1].type == "parenthesis" and toks[i + 1].value == ")" then
+                return {}
+            end
+
+            local name = expect("identifier").value
+            expect("punctuation", ":")
+            local type = expect("identifier").value
+
+            table.insert(vars, {name, false})
+            table.insert(args, {name = name, type = type})
+        end
+
+        return args, vars
+    end
+
     local function parse_function_declaration()
         expect("identifier", "fn")
         local name = expect("identifier").value
@@ -336,16 +352,21 @@ local function parse(toks, file)
             error(string.format("Function already declared in current scope: '%s'", name))
         end
 
-        add_function_to_scope(name)
-        enter_scope()
-
         expect("parenthesis", "(")
 
-        local args = parse_function_declaration_args()
+        local args, vars = parse_function_declaration_args()
 
         expect("parenthesis", ")")
         expect("punctuation", ":")
         local type = expect("identifier").value
+        add_function_to_scope(name, type)
+        enter_scope()
+
+        if vars ~= nil then
+            for _, var in ipairs(vars) do
+                add_variable_to_scope(var[1], var[2])
+            end
+        end
 
         expect("parenthesis", "{")
 
@@ -380,8 +401,8 @@ local function parse(toks, file)
 
         return {
             type = "function_return",
-            value_type = value_type,
-            expression = expr
+            expression = expr,
+            value_type = value_type
         }
     end
 
@@ -493,8 +514,8 @@ local function parse(toks, file)
     end
 
     local function add_standard_functions()
-        add_function_to_scope("echo")
-        add_function_to_scope("puts")
+        add_function_to_scope("echo", "void")
+        add_function_to_scope("puts", "void")
     end
 
     enter_scope()
@@ -617,17 +638,16 @@ local function generate_llvm(ast, file)
         local value_type = statement.value_type
 
         local type = ""
-        if value_type == "int" then
-            type = "i32"
-        elseif value_type == "float" then
+        if value_type == "float" then
             type = "double"
         elseif value_type == "string" then
-            error("TODO: implement string type generate_function_return")
             type = "i8*"
+        elseif value_type == "int" then
+            type = "i32"
         elseif value_type == "void" then
             type = "void"
         else
-            error(string.format("Unexpected value type: '%s'", value_type))
+            error(string.format("Unrecognized type found: '%s'", value_type))
         end
 
         if type == "void" then
@@ -671,6 +691,7 @@ local function generate_llvm(ast, file)
         elseif expression.type == "function_call" then
             local args = expression.args
             local name = expression.name
+            local value_type = expression.value_type
 
             local args_str = ""
             local i = 1
@@ -682,11 +703,23 @@ local function generate_llvm(ast, file)
                 local arg = args[i]
                 local expr = generate_expression(arg)
                 args_str = args_str .. expr
-                i = i +1
+                i = i + 1
             end
 
-            error("TODO: implement value_type in function_call code gen")
-            emit(string.format("call %s @%s(%s)", type, name, args_str))
+            local type = ""
+            if value_type == "int" then
+                type = "i32"
+            elseif value_type == "float" then
+                type = "double"
+            elseif value_type == "string" then
+                type = "i8*"
+            else
+                error(string.format("Unsupported function return type: '%s'", value_type))
+            end
+
+            local result_var = new_var()
+            emit(string.format("%s = call %s @%s(%s)", result_var, type, name, args_str))
+            return result_var
         elseif expression.type == "unary_expression" then
             local operand_var = generate_expression(expression.operand)
             local result_var = new_var()

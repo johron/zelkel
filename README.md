@@ -1,7 +1,7 @@
 # Zelkel
 
 ## TODO
-- [ ] Figure out how to not have to specify return type in the return statement eg. `return: int 0`
+- [ ] Figure out how to not have to specify return type in the return statement eg. `return: int 0`. Expressions must give their value_type, but i have no idea how to do this
 - [ ] Rewrite in itself
 - [x] Finish parser
 - [ ] Make llvm emitter, codegen
