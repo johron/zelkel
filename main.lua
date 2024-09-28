@@ -775,7 +775,7 @@ local function generate_llvm(ast, file)
                     if arg.value_type == "int" then
                         local int_var = new_var()
                         local type = convert_type(value_type)
-                        emit(string.format("%s = call i8* (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.int_fmt, i32 0, i32 0), i32 %s)", int_var, generate_expression(arg)))
+                        emit(string.format("%s = getelementptr inbounds [4 x i8], [4 x i8]* @.int_fmt, i32 0, i32 0", int_var))
                         args_str = args_str .. type .. " " .. int_var
                         return int_var
                     elseif arg.value_type == "float" then

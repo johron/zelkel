@@ -1,9 +1,3 @@
-//fn println(x: string): void {
-//    print(x);
-//    print("\n");
-//    return;
-//}
-
 fn main(): void {
     print(string(5));
     return;
