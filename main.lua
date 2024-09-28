@@ -550,8 +550,8 @@ local function parse(toks, file)
     end
 
     local function add_standard_functions()
-        add_function_to_scope("echo", "void")
-        add_function_to_scope("puts", "void")
+        add_function_to_scope("println", "void")
+        add_function_to_scope("print", "void")
     end
 
     enter_scope()
@@ -571,6 +571,7 @@ end
 
 local function generate_llvm(ast, file)
     local llvm = {}
+    local strings = {}
     local var_counter = 0
     local indent = 0
 
@@ -590,7 +591,6 @@ local function generate_llvm(ast, file)
         elseif type == "float" then
             return "double"
         elseif type == "string" then
-            error("Implement string type convert_type")
             return "i8*"
         elseif type == "void" then
             return "void"
@@ -712,6 +712,14 @@ local function generate_llvm(ast, file)
             local result_var = new_var()
             emit(string.format("%s = fadd double 0.0, %f", result_var, expression.value))
             return result_var
+        elseif expression.type == "string" then
+            local str = expression.value:gsub("\\n", "\0A")
+            local str_var = new_var()
+            local str_name = "@.str_" .. #strings
+            local str_len = #str + 1
+            table.insert(strings, string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str:gsub(".", function(c) return string.format("\\%02X", c:byte()) end)))
+            emit(string.format("%s = getelementptr [%d x i8], [%d x i8]* %s, i32 0, i32 0", str_var, str_len, str_len, str_name))
+            return str_var
         elseif expression.type == "variable" then
             return "%" .. expression.name
         elseif expression.type == "function_call" then
@@ -728,7 +736,6 @@ local function generate_llvm(ast, file)
 
                 local arg = args[i]
                 local expr = generate_expression(arg)
-
                 local type = convert_type(arg.value_type)
 
                 args_str = args_str .. type .. " " .. expr
@@ -738,7 +745,11 @@ local function generate_llvm(ast, file)
             local type = convert_type(value_type)
 
             local result_var = new_var()
-            emit(string.format("%s = call %s @%s(%s)", result_var, type, name, args_str))
+            if type == "void" then
+                emit(string.format("call %s @%s(%s)", type, name, args_str))
+            else
+                emit(string.format("%s = call %s @%s(%s)", result_var, type, name, args_str))
+            end
             return result_var
         elseif expression.type == "unary_expression" then
             local operand_var = generate_expression(expression.operand)
@@ -766,6 +777,8 @@ local function generate_llvm(ast, file)
             generate_assignment(statement)
         elseif type == "function_return" then
             generate_function_return(statement)
+        elseif type == "function_call" then
+            generate_expression(statement)
         else
             error(string.format("Unrecognized statement type found: '%s'", type))
         end
@@ -778,7 +791,7 @@ local function generate_llvm(ast, file)
         generate_statement(node)
     end
 
-    return table.concat(llvm, "\n")
+    return table.concat(strings, "\n") .. "\n" .. table.concat(llvm, "\n")
 end
 
 local file_name = "test.zk"

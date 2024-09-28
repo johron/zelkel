@@ -1,10 +1,11 @@
 # Zelkel
 
 ## TODO
-- [x] Figure out how to not have to specify return type in the return statement eg. `return: int 0`. Expressions must give their value_type, but i have no idea how to do this
+- [ ] Only include code that is used
+- [ ] Standard functions like println and print need to be thought and done about
 - [ ] Global variables
+- [ ] Tables, Lists
 - [ ] Rewrite in itself
-- [x] Finish parser
 - [ ] Make llvm emitter, codegen
 - [ ] AST evaluator/checker
     - [ ] Makes sure every function has a return

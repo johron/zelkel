@@ -1,4 +1,4 @@
 fn main(): void {
-    puts("Hello, world!\n");
+    println("Hello, world!");
     return: void;
 }

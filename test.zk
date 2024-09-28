@@ -1,9 +1,4 @@
-fn add(a: int, b: int): int {
-    return a + b;
-}
-
 fn main(): void {
-    const a: int = add(2, 3);
-    const b: int = a + 1;
+    println("Hello, world!");
     return;
 }
