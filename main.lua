@@ -137,8 +137,15 @@ local function parse(toks, file)
     local function has_variable_in_scope(name)
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
-            if is_in_table(name, scope.mut_vars) or is_in_table(name, scope.imut_vars) then
-                return true
+            for _, var in ipairs(scope.mut_vars) do
+                if var.name == name then
+                    return true
+                end
+            end
+            for _, var in ipairs(scope.imut_vars) do
+                if var.name == name then
+                    return true
+                end
             end
         end
         return false
@@ -147,22 +154,44 @@ local function parse(toks, file)
     local function variable_in_scope_is_mutable(name)
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
-            if is_in_table(name, scope.mut_vars) then
-                return true
-            elseif is_in_table(name, scope.imut_vars) then
-                return false
+            for _, var in ipairs(scope.mut_vars) do
+                if var.name == name then
+                    return true
+                end
+            end
+            for _, var in ipairs(scope.imut_vars) do
+                if var.name == name then
+                    return false
+                end
             end
         end
         return false
     end
 
-    local function add_variable_to_scope(name, mutable)
+    local function add_variable_to_scope(name, mutable, value_type)
         local scope = current_scope()
         if mutable then
-            table.insert(scope.mut_vars, name)
+            table.insert(scope.mut_vars, {name = name, value_type = value_type})
         else
-            table.insert(scope.imut_vars, name)
+            table.insert(scope.imut_vars, {name = name, value_type = value_type})
         end
+    end
+
+    local function variable_in_scope_value_type(name)
+        for j = #scope_stack, 1, -1 do
+            local scope = scope_stack[j]
+            for _, var in ipairs(scope.mut_vars) do
+                if var.name == name then
+                    return var.value_type
+                end
+            end
+            for _, var in ipairs(scope.imut_vars) do
+                if var.name == name then
+                    return var.value_type
+                end
+            end
+        end
+        return nil
     end
 
     local function has_function_in_scope(name)
@@ -281,7 +310,7 @@ local function parse(toks, file)
         local expr = parse_expression()
         expect("punctuation", ";")
 
-        add_variable_to_scope(name, mutable)
+        add_variable_to_scope(name, mutable, expr.value_type)
         return {
             type = str .. "_variable_assignment",
             name = name,
@@ -338,7 +367,7 @@ local function parse(toks, file)
             expect("punctuation", ":")
             local type = expect("identifier").value
 
-            table.insert(vars, {name, false})
+            table.insert(vars, {name = name, mutable = false, value_type = type})
             table.insert(args, {name = name, type = type})
         end
 
@@ -364,7 +393,7 @@ local function parse(toks, file)
 
         if vars ~= nil then
             for _, var in ipairs(vars) do
-                add_variable_to_scope(var[1], var[2])
+                add_variable_to_scope(var.name, var.mutable, var.value_type)
             end
         end
 
@@ -389,8 +418,6 @@ local function parse(toks, file)
 
     local function parse_function_return()
         expect("identifier", "return")
-        expect("punctuation", ":")
-        local value_type = expect("identifier").value
 
         local expr = {}
         if current().type ~= "punctuation" and current().value ~= ";" then
@@ -402,7 +429,7 @@ local function parse(toks, file)
         return {
             type = "function_return",
             expression = expr,
-            value_type = value_type
+            value_type = expr.value_type or "void"
         }
     end
 
@@ -420,17 +447,17 @@ local function parse(toks, file)
                         error(string.format("Variable not defined in current scope: '%s'", t.value))
                     end
                     i = i + 1
-                    return {type = "variable", name = t.value}
+                    return {type = "variable", name = t.value, value_type = variable_in_scope_value_type(t.value)}
                 end
             elseif t.type == "integer" then
                 i = i + 1
-                return {type = "integer", value = t.value}
+                return {type = "integer", value = t.value, value_type = "int"}
             elseif t.type == "float" then
                 i = i + 1
-                return {type = "float", value = t.value}
+                return {type = "float", value = t.value, value_type = "float"}
             elseif t.type == "string" then
                 i = i + 1
-                return {type = "string", value = t.value}
+                return {type = "string", value = t.value, value_type = "string"}
             elseif t.type == "parenthesis" and t.value == "(" then
                 i = i + 1
                 local expr = parse_expression()
@@ -453,7 +480,10 @@ local function parse(toks, file)
             if t.type == "operator" and (t.value == "-" or t.value == "+") then
                 i = i + 1
                 local expr = parse_unary()
-                return {type = "unary_expression", operator = t.value, operand = expr}
+                if expr.value_type ~= "int" and expr.value_type ~= "float" then
+                    error(string.format("Unary operator '%s' cannot be applied to type '%s'", t.value, expr.value_type))
+                end
+                return {type = "unary_expression", operator = t.value, operand = expr, value_type = expr.value_type}
             else
                 return parse_primary()
             end
@@ -465,7 +495,10 @@ local function parse(toks, file)
                 local op = current().value
                 i = i + 1
                 local right = parse_unary()
-                expr = {type = "binary_expression", operator = op, left = expr, right = right}
+                if expr.value_type ~= right.value_type then
+                    error(string.format("Type mismatch in binary expression: '%s' and '%s'", expr.value_type, right.value_type))
+                end
+                expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type}
             end
             return expr
         end
@@ -475,7 +508,10 @@ local function parse(toks, file)
             local op = current().value
             i = i + 1
             local right = parse_term()
-            expr = {type = "binary_expression", operator = op, left = expr, right = right}
+            if expr.value_type ~= right.value_type then
+                error(string.format("Type mismatch in binary expression: '%s' and '%s'", expr.value_type, right.value_type))
+            end
+            expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type}
         end
         return expr
     end
@@ -548,6 +584,21 @@ local function generate_llvm(ast, file)
         return "%t" .. var_counter
     end
 
+    local function convert_type(type)
+        if type == "int" then
+            return "i32"
+        elseif type == "float" then
+            return "double"
+        elseif type == "string" then
+            error("Implement string type convert_type")
+            return "i8*"
+        elseif type == "void" then
+            return "void"
+        else
+            error(string.format("Unsupported value type: '%s'", type))
+        end
+    end
+
     local function emit(str)
         if str == "}" then
             indent = indent - 1
@@ -604,29 +655,15 @@ local function generate_llvm(ast, file)
             end
 
             local arg = args[i]
-            if arg.type == "int" then
-                args_str = args_str .. "i32 " .. arg.name
-            elseif arg.type == "float" then
-                args_str = args_str .. "double " .. arg.name
-            elseif arg.type == "string" then
-                error("TODO: implement string argument type generate_function_declaration")
-                args_str = args_str .. "i8* " .. arg.name
-            end
+            local type = convert_type(arg.type)
+            args_str = args_str .. type .. " %" .. arg.name
 
             i = i + 1
         end
 
-        local type = ""
-        if value_type == "int" then
-            type = "i32"
-        elseif value_type == "float" then
-            type = "double"
-        elseif value_type == "void" then
-            type = "void"
-        else
-            error("TODO: implement argument types generate_function_declaration")
-        end
+        local type = convert_type(value_type)
 
+        emit("")
         emit(string.format("define %s @%s(%s) {", type, name, args_str))
         emit("entry:")
         generate_body(body)
@@ -637,18 +674,7 @@ local function generate_llvm(ast, file)
         local expression = statement.expression
         local value_type = statement.value_type
 
-        local type = ""
-        if value_type == "float" then
-            type = "double"
-        elseif value_type == "string" then
-            type = "i8*"
-        elseif value_type == "int" then
-            type = "i32"
-        elseif value_type == "void" then
-            type = "void"
-        else
-            error(string.format("Unrecognized type found: '%s'", value_type))
-        end
+        local type = convert_type(value_type)
 
         if type == "void" then
             emit(string.format("ret void"))
@@ -702,20 +728,14 @@ local function generate_llvm(ast, file)
 
                 local arg = args[i]
                 local expr = generate_expression(arg)
-                args_str = args_str .. expr
+
+                local type = convert_type(arg.value_type)
+
+                args_str = args_str .. type .. " " .. expr
                 i = i + 1
             end
 
-            local type = ""
-            if value_type == "int" then
-                type = "i32"
-            elseif value_type == "float" then
-                type = "double"
-            elseif value_type == "string" then
-                type = "i8*"
-            else
-                error(string.format("Unsupported function return type: '%s'", value_type))
-            end
+            local type = convert_type(value_type)
 
             local result_var = new_var()
             emit(string.format("%s = call %s @%s(%s)", result_var, type, name, args_str))
@@ -753,7 +773,6 @@ local function generate_llvm(ast, file)
 
     emit("@.int_fmt = constant [4 x i8] c\"%d\\0A\\00\"") -- should only be included if used?
     emit("declare i32 @printf(i8*, ...)") -- should only be included if used?
-    emit("")
 
     for _, node in ipairs(ast) do
         generate_statement(node)
