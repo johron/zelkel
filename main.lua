@@ -399,7 +399,7 @@ local function parse(toks, file)
 
         expect("parenthesis", "{")
 
-        if not is_in_table(type, {"void", "int"}) then
+        if not is_in_table(type, {"void", "int", "float"}) then
             error(string.format("Unrecognized return type: '%s'", type))
         end
 
@@ -535,6 +535,9 @@ local function parse(toks, file)
                 return parse_variable_assignment(false)
             elseif value == "return" then
                 return parse_function_return()
+            elseif value == "require" then
+                error("'require' not implemented")
+                -- return parse_require()
             elseif has_variable_in_scope(value) and variable_in_scope_is_mutable(value) then
                 return parse_variable_reassignment()
             else
@@ -550,8 +553,8 @@ local function parse(toks, file)
     end
 
     local function add_standard_functions()
-        add_function_to_scope("println", "void")
         add_function_to_scope("print", "void")
+        add_function_to_scope("string", "string")
     end
 
     enter_scope()
@@ -616,16 +619,9 @@ local function generate_llvm(ast, file)
         local expr = generate_expression(assignment.expression)
         local value_type = assignment.value_type
         if assignment.type == "immutable_variable_assignment" or assignment.type == "mutable_variable_assignment" then
-            if value_type == "int" then
-                emit(string.format("%%%s = alloca i32", assignment.name))
-            elseif value_type == "float" then
-                emit(string.format("%%%s = alloca double", assignment.name))
-            elseif value_type == "string" then
-                emit(string.format("%%%s = alloca i8*", assignment.name))
-            else
-                error(string.format("Unsupported value type: '%s'", value_type))
-            end
-            emit("store i32 " .. expr .. ", i32* %" .. assignment.name)
+            local type = convert_type(value_type)
+            emit("%" .. assignment.name .. " = alloca " .. type)
+            emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
         elseif assignment.type == "mutable_variable_reassignment" then
             error("TODO: implement mutable_variable_reassignment")
         else
@@ -694,13 +690,39 @@ local function generate_llvm(ast, file)
             local result_var = new_var()
 
             if operator == "+" then
-                emit(string.format("%s = add i32 %s, %s", result_var, left_var, right_var))
+                if expression.value_type == "int" then
+                    emit(string.format("%s = add i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fadd double %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "string" then
+                    error("String concatenation not supported")
+                else
+                    error(string.format("Unsupported value type for '+': '%s'", expression.value_type))
+                end
             elseif operator == "-" then
-                emit(string.format("%s = sub i32 %s, %s", result_var, left_var, right_var))
+                if expression.value_type == "int" then
+                    emit(string.format("%s = sub i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fsub double %s, %s", result_var, left_var, right_var))
+                else
+                    error(string.format("Unsupported value type for '-': '%s'", expression.value_type))
+                end
             elseif operator == "*" then
-                emit(string.format("%s = mul i32 %s, %s", result_var, left_var, right_var))
+                if expression.value_type == "int" then
+                    emit(string.format("%s = mul i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fmul double %s, %s", result_var, left_var, right_var))
+                else
+                    error(string.format("Unsupported value type for '*': '%s'", expression.value_type))
+                end
             elseif operator == "/" then
-                emit(string.format("%s = sdiv i32 %s, %s", result_var, left_var, right_var))
+                if expression.value_type == "int" then
+                    emit(string.format("%s = sdiv i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fdiv double %s, %s", result_var, left_var, right_var))
+                else
+                    error(string.format("Unsupported value type for '/': '%s'", expression.value_type))
+                end
             else
                 error(string.format("Unsupported binary operator: '%s'", operator))
             end
@@ -713,21 +735,26 @@ local function generate_llvm(ast, file)
             emit(string.format("%s = fadd double 0.0, %f", result_var, expression.value))
             return result_var
         elseif expression.type == "string" then
-            local str = expression.value:gsub("\\n", "\0A")
+            local str = expression.value:gsub("\\n", "\\0A")
             local str_var = new_var()
             local str_name = "@.str_" .. #strings
             local str_len = #str + 1
-            table.insert(strings, string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str:gsub(".", function(c) return string.format("\\%02X", c:byte()) end)))
+            table.insert(strings, string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
             emit(string.format("%s = getelementptr [%d x i8], [%d x i8]* %s, i32 0, i32 0", str_var, str_len, str_len, str_name))
             return str_var
         elseif expression.type == "variable" then
-            return "%" .. expression.name
+            local value_type = convert_type(expression.value_type)
+            local var = new_var()
+            emit(var .. " = load " .. value_type .. ", " .. value_type .. "* " .. "%" .. expression.name)
+            return var
         elseif expression.type == "function_call" then
             local args = expression.args
             local name = expression.name
             local value_type = expression.value_type
 
             local args_str = ""
+            local type = convert_type(value_type)
+
             local i = 1
             while i <= #args do
                 if i ~= 1 then
@@ -742,15 +769,37 @@ local function generate_llvm(ast, file)
                 i = i + 1
             end
 
-            local type = convert_type(value_type)
-
-            local result_var = new_var()
-            if type == "void" then
-                emit(string.format("call %s @%s(%s)", type, name, args_str))
+            if name == "string" then
+                args_str = ""
+                for i, arg in ipairs(args) do
+                    if arg.value_type == "int" then
+                        local int_var = new_var()
+                        local type = convert_type(value_type)
+                        emit(string.format("%s = call i8* (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.int_fmt, i32 0, i32 0), i32 %s)", int_var, generate_expression(arg)))
+                        args_str = args_str .. type .. " " .. int_var
+                        return int_var
+                    elseif arg.value_type == "float" then
+                        local float_var = new_var()
+                        local type = convert_type(value_type)
+                        emit(string.format("%s = call i8* (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.float_fmt, i32 0, i32 0), double %s)", float_var, generate_expression(arg)))
+                        args_str = args_str .. type .. " " .. float_var
+                        return float_var
+                    else
+                        error("Unrecognized type for string function: " .. arg.value_type)
+                    end
+                end
             else
-                emit(string.format("%s = call %s @%s(%s)", result_var, type, name, args_str))
+                if name == "print" then
+                    name = "printf"
+                end
+                if type == "void" then
+                    emit(string.format("call %s @%s(%s)", type, name, args_str))
+                else
+                    local result_var = new_var()
+                    emit(string.format("%s = call %s @%s(%s)", result_var, type, name, args_str))
+                    return result_var
+                end
             end
-            return result_var
         elseif expression.type == "unary_expression" then
             local operand_var = generate_expression(expression.operand)
             local result_var = new_var()
@@ -785,6 +834,7 @@ local function generate_llvm(ast, file)
     end
 
     emit("@.int_fmt = constant [4 x i8] c\"%d\\0A\\00\"") -- should only be included if used?
+    emit("@.float_fmt = constant [4 x i8] c\"%f\\0A\\00\"")
     emit("declare i32 @printf(i8*, ...)") -- should only be included if used?
 
     for _, node in ipairs(ast) do
@@ -815,3 +865,9 @@ end
 
 out:write(llvm)
 out:close()
+
+if arg[1] == "r" then
+    os.execute("llvm-as ./out/test.ll -o ./out/test.bc")
+    os.execute("llc ./out/test.bc -o ./out/test.s")
+    os.execute("clang ./out/test.s -o ./out/test")
+end

@@ -1,7 +1,10 @@
+//fn println(x: string): void {
+//    print(x);
+//    print("\n");
+//    return;
+//}
+
 fn main(): void {
-    const a: int = 1;
-    const b: int = 1;
-    const c: int = a + b;
-    println("Hello, world!");
+    print(string(5));
     return;
 }
