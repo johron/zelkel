@@ -1,6 +1,6 @@
 fn main(): void {
-    let x: float = 2.5;
-    x = x + 0.2;
-    print(string(x));
+    let x: int = 2;
+    x = x + 3;
+    print("%i", x);
     return;
 }

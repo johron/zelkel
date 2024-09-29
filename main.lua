@@ -660,7 +660,11 @@ local function generate_llvm(ast, file)
         local type = convert_type(value_type)
 
         emit("")
-        emit(string.format("define %s @%s(%s) {", type, name, args_str))
+        if type == "void" then
+            emit(string.format("define i32 @%s(%s) {", name, args_str))
+        else
+            emit(string.format("define %s @%s(%s) {", type, name, args_str))
+        end
         emit("entry:")
         generate_body(body)
         emit("}")
@@ -673,7 +677,7 @@ local function generate_llvm(ast, file)
         local type = convert_type(value_type)
 
         if type == "void" then
-            emit(string.format("ret void"))
+            emit(string.format("ret i32 0"))
         else
             local expr = generate_expression(expression)
             emit(string.format("ret %s %s", type, expr))
