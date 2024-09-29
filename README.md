@@ -4,10 +4,9 @@
 - [ ] Only include code that is used
 - [ ] Standard functions like println and print need to be thought and done about
     - Remove hard coded standard functions
-- [x] Variable definitions are a little bugged can't perform math on them
 - [ ] Parser doesnt like to have big expressions with parentheses in function call arguments
 - [/] Parser must make sure expression value_type is same as the variable value_type
-- [x] Reassignable variables
+- [ ] Convert ints, floats to strings and vice versa
 - [ ] If statements
 - [ ] While loops
 - [ ] Global variables

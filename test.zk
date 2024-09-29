@@ -1,6 +1,6 @@
 fn main(): void {
     let x: int = 2;
     x = x + 3;
-    print("%i", x);
+    print("result = %i", x);
     return;
 }

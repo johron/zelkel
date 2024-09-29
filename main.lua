@@ -741,7 +741,7 @@ local function generate_llvm(ast, file)
         elseif expression.type == "string" then
             local str = expression.value:gsub("\\n", "\\0A")
             local str_var = new_var()
-            local str_name = "@.str_" .. #strings
+            local str_name = "@.str_" .. #strings -- TODO: fix length
             local str_len = #str + 1
             table.insert(strings, string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
             emit(string.format("%s = getelementptr [%d x i8], [%d x i8]* %s, i32 0, i32 0", str_var, str_len, str_len, str_name))
