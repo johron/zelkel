@@ -207,7 +207,11 @@ local function parse(toks, file)
         if toks[i] then
             return toks[i]
         else
-            error("Attempt to access token out of bounds, could be missing '}'")
+            if current_scope() then
+                error(string.format("Unexpected end of input, could be missing '}' on line %d", line))
+            else
+                error("Attempt to access token out of bounds")
+            end
         end
     end
 
@@ -324,7 +328,7 @@ local function parse(toks, file)
 
     local function parse_body()
         local body = {}
-        while i <= #toks and (current().type ~= "parenthesis" or current().value ~= "}") do
+        while i <= #toks and not (current().type == "parenthesis" and current().value == "}") do
             if current().type == "newline" and current().value == "\n" then
                 line = line + 1
                 i = i + 1
@@ -420,6 +424,30 @@ local function parse(toks, file)
         }
     end
 
+    local function parse_require()
+        expect("identifier", "require")
+        local lib_path = expect("string").value:gsub('^"(.*)"$', '%1')
+        expect("punctuation", ";")
+
+        if lib_path == file then
+            error("Cannot require itself")
+        end
+
+        if not lib_path:match("%.zk$") then
+            lib_path = "require/" .. lib_path .. ".zk"
+        end
+
+        local lib_file = io.open(lib_path, "r")
+        if lib_file == nil then
+            error(string.format("Tried to require nonexistent library: '%s'", lib_path))
+        end
+        local lib_content = lib_file:read("a")
+        local lib_toks = lex(lib_content, lib_path)
+        local lib_ast = parse(lib_toks, lib_path)
+        print(inspect(lib_ast))
+        return nil
+    end
+
     function parse_expression()
         local function parse_primary()
             local t = current()
@@ -513,6 +541,10 @@ local function parse(toks, file)
     end
 
     function parse_statement()
+        if not toks[i] then
+            return nil
+        end
+
         local type = current().type
         local value = current().value
 
@@ -526,8 +558,7 @@ local function parse(toks, file)
             elseif value == "return" then
                 return parse_function_return()
             elseif value == "require" then
-                error("'require' not implemented")
-                -- return parse_require()
+                return parse_require()
             elseif has_variable_in_scope(value) then
                 return parse_variable_reassignment()
             elseif has_function_in_scope(value) then
@@ -556,6 +587,8 @@ local function parse(toks, file)
         local node = parse_statement()
         if node then
             table.insert(ast, node)
+        else
+            break
         end
     end
 
@@ -627,7 +660,6 @@ local function generate_llvm(ast, file)
             local type = convert_type(value_type)
             emit("%" .. assignment.name .. "_" .. assignment.counter .. " = alloca " .. type)
             emit("store " .. convert_type(value_type) .. " " .. expr .. ", " .. convert_type(value_type) .. "* %" .. assignment.name .. "_" .. assignment.counter)
-            --error("TODO: implement mutable_variable_reassignment")
         else
             error(string.format("Unsupported assignment type: '%s'", assignment.type))
         end
@@ -864,9 +896,9 @@ local function generate_llvm(ast, file)
     return table.concat(top_code, "\n") .. "\n" .. table.concat(llvm, "\n")
 end
 
-local file_name = "test.zk"
+local file_name = arg[1]
 local file = io.open(file_name, "rb")
-if not file then print("No 'test.zk' file") os.exit(1)  end
+if not file then print("No file") os.exit(1)  end
 local content = file:read("a")
 file:close()
 
@@ -877,7 +909,7 @@ print(inspect(ast))
 
 local llvm = generate_llvm(ast, file_name)
 
-local out = io.open("out/test.ll", "w")
+local out = io.open("out/" .. file_name .. ".ll", "w")
 if out == nil then
     print("file is nil")
     os.exit(1)
@@ -886,6 +918,4 @@ end
 out:write(llvm)
 out:close()
 
-if arg[1] == "r" then
-    os.execute("clang ./out/test.ll -o ./out/test")
-end
+os.execute(string.format("clang ./out/%s.ll -o ./out/%s.out", file_name, file_name))

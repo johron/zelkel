@@ -1,8 +1,6 @@
-fn println(str: string): void {
-    print("%s\n", str);
-    return;
-}
+require "std";
+
 fn main(): void {
-    println(string(0.3));
+    println("Hello, world!");
     return;
 }
