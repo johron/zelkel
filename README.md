@@ -6,8 +6,8 @@
     - Remove hard coded standard functions
 - [x] Variable definitions are a little bugged can't perform math on them
 - [ ] Parser doesnt like to have big expressions with parentheses in function call arguments
-- [ ] Parser must make sure expression value_type is same as the variable value_type
-- [ ] Reassignable variables
+- [/] Parser must make sure expression value_type is same as the variable value_type
+- [x] Reassignable variables
 - [ ] If statements
 - [ ] While loops
 - [ ] Global variables
