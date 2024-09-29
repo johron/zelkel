@@ -1,6 +1,9 @@
+fn println(a: string): void {
+    print("%s\n", a);
+    return;
+}
+
 fn main(): void {
-    let x: int = 2;
-    x = x + 3;
-    print("result = %i", x);
+    println("Hello, world!");
     return;
 }

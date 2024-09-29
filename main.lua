@@ -146,10 +146,6 @@ local function parse(toks, file)
     end
 
     local function add_variable_to_scope(var)
-        if not var.name or not var.mutable or not var.value_type or not var.counter then
-            error("This shouldn't happen")
-        end
-
         local scope = current_scope()
         table.insert(scope.variables, var)
     end
@@ -294,11 +290,11 @@ local function parse(toks, file)
         local expr = parse_expression()
         expect("punctuation", ";")
 
-        add_variable_to_scope({name = name, mutable = mutable, value_type = expr.value_type, counter = 1})
+        add_variable_to_scope({name = name, mutable = mutable, value_type = expr.value_type, counter = 0})
         return {
             type = str .. "_variable_assignment",
             name = name,
-            counter = 1,
+            counter = 0,
             value_type = value_type,
             expression = expr
         }
@@ -347,7 +343,6 @@ local function parse(toks, file)
 
     local function parse_function_declaration_args()
         local args = {}
-        local vars = {}
         local start = i
         while i <= #toks and toks[i].type ~= "parenthesis" and toks[i].value ~= ")" do
             if i ~= start then
@@ -360,11 +355,10 @@ local function parse(toks, file)
             expect("punctuation", ":")
             local type = expect("identifier").value
 
-            table.insert(vars, {name = name, mutable = false, value_type = type})
-            table.insert(args, {name = name, type = type})
+            table.insert(args, {name = name, mutable = false, type = type})
         end
 
-        return args, vars
+        return args
     end
 
     local function parse_function_declaration()
@@ -376,7 +370,7 @@ local function parse(toks, file)
 
         expect("parenthesis", "(")
 
-        local args, vars = parse_function_declaration_args()
+        local args = parse_function_declaration_args()
 
         expect("parenthesis", ")")
         expect("punctuation", ":")
@@ -384,9 +378,9 @@ local function parse(toks, file)
         add_function_to_scope(name, type)
         enter_scope()
 
-        if vars ~= nil then
-            for _, var in ipairs(vars) do
-                add_variable_to_scope({name = var.name, mutable = var.mutable, value_type = var.value_type, counter = 1})
+        if args ~= nil then
+            for _, arg in ipairs(args) do
+                add_variable_to_scope({name = arg.name, mutable = arg.mutable, value_type = arg.type, counter = 0, isarg = true})
             end
         end
 
@@ -442,7 +436,8 @@ local function parse(toks, file)
                     i = i + 1
                     local value_type = variable_in_scope_get_value(t.value, "value_type")
                     local counter = variable_in_scope_get_value(t.value, "counter")
-                    return {type = "variable", name = t.value, value_type = value_type, counter = counter}
+                    local isarg = variable_in_scope_get_value(t.value, "isarg")
+                    return {type = "variable", name = t.value, value_type = value_type, counter = counter, isarg = isarg}
                 end
             elseif t.type == "integer" then
                 i = i + 1
@@ -652,7 +647,7 @@ local function generate_llvm(ast, file)
 
             local arg = args[i]
             local type = convert_type(arg.type)
-            args_str = args_str .. type .. " %" .. arg.name
+            args_str = args_str .. type .. " %" .. arg.name .. "_0"
 
             i = i + 1
         end
@@ -743,14 +738,20 @@ local function generate_llvm(ast, file)
             local str_var = new_var()
             local str_name = "@.str_" .. #strings -- TODO: fix length
             local str_len = #str + 1
+            for _ in string.gmatch(str, "\\0A") do
+                str_len = str_len - 2
+            end
             table.insert(strings, string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
             emit(string.format("%s = getelementptr [%d x i8], [%d x i8]* %s, i32 0, i32 0", str_var, str_len, str_len, str_name))
             return str_var
         elseif expression.type == "variable" then
             local value_type = convert_type(expression.value_type)
             local var = new_var()
-            emit(var .. " = load " .. value_type .. ", " .. value_type .. "* " .. "%" .. expression.name .. "_" .. expression.counter)
-            return var
+            if not expression.isarg or expression.isarg ~= true then
+                emit(var .. " = load " .. value_type .. ", " .. value_type .. "* " .. "%" .. expression.name .. "_" .. expression.counter)
+                return var
+            end
+            return "%" .. expression.name .. "_" .. expression.counter
         elseif expression.type == "function_call" then
             local args = expression.args
             local name = expression.name
