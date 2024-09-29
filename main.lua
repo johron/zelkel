@@ -566,7 +566,7 @@ end
 
 local function generate_llvm(ast, file)
     local llvm = {}
-    local strings = {}
+    local top_code = {}
     local var_counter = 0
     local indent = 0
 
@@ -578,6 +578,15 @@ local function generate_llvm(ast, file)
     local function new_var()
         var_counter = var_counter + 1
         return "%t" .. var_counter
+    end
+
+    local function emit_top(str)
+        for _, code in ipairs(top_code) do
+            if code == str then
+                return
+            end
+        end
+        table.insert(top_code, str)
     end
 
     local function convert_type(type)
@@ -719,8 +728,10 @@ local function generate_llvm(ast, file)
                     emit(string.format("%s = sdiv i32 %s, %s", result_var, left_var, right_var))
                 elseif expression.value_type == "float" then
                     emit(string.format("%s = fdiv double %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "string" then
+                    error(string.format("Cannot divide a string: '%s'", expression.value)) -- TODO: this should be eliminated in the parser
                 else
-                    error(string.format("Unsupported value type for '/': '%s'", expression.value_type))
+                    error(string.format("Unrecognized type found: '%s'", expression.value_type))
                 end
             else
                 error(string.format("Unsupported binary operator: '%s'", operator))
@@ -730,18 +741,19 @@ local function generate_llvm(ast, file)
         elseif expression.type == "integer" then
             return tostring(expression.value)
         elseif expression.type == "float" then
-            local result_var = new_var()
-            emit(string.format("%s = fadd double 0.0, %f", result_var, expression.value))
-            return result_var
+            --local result_var = new_var()
+            --emit(string.format("%s = fadd double 0.0, %f", result_var, expression.value))
+            --return result_var
+            return tostring(expression.value)
         elseif expression.type == "string" then
             local str = expression.value:gsub("\\n", "\\0A")
             local str_var = new_var()
-            local str_name = "@.str_" .. #strings -- TODO: fix length
+            local str_name = "@.str_" .. #top_code -- TODO: fix length
             local str_len = #str + 1
             for _ in string.gmatch(str, "\\0A") do
                 str_len = str_len - 2
             end
-            table.insert(strings, string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
+            table.insert(top_code, string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
             emit(string.format("%s = getelementptr [%d x i8], [%d x i8]* %s, i32 0, i32 0", str_var, str_len, str_len, str_name))
             return str_var
         elseif expression.type == "variable" then
@@ -778,17 +790,23 @@ local function generate_llvm(ast, file)
                 args_str = ""
                 for i, arg in ipairs(args) do
                     if arg.value_type == "int" then
-                        local int_var = new_var()
-                        local type = convert_type(value_type)
-                        emit(string.format("%s = getelementptr inbounds [4 x i8], [4 x i8]* @.int_fmt, i32 0, i32 0", int_var))
-                        args_str = args_str .. type .. " " .. int_var
-                        return int_var
+                        local buffer = new_var()
+                        emit(string.format("%s = alloca [12 x i8]", buffer))
+                        emit(string.format("call i32 (i8*, i8*, ...) @sprintf(i8* %s, i8* getelementptr ([3 x i8], [3 x i8]* @.int_fmt, i32 0, i32 0), i32 %s)", buffer, generate_expression(arg)))
+
+                        emit_top("declare i32 @sprintf(i8*, ...)")
+                        emit_top("@.int_fmt = constant [3 x i8] c\"%d\\00\"")
+
+                        return buffer
                     elseif arg.value_type == "float" then
-                        local float_var = new_var()
-                        local type = convert_type(value_type)
-                        emit(string.format("%s = call i8* (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.float_fmt, i32 0, i32 0), double %s)", float_var, generate_expression(arg)))
-                        args_str = args_str .. type .. " " .. float_var
-                        return float_var
+                        local buffer = new_var()
+                        emit(string.format("%s = alloca [32 x i8]", buffer))
+                        emit(string.format("call i32 (i8*, i8*, ...) @sprintf(i8* %s, i8* getelementptr ([3 x i8], [3 x i8]* @.float_fmt, i32 0, i32 0), double %s)", buffer, generate_expression(arg)))
+
+                        emit_top("declare i32 @sprintf(i8*, ...)")
+                        emit_top("@.float_fmt = constant [3 x i8] c\"%f\\00\"")
+
+                        return buffer
                     else
                         error("Unrecognized type for string function: " .. arg.value_type)
                     end
@@ -796,6 +814,7 @@ local function generate_llvm(ast, file)
             else
                 if name == "print" then
                     name = "printf"
+                    emit_top("declare i32 @printf(i8*, ...)")
                 end
                 if type == "void" then
                     emit(string.format("call %s @%s(%s)", type, name, args_str))
@@ -838,15 +857,11 @@ local function generate_llvm(ast, file)
         end
     end
 
-    emit("@.int_fmt = constant [4 x i8] c\"%d\\0A\\00\"") -- should only be included if used?
-    emit("@.float_fmt = constant [4 x i8] c\"%f\\0A\\00\"")
-    emit("declare i32 @printf(i8*, ...)") -- should only be included if used?
-
     for _, node in ipairs(ast) do
         generate_statement(node)
     end
 
-    return table.concat(strings, "\n") .. "\n" .. table.concat(llvm, "\n")
+    return table.concat(top_code, "\n") .. "\n" .. table.concat(llvm, "\n")
 end
 
 local file_name = "test.zk"
@@ -872,7 +887,5 @@ out:write(llvm)
 out:close()
 
 if arg[1] == "r" then
-    os.execute("llvm-as ./out/test.ll -o ./out/test.bc")
-    os.execute("llc ./out/test.bc -o ./out/test.s")
-    os.execute("clang ./out/test.s -o ./out/test")
+    os.execute("clang ./out/test.ll -o ./out/test")
 end
