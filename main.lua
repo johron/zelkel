@@ -114,14 +114,13 @@ local function parse(toks, file)
     local scope_stack = {}
 
     local function current_scope()
-        return scope_stack[#scope_stack] or scope_stack[#scope_stack - 1] or {mut_vars = {}, imut_vars = {}, functions = {}}
+        return scope_stack[#scope_stack] or scope_stack[#scope_stack - 1] or {variables = {}, functions = {}}
     end
 
     local function enter_scope()
         local parent_scope = current_scope()
         local new_scope = {
-            mut_vars = {table.unpack(parent_scope.mut_vars)},
-            imut_vars = {table.unpack(parent_scope.imut_vars)},
+            variables = {table.unpack(parent_scope.variables)},
             functions = {table.unpack(parent_scope.functions)}
         }
         table.insert(scope_stack, new_scope)
@@ -137,12 +136,7 @@ local function parse(toks, file)
     local function has_variable_in_scope(name)
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
-            for _, var in ipairs(scope.mut_vars) do
-                if var.name == name then
-                    return true
-                end
-            end
-            for _, var in ipairs(scope.imut_vars) do
+            for _, var in ipairs(scope.variables) do
                 if var.name == name then
                     return true
                 end
@@ -151,43 +145,33 @@ local function parse(toks, file)
         return false
     end
 
-    local function variable_in_scope_is_mutable(name)
-        for j = #scope_stack, 1, -1 do
-            local scope = scope_stack[j]
-            for _, var in ipairs(scope.mut_vars) do
-                if var.name == name then
-                    return true
-                end
-            end
-            for _, var in ipairs(scope.imut_vars) do
-                if var.name == name then
-                    return false
-                end
-            end
+    local function add_variable_to_scope(var)
+        if not var.name or not var.mutable or not var.value_type or not var.counter then
+            error("This shouldn't happen")
         end
-        return false
-    end
 
-    local function add_variable_to_scope(name, mutable, value_type)
         local scope = current_scope()
-        if mutable then
-            table.insert(scope.mut_vars, {name = name, value_type = value_type})
-        else
-            table.insert(scope.imut_vars, {name = name, value_type = value_type})
+        table.insert(scope.variables, var)
+    end
+
+    local function variable_in_scope_set_value(name, value, v)
+        for j = #scope_stack, 1, -1 do
+            local scope = scope_stack[j]
+            for _, var in ipairs(scope.variables) do
+                if var.name == name then
+                    var[value] = v
+                    return
+                end
+            end
         end
     end
 
-    local function variable_in_scope_value_type(name)
+    local function variable_in_scope_get_value(name, value)
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
-            for _, var in ipairs(scope.mut_vars) do
+            for _, var in ipairs(scope.variables) do
                 if var.name == name then
-                    return var.value_type
-                end
-            end
-            for _, var in ipairs(scope.imut_vars) do
-                if var.name == name then
-                    return var.value_type
+                    return var[value]
                 end
             end
         end
@@ -211,12 +195,12 @@ local function parse(toks, file)
         table.insert(scope.functions, {name = name, value_type = value_type})
     end
 
-    local function function_in_scope_value_type(name)
+    local function function_in_scope_get_value(name, value)
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
             for _, func in ipairs(scope.functions) do
                 if func.name == name then
-                    return func.value_type
+                    return func[value]
                 end
             end
         end
@@ -274,7 +258,7 @@ local function parse(toks, file)
 
         expect("parenthesis", ")")
 
-        local value_type = function_in_scope_value_type(name)
+        local value_type = function_in_scope_get_value(name, "value_type")
 
         return {
             type = "function_call",
@@ -310,10 +294,11 @@ local function parse(toks, file)
         local expr = parse_expression()
         expect("punctuation", ";")
 
-        add_variable_to_scope(name, mutable, expr.value_type)
+        add_variable_to_scope({name = name, mutable = mutable, value_type = expr.value_type, counter = 1})
         return {
             type = str .. "_variable_assignment",
             name = name,
+            counter = 1,
             value_type = value_type,
             expression = expr
         }
@@ -322,13 +307,21 @@ local function parse(toks, file)
     local function parse_variable_reassignment()
         local name = expect("identifier").value
 
+        if not variable_in_scope_get_value(name, "mutable") then
+            error(string.format("Cannot reasign immutable variable: '%s'", name))
+        end
+
         expect("operator", "=")
         local expr = parse_expression()
         expect("punctuation", ";")
 
+        variable_in_scope_set_value(name, "counter", variable_in_scope_get_value(name, "counter") + 1)
+
         return {
+            counter = variable_in_scope_get_value(name, "counter"),
             type = "mutable_variable_reassignment",
             name = name,
+            value_type = expr.value_type,
             expression = expr
         }
     end
@@ -393,7 +386,7 @@ local function parse(toks, file)
 
         if vars ~= nil then
             for _, var in ipairs(vars) do
-                add_variable_to_scope(var.name, var.mutable, var.value_type)
+                add_variable_to_scope({name = var.name, mutable = var.mutable, value_type = var.value_type, counter = 1})
             end
         end
 
@@ -447,7 +440,9 @@ local function parse(toks, file)
                         error(string.format("Variable not defined in current scope: '%s'", t.value))
                     end
                     i = i + 1
-                    return {type = "variable", name = t.value, value_type = variable_in_scope_value_type(t.value)}
+                    local value_type = variable_in_scope_get_value(t.value, "value_type")
+                    local counter = variable_in_scope_get_value(t.value, "counter")
+                    return {type = "variable", name = t.value, value_type = value_type, counter = counter}
                 end
             elseif t.type == "integer" then
                 i = i + 1
@@ -538,10 +533,12 @@ local function parse(toks, file)
             elseif value == "require" then
                 error("'require' not implemented")
                 -- return parse_require()
-            elseif has_variable_in_scope(value) and variable_in_scope_is_mutable(value) then
+            elseif has_variable_in_scope(value) then
                 return parse_variable_reassignment()
-            else
+            elseif has_function_in_scope(value) then
                 return parse_expression_as_statement()
+            else
+                error(string.format("Unrecognized token found while parsing: '%s'", value))
             end
         elseif type == "newline" and value == "\n" then
             line = line + 1
@@ -620,10 +617,13 @@ local function generate_llvm(ast, file)
         local value_type = assignment.value_type
         if assignment.type == "immutable_variable_assignment" or assignment.type == "mutable_variable_assignment" then
             local type = convert_type(value_type)
-            emit("%" .. assignment.name .. " = alloca " .. type)
-            emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
+            emit("%" .. assignment.name .. "_" .. assignment.counter .. " = alloca " .. type)
+            emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name .. "_" .. assignment.counter)
         elseif assignment.type == "mutable_variable_reassignment" then
-            error("TODO: implement mutable_variable_reassignment")
+            local type = convert_type(value_type)
+            emit("%" .. assignment.name .. "_" .. assignment.counter .. " = alloca " .. type)
+            emit("store " .. convert_type(value_type) .. " " .. expr .. ", " .. convert_type(value_type) .. "* %" .. assignment.name .. "_" .. assignment.counter)
+            --error("TODO: implement mutable_variable_reassignment")
         else
             error(string.format("Unsupported assignment type: '%s'", assignment.type))
         end
@@ -745,7 +745,7 @@ local function generate_llvm(ast, file)
         elseif expression.type == "variable" then
             local value_type = convert_type(expression.value_type)
             local var = new_var()
-            emit(var .. " = load " .. value_type .. ", " .. value_type .. "* " .. "%" .. expression.name)
+            emit(var .. " = load " .. value_type .. ", " .. value_type .. "* " .. "%" .. expression.name .. "_" .. expression.counter)
             return var
         elseif expression.type == "function_call" then
             local args = expression.args
