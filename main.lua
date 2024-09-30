@@ -101,7 +101,7 @@ local function lex(input, file)
     return toks
 end
 
-local function parse(toks, file)
+local function parse(toks, file, lib)
     local line = 1
     local ast = {}
     local i = 1
@@ -207,6 +207,7 @@ local function parse(toks, file)
         if toks[i] then
             return toks[i]
         else
+            if lib then print(lib) end
             if current_scope() then
                 error(string.format("Unexpected end of input, could be missing '}' on line %d", line))
             else
@@ -424,30 +425,6 @@ local function parse(toks, file)
         }
     end
 
-    local function parse_require()
-        expect("identifier", "require")
-        local lib_path = expect("string").value:gsub('^"(.*)"$', '%1')
-        expect("punctuation", ";")
-
-        if lib_path == file then
-            error("Cannot require itself")
-        end
-
-        if not lib_path:match("%.zk$") then
-            lib_path = "require/" .. lib_path .. ".zk"
-        end
-
-        local lib_file = io.open(lib_path, "r")
-        if lib_file == nil then
-            error(string.format("Tried to require nonexistent library: '%s'", lib_path))
-        end
-        local lib_content = lib_file:read("a")
-        local lib_toks = lex(lib_content, lib_path)
-        local lib_ast = parse(lib_toks, lib_path)
-        print(inspect(lib_ast))
-        return nil
-    end
-
     function parse_expression()
         local function parse_primary()
             local t = current()
@@ -541,10 +518,6 @@ local function parse(toks, file)
     end
 
     function parse_statement()
-        if not toks[i] then
-            return nil
-        end
-
         local type = current().type
         local value = current().value
 
@@ -557,8 +530,6 @@ local function parse(toks, file)
                 return parse_variable_assignment(false)
             elseif value == "return" then
                 return parse_function_return()
-            elseif value == "require" then
-                return parse_require()
             elseif has_variable_in_scope(value) then
                 return parse_variable_reassignment()
             elseif has_function_in_scope(value) then
@@ -587,8 +558,6 @@ local function parse(toks, file)
         local node = parse_statement()
         if node then
             table.insert(ast, node)
-        else
-            break
         end
     end
 
@@ -884,6 +853,7 @@ local function generate_llvm(ast, file)
             generate_function_return(statement)
         elseif type == "function_call" then
             generate_expression(statement)
+        elseif type == "ignore" then
         else
             error(string.format("Unrecognized statement type found: '%s'", type))
         end

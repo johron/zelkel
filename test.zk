@@ -1,4 +1,7 @@
-require "std";
+fn println(str: string): void {
+    print("%s\n", str);
+    return;
+}
 
 fn main(): void {
     println("Hello, world!");
