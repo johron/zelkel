@@ -101,10 +101,14 @@ local function lex(input, file)
     return toks
 end
 
-local function parse(toks, file, lib)
+local function parse(toks, file)
     local line = 1
     local ast = {}
     local i = 1
+
+    local function luaerror(msg)
+        error(msg)
+    end
 
     local function error(msg)
         print(string.format("%s:%s: %s", file, line, msg))
@@ -207,9 +211,8 @@ local function parse(toks, file, lib)
         if toks[i] then
             return toks[i]
         else
-            if lib then print(lib) end
             if current_scope() then
-                error(string.format("Unexpected end of input, could be missing '}' on line %d", line))
+                luaerror(string.format("Unexpected end of input, could be missing '}' on line %d", line))
             else
                 error("Attempt to access token out of bounds")
             end
@@ -330,18 +333,12 @@ local function parse(toks, file, lib)
     local function parse_body()
         local body = {}
         while i <= #toks and not (current().type == "parenthesis" and current().value == "}") do
-            if current().type == "newline" and current().value == "\n" then
-                line = line + 1
-                i = i + 1
-            end
             if current().type == "parenthesis" or current().value == "}" then
                 return body
             end
 
             local stmt = parse_statement()
-            if stmt ~= nil then
-                table.insert(body, stmt)
-            end
+            table.insert(body, stmt)
         end
         return body
     end
@@ -422,6 +419,33 @@ local function parse(toks, file, lib)
             type = "function_return",
             expression = expr,
             value_type = expr.value_type or "void"
+        }
+    end
+
+    local function parse_require()
+        expect("identifier", "require")
+        local lib_path = expect("string").value:gsub('^"(.*)"$', '%1')
+        expect("punctuation", ";")
+
+        if lib_path == file then
+            error("Cannot require itself")
+        end
+        if not lib_path:match("%.zk$") then
+            lib_path = "require/" .. lib_path .. ".zk"
+        end
+
+        local lib_file = io.open(lib_path, "r")
+        if lib_file == nil then
+            error(string.format("Tried to require nonexistent library: '%s'", lib_path))
+        end
+
+        local lib_content = lib_file:read("a")
+        local lib_toks = lex(lib_content, lib_path)
+        local lib_ast = parse(lib_toks, lib_path)
+
+        print(inspect(lib_ast))
+        return {
+            type = "return"
         }
     end
 
@@ -528,6 +552,8 @@ local function parse(toks, file, lib)
                 return parse_variable_assignment(true)
             elseif value == "const" then
                 return parse_variable_assignment(false)
+            elseif value == "require" then
+                return parse_require()
             elseif value == "return" then
                 return parse_function_return()
             elseif has_variable_in_scope(value) then
@@ -540,7 +566,6 @@ local function parse(toks, file, lib)
         elseif type == "newline" and value == "\n" then
             line = line + 1
             i = i + 1
-            return nil
         else
             error(string.format("Unexpected token found while parsing statement: '%s'", value))
         end
@@ -556,9 +581,7 @@ local function parse(toks, file, lib)
 
     while i <= #toks do
         local node = parse_statement()
-        if node then
-            table.insert(ast, node)
-        end
+        table.insert(ast, node)
     end
 
     exit_scope()
@@ -866,26 +889,30 @@ local function generate_llvm(ast, file)
     return table.concat(top_code, "\n") .. "\n" .. table.concat(llvm, "\n")
 end
 
-local file_name = arg[1]
-local file = io.open(file_name, "rb")
-if not file then print("No file") os.exit(1)  end
-local content = file:read("a")
-file:close()
+local function compile()
+    local file_name = arg[1]
+    local file = io.open(file_name, "rb")
+    if not file then print("No file") os.exit(1)  end
+    local content = file:read("a")
+    file:close()
 
-local toks = lex(content, file_name)
-local ast = parse(toks, file_name)
+    local toks = lex(content, file_name)
+    local ast = parse(toks, file_name)
 
-print(inspect(ast))
+    print(inspect(ast))
 
-local llvm = generate_llvm(ast, file_name)
+    local llvm = generate_llvm(ast, file_name)
 
-local out = io.open("out/" .. file_name .. ".ll", "w")
-if out == nil then
-    print("file is nil")
-    os.exit(1)
+    local out = io.open("out/" .. file_name .. ".ll", "w")
+    if out == nil then
+        print("file is nil")
+        os.exit(1)
+    end
+
+    out:write(llvm)
+    out:close()
+
+    os.execute(string.format("clang ./out/%s.ll -o ./out/%s.out", file_name, file_name))
 end
 
-out:write(llvm)
-out:close()
-
-os.execute(string.format("clang ./out/%s.ll -o ./out/%s.out", file_name, file_name))
+compile()

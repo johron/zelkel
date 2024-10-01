@@ -18,5 +18,6 @@
       maybe combine the zelkel code into one and compile that
     - no ending ("std"): a standard, bundled library, library in a main directory
     - with ending ("lib.zk"): user defined library, can have path and stuff
+- [ ] Rewrite parser since it is very buggy.
 - [ ] Rewrite in itself
 - [ ] Make sure every function has a return
