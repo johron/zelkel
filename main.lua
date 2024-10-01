@@ -124,7 +124,7 @@ local function parse(toks, file)
     local function enter_scope()
         local parent_scope = current_scope()
         local new_scope = {
-            variables = {table.unpack(parent_scope.variables)},
+            variables = {table.unpack(parent_scope.variables)}, -- remove table.unpack ? TODO: 
             functions = {table.unpack(parent_scope.functions)}
         }
         table.insert(scope_stack, new_scope)
@@ -211,16 +211,17 @@ local function parse(toks, file)
         if toks[i] then
             return toks[i]
         else
-            if current_scope() then
-                luaerror(string.format("Unexpected end of input, could be missing '}' on line %d", line))
-            else
-                error("Attempt to access token out of bounds")
-            end
+            return nil
+            --luaerror("Attempt to access token out of bounds")
         end
     end
 
     local function expect(type, value)
         local t = current()
+        if t == nil then
+            error("current() is nil")
+        end
+
         if t.type == "newline" then
             line = line + 1
             i = i + 1
@@ -338,8 +339,12 @@ local function parse(toks, file)
             end
 
             local stmt = parse_statement()
+            while stmt.type == "newline" and toks[i].value ~= "}" do
+                stmt = parse_statement()
+            end
             table.insert(body, stmt)
         end
+
         return body
     end
 
@@ -443,10 +448,7 @@ local function parse(toks, file)
         local lib_toks = lex(lib_content, lib_path)
         local lib_ast = parse(lib_toks, lib_path)
 
-        print(inspect(lib_ast))
-        return {
-            type = "return"
-        }
+        return table.unpack(lib_ast)
     end
 
     function parse_expression()
@@ -542,8 +544,17 @@ local function parse(toks, file)
     end
 
     function parse_statement()
-        local type = current().type
-        local value = current().value
+        local current = current()
+
+        if current == nil then
+            print(i, file)
+            return {
+                type = "EOF"
+            }
+        end
+
+        local type = current.type
+        local value = current.value
 
         if type == "identifier" then
             if value == "fn" then
@@ -566,6 +577,11 @@ local function parse(toks, file)
         elseif type == "newline" and value == "\n" then
             line = line + 1
             i = i + 1
+            print("here", i, line, file)
+            return {
+                type = "newline",
+                value = "\n"
+            }
         else
             error(string.format("Unexpected token found while parsing statement: '%s'", value))
         end
@@ -581,6 +597,10 @@ local function parse(toks, file)
 
     while i <= #toks do
         local node = parse_statement()
+        if node.type == "EOF" then
+            print(inspect(toks))
+            break
+        end
         table.insert(ast, node)
     end
 
@@ -876,7 +896,7 @@ local function generate_llvm(ast, file)
             generate_function_return(statement)
         elseif type == "function_call" then
             generate_expression(statement)
-        elseif type == "ignore" then
+        elseif type == "ignore" or type == "newline" then
         else
             error(string.format("Unrecognized statement type found: '%s'", type))
         end

@@ -1,4 +1,1 @@
-fn println(str: string): void {
-    print("%s\n", str);
-    return;
-}
+fn println(str: string): void {print("%s\n", str);return;}
