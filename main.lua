@@ -77,9 +77,21 @@ local function lex(input, file)
                 if chars[i] == "\n" then
                     line = line + 1
                 end
+            elseif c == "=" and chars[i + 1] == "=" then
+                table.insert(toks, {type = "operator", value = c .. chars[i]})
+                i = i + 1
             else
                 table.insert(toks, {type = "operator", value = c})
             end
+            i = i + 1
+        elseif is_in_table(c, {">", "<", "!"}) then
+            if chars[i + 1] == "=" then
+                table.insert(toks, {type = "operator", value = c .. chars[i + 1]})
+                i = i + 1
+            else
+                table.insert(toks, {type = "operator", value = c})
+            end
+
             i = i + 1
         elseif is_in_table(c, {";", ":", ","}) then
             table.insert(toks, {type = "punctuation", value = c})
@@ -338,7 +350,7 @@ local function parse(toks, file)
             end
 
             local stmt = parse_statement()
-            while stmt.type == "newline" and toks[i].value ~= "}" do
+            while stmt == nil and toks[i].value ~= "}" do
                 stmt = parse_statement()
             end
             table.insert(body, stmt)
@@ -426,6 +438,55 @@ local function parse(toks, file)
         }
     end
 
+    local function parse_if_statement()
+        expect("identifier", "if")
+        expect("parenthesis", "(")
+
+        local cond = parse_expression()
+
+        expect("parenthesis", ")")
+        expect("parenthesis", "{")
+        enter_scope()
+
+        local body = parse_body()
+        expect("parenthesis", "}")
+        exit_scope()
+
+        local else_body = nil
+        local elseif_statements = {}
+
+        while i <= #toks and current().type == "identifier" and current().value == "else" and toks[i + 1].type == "identifier" and toks[i + 1].value == "if" do
+            expect("identifier", "else")
+            expect("identifier", "if")
+            expect("parenthesis", "(")
+            local elseif_cond = parse_expression()
+            expect("parenthesis", ")")
+            expect("parenthesis", "{")
+            enter_scope()
+            local elseif_body = parse_body()
+            expect("parenthesis", "}")
+            exit_scope()
+            table.insert(elseif_statements, {condition = elseif_cond, body = elseif_body})
+        end
+
+        if i <= #toks and current().type == "identifier" and current().value == "else" then
+            expect("identifier", "else")
+            expect("parenthesis", "{")
+            enter_scope()
+            else_body = parse_body()
+            expect("parenthesis", "}")
+            exit_scope()
+        end
+
+        return {
+            type = "if_statement",
+            condition = cond,
+            body = body,
+            elseif_statements = elseif_statements,
+            else_body = else_body
+        }
+    end
+
     function parse_expression()
         local function parse_primary()
             local t = current()
@@ -467,6 +528,7 @@ local function parse(toks, file)
                 i = i + 1
                 error(string.format("Unexpected token in primary expression: '%s', could be missing ';' on line above", t.value))
             else
+                print(inspect(t))
                 error(string.format("Unexpected token in primary expression: '%s'", t.value))
             end
         end
@@ -494,18 +556,38 @@ local function parse(toks, file)
                 if expr.value_type ~= right.value_type then
                     error(string.format("Type mismatch in binary expression: '%s' and '%s'", expr.value_type, right.value_type))
                 end
+                if expr.value_type == "string" then
+                    error(string.format("Operator '%s' cannot be applied to type 'string'", op))
+                end
                 expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type}
             end
             return expr
         end
 
-        local expr = parse_term()
-        while i <= #toks and current().type == "operator" and (current().value == "+" or current().value == "-") and current().type ~= "punctuation" and current().value ~= ";" do
+        local function parse_comparison()
+            local expr = parse_term()
+            while i <= #toks and current().type == "operator" and (current().value == "==" or current().value == "!=" or current().value == ">=" or current().value == "<=" or current().value == ">" or current().value == "<") and current().type ~= "punctuation" and current().value ~= ";" do
+                local op = current().value
+                i = i + 1
+                local right = parse_term()
+                if expr.value_type ~= right.value_type then
+                    error(string.format("Type mismatch in comparison expression: '%s' and '%s'", expr.value_type, right.value_type))
+                end
+                expr = {type = "comparison_expression", operator = op, left = expr, right = right, value_type = "bool"}
+            end
+            return expr
+        end
+
+        local expr = parse_comparison()
+        while i <= #toks and current().type == "operator" and is_in_table(current().value, {"+", "-"}) and current().type ~= "punctuation" and current().value ~= ";" do
             local op = current().value
             i = i + 1
-            local right = parse_term()
+            local right = parse_comparison()
             if expr.value_type ~= right.value_type then
                 error(string.format("Type mismatch in binary expression: '%s' and '%s'", expr.value_type, right.value_type))
+            end
+            if expr.value_type == "string" and op ~= "+" then
+                error(string.format("Operator '%s' cannot be applied to type 'string'", op))
             end
             expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type}
         end
@@ -519,14 +601,16 @@ local function parse(toks, file)
     end
 
     function parse_statement()
-        local current = current()
+        local curr = current()
 
-        local type = current.type
-        local value = current.value
+        local type = curr.type
+        local value = curr.value
 
         if type == "identifier" then
             if value == "fn" then
                 return parse_function_declaration()
+            elseif value == "if" then
+                return parse_if_statement()
             elseif value == "let" then
                 return parse_variable_assignment(true)
             elseif value == "const" then
@@ -543,11 +627,7 @@ local function parse(toks, file)
         elseif type == "newline" and value == "\n" then
             line = line + 1
             i = i + 1
-            print("here", i, line, file)
-            return {
-                type = "newline",
-                value = "\n"
-            }
+            return nil
         else
             error(string.format("Unexpected token found while parsing statement: '%s'", value))
         end
@@ -709,9 +789,9 @@ local function generate_llvm(ast, file)
                 elseif expression.value_type == "float" then
                     emit(string.format("%s = fadd double %s, %s", result_var, left_var, right_var))
                 elseif expression.value_type == "string" then
-                    error("String concatenation not supported")
+                    error("String concatenation not supported yet")
                 else
-                    error(string.format("Unsupported value type for '+': '%s'", expression.value_type))
+                    error(string.format("Unexpected value type for '+': '%s'", expression.value_type))
                 end
             elseif operator == "-" then
                 if expression.value_type == "int" then
@@ -719,7 +799,7 @@ local function generate_llvm(ast, file)
                 elseif expression.value_type == "float" then
                     emit(string.format("%s = fsub double %s, %s", result_var, left_var, right_var))
                 else
-                    error(string.format("Unsupported value type for '-': '%s'", expression.value_type))
+                    error(string.format("Unexpected value type for '-': '%s'", expression.value_type))
                 end
             elseif operator == "*" then
                 if expression.value_type == "int" then
@@ -727,29 +807,24 @@ local function generate_llvm(ast, file)
                 elseif expression.value_type == "float" then
                     emit(string.format("%s = fmul double %s, %s", result_var, left_var, right_var))
                 else
-                    error(string.format("Unsupported value type for '*': '%s'", expression.value_type))
+                    error(string.format("Unexpected value type for '*': '%s'", expression.value_type))
                 end
             elseif operator == "/" then
                 if expression.value_type == "int" then
                     emit(string.format("%s = sdiv i32 %s, %s", result_var, left_var, right_var))
                 elseif expression.value_type == "float" then
                     emit(string.format("%s = fdiv double %s, %s", result_var, left_var, right_var))
-                elseif expression.value_type == "string" then
-                    error(string.format("Cannot divide a string: '%s'", expression.value)) -- TODO: this should be eliminated in the parser
                 else
-                    error(string.format("Unrecognized type found: '%s'", expression.value_type))
+                    error(string.format("Unexpected type found: '%s'", expression.value_type))
                 end
             else
-                error(string.format("Unsupported binary operator: '%s'", operator))
+                error(string.format("Unexpected binary operator: '%s'", operator))
             end
 
             return result_var
         elseif expression.type == "integer" then
             return tostring(expression.value)
         elseif expression.type == "float" then
-            --local result_var = new_var()
-            --emit(string.format("%s = fadd double 0.0, %f", result_var, expression.value))
-            --return result_var
             return tostring(expression.value)
         elseif expression.type == "string" then
             local str = expression.value:gsub("\\n", "\\0A")
