@@ -1,3 +1,4 @@
 testing/
-out/
+out/*
+!out/.gitinclude
 output.txt
