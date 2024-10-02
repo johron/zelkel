@@ -1,6 +1,4 @@
-require "std";
-
 fn main(): void {
-    println("Hello, world!");
+    print("Hello, world!\n");
     return;
 }

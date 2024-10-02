@@ -211,8 +211,7 @@ local function parse(toks, file)
         if toks[i] then
             return toks[i]
         else
-            return nil
-            --luaerror("Attempt to access token out of bounds")
+            error("Attempt to access token out of bounds")
         end
     end
 
@@ -427,30 +426,6 @@ local function parse(toks, file)
         }
     end
 
-    local function parse_require()
-        expect("identifier", "require")
-        local lib_path = expect("string").value:gsub('^"(.*)"$', '%1')
-        expect("punctuation", ";")
-
-        if lib_path == file then
-            error("Cannot require itself")
-        end
-        if not lib_path:match("%.zk$") then
-            lib_path = "require/" .. lib_path .. ".zk"
-        end
-
-        local lib_file = io.open(lib_path, "r")
-        if lib_file == nil then
-            error(string.format("Tried to require nonexistent library: '%s'", lib_path))
-        end
-
-        local lib_content = lib_file:read("a")
-        local lib_toks = lex(lib_content, lib_path)
-        local lib_ast = parse(lib_toks, lib_path)
-
-        return table.unpack(lib_ast)
-    end
-
     function parse_expression()
         local function parse_primary()
             local t = current()
@@ -546,13 +521,6 @@ local function parse(toks, file)
     function parse_statement()
         local current = current()
 
-        if current == nil then
-            print(i, file)
-            return {
-                type = "EOF"
-            }
-        end
-
         local type = current.type
         local value = current.value
 
@@ -563,8 +531,6 @@ local function parse(toks, file)
                 return parse_variable_assignment(true)
             elseif value == "const" then
                 return parse_variable_assignment(false)
-            elseif value == "require" then
-                return parse_require()
             elseif value == "return" then
                 return parse_function_return()
             elseif has_variable_in_scope(value) then
@@ -597,10 +563,6 @@ local function parse(toks, file)
 
     while i <= #toks do
         local node = parse_statement()
-        if node.type == "EOF" then
-            print(inspect(toks))
-            break
-        end
         table.insert(ast, node)
     end
 

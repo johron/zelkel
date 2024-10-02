@@ -1,1 +1,0 @@
-fn println(str: string): void {print("%s\n", str);return;}
