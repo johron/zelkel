@@ -946,10 +946,15 @@ local function generate_llvm(ast, file)
 end
 
 local function compile()
+    local std = io.open("require/std.zk", "rb")
+    if not std then print("No std") os.exit(1) end
+    local content = std:read("a")
+    std:close()
+
     local file_name = arg[1]
     local file = io.open(file_name, "rb")
-    if not file then print("No file") os.exit(1)  end
-    local content = file:read("a")
+    if not file then print("No file") os.exit(1) end
+    content = content .. "\n" .. file:read("a")
     file:close()
 
     local toks = lex(content, file_name)

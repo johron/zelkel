@@ -1,11 +1,4 @@
 fn main(): void {
-    const x: int = 5;
-    if (x >= 1) {
-        print("true\n");
-    } else if (x <= 1) {
-        print("false\n");
-    } else {
-        print("not");
-    }
+    println("Hello, World!");
     return;
-} 
+}
