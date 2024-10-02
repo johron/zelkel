@@ -91,7 +91,6 @@ local function lex(input, file)
             else
                 table.insert(toks, {type = "operator", value = c})
             end
-
             i = i + 1
         elseif is_in_table(c, {";", ":", ","}) then
             table.insert(toks, {type = "punctuation", value = c})

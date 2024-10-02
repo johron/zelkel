@@ -20,4 +20,4 @@
     - with ending ("lib.zk"): user defined library, can have path and stuff
 - [ ] Rewrite parser since it is very buggy.
 - [ ] Rewrite in itself
-- [ ] Make sure every function has a return
+- [ ] Make sure every function has a return and it's value should be same type as function declaration return type

@@ -4,6 +4,8 @@ fn main(): void {
         print("true\n");
     } else if (x <= 1) {
         print("false\n");
+    } else {
+        print("not");
     }
     return;
-}
+} 
