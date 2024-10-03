@@ -1,9 +1,6 @@
-fn add(a: int, b: int): int {
-    return a + b;
-}
-
 fn main(): void {
-    const result: int = add(2, 3);
-    print("%i\n", result);
+    let x: string = "";
+    llvm__sprintf(x, "%i", 5);
+    llvm__printf("%s\n", x);
     return;
 }

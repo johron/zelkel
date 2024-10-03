@@ -633,8 +633,8 @@ local function parse(toks, file)
     end
 
     local function add_standard_functions()
-        add_function_to_scope("print", "void")
-        add_function_to_scope("string", "string")
+        add_function_to_scope("llvm__printf", "int")
+        add_function_to_scope("llvm__sprintf", "int")
     end
 
     enter_scope()
@@ -866,43 +866,20 @@ local function generate_llvm(ast, file)
                 i = i + 1
             end
 
-            if name == "string" then
-                args_str = ""
-                for i, arg in ipairs(args) do
-                    if arg.value_type == "int" then
-                        local buffer = new_var()
-                        emit(string.format("%s = alloca [12 x i8]", buffer))
-                        emit(string.format("call i32 (i8*, i8*, ...) @sprintf(i8* %s, i8* getelementptr ([3 x i8], [3 x i8]* @.int_fmt, i32 0, i32 0), i32 %s)", buffer, generate_expression(arg)))
+            if name == "llvm__printf" then
+                name = "printf"
+                emit_top("declare i32 @printf(i8*, ...)")
+            elseif name == "llvm__sprintf" then
+                name = "sprintf"
+                emit_top("declare i32 @sprintf(i8*, ...)")
+            end
 
-                        emit_top("declare i32 @sprintf(i8*, ...)")
-                        emit_top("@.int_fmt = constant [3 x i8] c\"%d\\00\"")
-
-                        return buffer
-                    elseif arg.value_type == "float" then
-                        local buffer = new_var()
-                        emit(string.format("%s = alloca [32 x i8]", buffer))
-                        emit(string.format("call i32 (i8*, i8*, ...) @sprintf(i8* %s, i8* getelementptr ([3 x i8], [3 x i8]* @.float_fmt, i32 0, i32 0), double %s)", buffer, generate_expression(arg)))
-
-                        emit_top("declare i32 @sprintf(i8*, ...)")
-                        emit_top("@.float_fmt = constant [3 x i8] c\"%f\\00\"")
-
-                        return buffer
-                    else
-                        error("Unrecognized type for string function: " .. arg.value_type)
-                    end
-                end
+            if type == "void" then
+                emit(string.format("call %s @%s(%s)", type, name, args_str))
             else
-                if name == "print" then
-                    name = "printf"
-                    emit_top("declare i32 @printf(i8*, ...)")
-                end
-                if type == "void" then
-                    emit(string.format("call %s @%s(%s)", type, name, args_str))
-                else
-                    local result_var = new_var()
-                    emit(string.format("%s = call %s @%s(%s)", result_var, type, name, args_str))
-                    return result_var
-                end
+                local result_var = new_var()
+                emit(string.format("%s = call %s @%s(%s)", result_var, type, name, args_str))
+                return result_var
             end
         elseif expression.type == "unary_expression" then
             local operand_var = generate_expression(expression.operand)
@@ -951,7 +928,7 @@ local function compile()
     local content = std:read("a")
     std:close()
 
-    local file_name = arg[1]
+    local file_name = "test.zk"
     local file = io.open(file_name, "rb")
     if not file then print("No file") os.exit(1) end
     content = content .. "\n" .. file:read("a")
