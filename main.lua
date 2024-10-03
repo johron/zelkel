@@ -102,7 +102,7 @@ local function lex(input, file)
             table.insert(toks, {type = "newline", value = "\n"})
             line = line + 1
             i = i + 1
-        elseif c == " " then -- disregard
+        elseif is_in_table(c, {" ", "\r"}) then -- disregard
             i = i + 1
         else
             error(string.format("Unexpected character found by lexer: '%s'", c))
@@ -871,7 +871,7 @@ local function generate_llvm(ast, file)
                 emit_top("declare i32 @printf(i8*, ...)")
             elseif name == "llvm__sprintf" then
                 name = "sprintf"
-                emit_top("declare i32 @sprintf(i8*, ...)")
+                emit_top("declare i32 @sprintf(i8*, i8*, ...)")
             end
 
             if type == "void" then
