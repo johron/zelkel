@@ -1,9 +1,8 @@
 fn main(): void {
-    let x: int = 64;
-    if (x == (2*4*8)) {
-        printf("(2*4*8) is equal to 64\n");
-    } else {
-        printf("Math is severly broken\n");
+    let i: int = 0;
+    while (i < 10) {
+        printf("hi %i\n", i);
+        i = i + 1;
     }
     return;
 }

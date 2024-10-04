@@ -807,20 +807,69 @@ local function generate_llvm(ast, file)
         end
     end
 
-    local function generate_equality_check(left, right)
+    local function generate_comparison_check(left, right, operator)
         local left_var = generate_expression(left)
         local right_var = generate_expression(right)
         local result_var = new_var()
 
         if left.value_type == "int" and right.value_type == "int" then
-            emit(string.format("%s = icmp eq i32 %s, %s", result_var, left_var, right_var))
+            if operator == "==" then
+                emit(string.format("%s = icmp eq i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == "!=" then
+                emit(string.format("%s = icmp ne i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == ">" then
+                emit(string.format("%s = icmp sgt i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == "<" then
+                emit(string.format("%s = icmp slt i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == ">=" then
+                emit(string.format("%s = icmp sge i32 %s, %s", result_var, left_var, right_var))
+            elseif operator == "<=" then
+                emit(string.format("%s = icmp sle i32 %s, %s", result_var, left_var, right_var))
+            else
+                error(string.format("Unsupported comparison operator: '%s'", operator))
+            end
         elseif left.value_type == "float" and right.value_type == "float" then
-            emit(string.format("%s = fcmp oeq double %s, %s", result_var, left_var, right_var))
+            if operator == "==" then
+                emit(string.format("%s = fcmp oeq double %s, %s", result_var, left_var, right_var))
+            elseif operator == "!=" then
+                emit(string.format("%s = fcmp one double %s, %s", result_var, left_var, right_var))
+            elseif operator == ">" then
+                emit(string.format("%s = fcmp ogt double %s, %s", result_var, left_var, right_var))
+            elseif operator == "<" then
+                emit(string.format("%s = fcmp olt double %s, %s", result_var, left_var, right_var))
+            elseif operator == ">=" then
+                emit(string.format("%s = fcmp oge double %s, %s", result_var, left_var, right_var))
+            elseif operator == "<=" then
+                emit(string.format("%s = fcmp ole double %s, %s", result_var, left_var, right_var))
+            else
+                error(string.format("Unsupported comparison operator: '%s'", operator))
+            end
         else
-            error(string.format("Unsupported value types for equality check: '%s' and '%s'", left.value_type, right.value_type))
+            error(string.format("Unsupported value types for comparison: '%s' and '%s'", left.value_type, right.value_type))
         end
 
         return result_var
+    end
+
+    local function generate_condition_check(condition)
+        if condition.type == "comparison_expression" then
+            return generate_comparison_check(condition.left, condition.right, condition.operator)
+        elseif condition.type == "variable" then
+            local var = generate_expression(condition)
+            local result_var = new_var()
+            emit(string.format("%s = icmp ne %s %s, 0", result_var, convert_type(condition.value_type), var))
+            return result_var
+        elseif condition.type == "integer" then
+            local result_var = new_var()
+            emit(string.format("%s = icmp ne i32 %d, 0", result_var, condition.value))
+            return result_var
+        elseif condition.type == "float" then
+            local result_var = new_var()
+            emit(string.format("%s = fcmp one double %f, 0.0", result_var, condition.value))
+            return result_var
+        else
+            error(string.format("Unsupported condition type: '%s'", condition.type))
+        end
     end
 
     local function generate_if_statement(statement)
@@ -829,7 +878,7 @@ local function generate_llvm(ast, file)
         local else_body = statement.else_body
         local else_if_stmts = statement.elseif_statements
 
-        local cond_var = generate_equality_check(condition.left, condition.right)
+        local cond_var = generate_condition_check(condition)
         local then_label = new_label()
         local else_label = new_label()
         local end_label = new_label()
@@ -842,7 +891,7 @@ local function generate_llvm(ast, file)
         emit(else_label .. ":")
         if #else_if_stmts > 0 then
             for _, elseif_stmt in ipairs(else_if_stmts) do
-            local elseif_cond_var = generate_equality_check(elseif_stmt.condition.left, elseif_stmt.condition.right)
+            local elseif_cond_var = generate_condition_check(elseif_stmt.condition)
             local elseif_then_label = new_label()
             local elseif_else_label = new_label()
 
@@ -861,6 +910,23 @@ local function generate_llvm(ast, file)
         end
 
         emit(string.format("br label %%%s", end_label))
+        emit(end_label .. ":")
+    end
+
+    local function generate_while_statement(statement)
+        local body_label = new_label()
+        local end_label = new_label()
+
+        local cond_var = generate_condition_check(statement.condition)
+        emit(string.format("br i1 %s, label %%%s, label %%%s", cond_var, body_label, end_label))
+
+        emit(body_label .. ":")
+        generate_body(statement.body)
+        emit(string.format("br label %%%s", body_label))
+
+        local cond_var = generate_condition_check(statement.condition)
+        emit(string.format("br i1 %s, label %%%s, label %%%s", cond_var, body_label, end_label))
+
         emit(end_label .. ":")
     end
 
@@ -1061,6 +1127,8 @@ local function generate_llvm(ast, file)
             generate_expression(statement)
         elseif type == "if_statement" then
             generate_if_statement(statement)
+        elseif type == "while_statement" then
+            generate_while_statement(statement)
         elseif type == "ignore" or type == "newline" then
         else
             error(string.format("Unrecognized statement type found: '%s'", type))

@@ -10,8 +10,9 @@
 - [ ] Convert strings to int, float
 - [ ] Some type conversion for: "2.5 * 5" to be converted to "2.5 * 5.0" for some usability
 - [ ] String concatination
-- [x] If statements
 - [ ] While loops
+    - The mutable variable counter has to be updated for every iteration of the loop which i am not sure how i can do
+      since the counter things are done in the parser and not in codegen. So maybe this has to be moved?
 - [ ] Global variables, variables in top scope
 - [ ] Tables, Lists
 - [ ] Requiring other files, libraries: standard
