@@ -829,39 +829,39 @@ local function generate_llvm(ast, file)
         local else_body = statement.else_body
         local else_if_stmts = statement.elseif_statements
 
-            local cond_var = generate_equality_check(condition.left, condition.right)
-            local then_label = new_label()
-            local else_label = new_label()
-            local end_label = new_label()
+        local cond_var = generate_equality_check(condition.left, condition.right)
+        local then_label = new_label()
+        local else_label = new_label()
+        local end_label = new_label()
 
-            emit(string.format("br i1 %s, label %%%s, label %%%s", cond_var, then_label, else_label))
-            emit(then_label .. ":")
-            generate_body(body)
+        emit(string.format("br i1 %s, label %%%s, label %%%s", cond_var, then_label, else_label))
+        emit(then_label .. ":")
+        generate_body(body)
+        emit(string.format("br label %%%s", end_label))
+
+        emit(else_label .. ":")
+        if #else_if_stmts > 0 then
+            for _, elseif_stmt in ipairs(else_if_stmts) do
+            local elseif_cond_var = generate_equality_check(elseif_stmt.condition.left, elseif_stmt.condition.right)
+            local elseif_then_label = new_label()
+            local elseif_else_label = new_label()
+
+            emit(string.format("br i1 %s, label %%%s, label %%%s", elseif_cond_var, elseif_then_label, elseif_else_label))
+            emit(elseif_then_label .. ":")
+            generate_body(elseif_stmt.body)
             emit(string.format("br label %%%s", end_label))
 
-            emit(else_label .. ":")
-            if #else_if_stmts > 0 then
-                for _, elseif_stmt in ipairs(else_if_stmts) do
-                local elseif_cond_var = generate_equality_check(elseif_stmt.condition.left, elseif_stmt.condition.right)
-                local elseif_then_label = new_label()
-                local elseif_else_label = new_label()
-
-                emit(string.format("br i1 %s, label %%%s, label %%%s", elseif_cond_var, elseif_then_label, elseif_else_label))
-                emit(elseif_then_label .. ":")
-                generate_body(elseif_stmt.body)
-                emit(string.format("br label %%%s", end_label))
-
-                emit(elseif_else_label .. ":")
-                else_label = elseif_else_label
-                end
+            emit(elseif_else_label .. ":")
+            else_label = elseif_else_label
             end
+        end
 
-            if else_body then
-                generate_body(else_body)
-            end
+        if else_body then
+            generate_body(else_body)
+        end
 
-            emit(string.format("br label %%%s", end_label))
-            emit(end_label .. ":")
+        emit(string.format("br label %%%s", end_label))
+        emit(end_label .. ":")
     end
 
     function generate_expression(expression)
