@@ -1,7 +1,11 @@
 fn main(): void {
     let x: float = 2.5;
-    if (x == 0.5*5.0) {
-        printf("true\n");
+    if (x == 0.5) {
+        printf("if\n");
+    } else if (x == 2.5) {
+        printf("else if\n");
+    } else {
+        printf("else\n");
     }
     return;
 }

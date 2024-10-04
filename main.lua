@@ -598,7 +598,7 @@ local function parse(toks, file)
                 if expr.value_type ~= right.value_type then
                     error(string.format("Type mismatch in comparison expression: '%s' and '%s'", expr.value_type, right.value_type))
                 end
-                expr = {type = "comparison_expression", operator = op, left = expr, right = right, value_type = "bool"}
+                expr = {type = "comparison_expression", operator = op, left = expr, right = right}
             end
             return expr
         end
@@ -807,21 +807,21 @@ local function generate_llvm(ast, file)
         end
     end
 
-        local function generate_equality_check(left, right)
-            local left_var = generate_expression(left)
-            local right_var = generate_expression(right)
-            local result_var = new_var()
+    local function generate_equality_check(left, right)
+        local left_var = generate_expression(left)
+        local right_var = generate_expression(right)
+        local result_var = new_var()
 
-            if left.value_type == "int" and right.value_type == "int" then
-                emit(string.format("%s = icmp eq i32 %s, %s", result_var, left_var, right_var))
-            elseif left.value_type == "float" and right.value_type == "float" then
-                emit(string.format("%s = fcmp oeq double %s, %s", result_var, left_var, right_var))
-            else
-                error(string.format("Unsupported value types for equality check: '%s' and '%s'", left.value_type, right.value_type))
-            end
-
-            return result_var
+        if left.value_type == "int" and right.value_type == "int" then
+            emit(string.format("%s = icmp eq i32 %s, %s", result_var, left_var, right_var))
+        elseif left.value_type == "float" and right.value_type == "float" then
+            emit(string.format("%s = fcmp oeq double %s, %s", result_var, left_var, right_var))
+        else
+            error(string.format("Unsupported value types for equality check: '%s' and '%s'", left.value_type, right.value_type))
         end
+
+        return result_var
+    end
 
     local function generate_if_statement(statement)
         local condition = statement.condition
@@ -831,7 +831,7 @@ local function generate_llvm(ast, file)
 
         local cond_var
         if condition.type == "comparison_expression" and condition.operator == "==" then
-            cond_var = generate_equality_check(condition.left, condition.right, condition.value_type)
+            cond_var = generate_equality_check(condition.left, condition.right)
         else
             cond_var = generate_expression(condition)
         end
