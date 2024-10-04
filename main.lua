@@ -1165,6 +1165,7 @@ local function compile()
     out:write(llvm)
     out:close()
 
+    os.execute(string.format("opt -O2 -S ./out/%s.ll -o ./out/%s.ll", file_name, file_name))
     os.execute(string.format("clang ./out/%s.ll -o ./out/%s.out", file_name, file_name))
 end
 
