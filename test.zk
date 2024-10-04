@@ -1,8 +1,7 @@
 fn main(): void {
-    let i: int = 0;
-    while (i < 10) {
-        println("%i", i);
-        i = i + 1;
+    let x: float = 2.5;
+    if (x == 0.5*5.0) {
+        printf("true\n");
     }
     return;
 }

@@ -661,8 +661,8 @@ local function parse(toks, file)
     end
 
     local function add_standard_functions()
-        add_function_to_scope("llvm__printf", "int")
-        add_function_to_scope("llvm__sprintf", "int")
+        add_function_to_scope("printf", "int")
+        add_function_to_scope("sprintf", "int")
     end
 
     enter_scope()
@@ -682,6 +682,7 @@ local function generate_llvm(ast, file)
     local llvm = {}
     local top_code = {}
     local var_counter = 0
+    local label_counter = 0
     local indent = 0
 
     local function error(msg)
@@ -692,6 +693,11 @@ local function generate_llvm(ast, file)
     local function new_var()
         var_counter = var_counter + 1
         return "%t" .. var_counter
+    end
+
+    local function new_label()
+        label_counter = label_counter + 1
+        return "lb" .. label_counter
     end
 
     local function emit_top(str)
@@ -718,15 +724,15 @@ local function generate_llvm(ast, file)
     end
 
     local function emit(str)
-        if str == "}" then
-            indent = indent - 1
+        if str == "}" or str:sub(-1) == ":" then
+            indent = 0
         end
 
         local indent_str = string.rep("    ", indent)
         table.insert(llvm, indent_str .. str)
 
         if str:sub(-1) == ":" then
-            indent = indent + 1
+            indent = 1
         end
     end
 
@@ -801,6 +807,73 @@ local function generate_llvm(ast, file)
         end
     end
 
+        local function generate_equality_check(left, right)
+            local left_var = generate_expression(left)
+            local right_var = generate_expression(right)
+            local result_var = new_var()
+
+            if left.value_type == "int" and right.value_type == "int" then
+                emit(string.format("%s = icmp eq i32 %s, %s", result_var, left_var, right_var))
+            elseif left.value_type == "float" and right.value_type == "float" then
+                emit(string.format("%s = fcmp oeq double %s, %s", result_var, left_var, right_var))
+            else
+                error(string.format("Unsupported value types for equality check: '%s' and '%s'", left.value_type, right.value_type))
+            end
+
+            return result_var
+        end
+
+    local function generate_if_statement(statement)
+        local condition = statement.condition
+        local body = statement.body
+        local else_body = statement.else_body
+        local else_if_stmts = statement.elseif_statements
+
+        local cond_var
+        if condition.type == "comparison_expression" and condition.operator == "==" then
+            cond_var = generate_equality_check(condition.left, condition.right, condition.value_type)
+        else
+            cond_var = generate_expression(condition)
+        end
+
+        local if_label = new_label()
+        local end_label = new_label()
+        local else_label = else_body and new_label() or end_label
+
+        emit(string.format("br i1 %s, label %%%s, label %%%s", cond_var, if_label, else_label))
+        emit(string.format("%s:", if_label))
+        generate_body(body)
+        emit(string.format("br label %%%s", end_label))
+
+        if else_if_stmts then
+            for _, elseif_stmt in ipairs(else_if_stmts) do
+                local elseif_cond_var
+                if elseif_stmt.condition.type == "comparison_expression" and elseif_stmt.condition.operator == "==" then
+                    elseif_cond_var = generate_equality_check(elseif_stmt.condition.left, elseif_stmt.condition.right, elseif_stmt.condition.value_type)
+                else
+                    elseif_cond_var = generate_expression(elseif_stmt.condition)
+                end
+
+                local elseif_body_label = new_label()
+                local next_elseif_label = new_label()
+
+                emit(string.format("br i1 %s, label %%%s, label %%%s", elseif_cond_var, elseif_body_label, next_elseif_label))
+                emit(string.format("%s:", elseif_body_label))
+                generate_body(elseif_stmt.body)
+                emit(string.format("br label %%%s", end_label))
+                emit(string.format("%s:", next_elseif_label))
+            end
+        end
+
+        if else_body then
+            emit(string.format("%s:", else_label))
+            generate_body(else_body)
+            emit(string.format("br label %%%s", end_label))
+        end
+
+        emit(string.format("%s:", end_label))
+    end
+
     function generate_expression(expression)
         if expression.type == "binary_expression" then
             local left = expression.left
@@ -849,6 +922,67 @@ local function generate_llvm(ast, file)
             end
 
             return result_var
+        elseif expression.type == "comparison_expression" then
+            local left = expression.left
+            local right = expression.right
+            local operator = expression.operator
+            local left_var = generate_expression(left)
+            local right_var = generate_expression(right)
+            local result_var = new_var()
+
+            if operator == "==" then
+                if expression.value_type == "int" then
+                    emit(string.format("%s = icmp eq i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fcmp oeq double %s, %s", result_var, left_var, right_var))
+                else
+                    error(string.format("Unexpected value type for '==': '%s'", expression.value_type))
+                end
+            elseif operator == "!=" then
+                if expression.value_type == "int" then
+                    emit(string.format("%s = icmp ne i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fcmp one double %s, %s", result_var, left_var, right_var))
+                else
+                    error(string.format("Unexpected value type for '!=': '%s'", expression.value_type))
+                end
+            elseif operator == ">" then
+                if expression.value_type == "int" then
+                    emit(string.format("%s = icmp sgt i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fcmp ogt double %s, %s", result_var, left_var, right_var))
+                else
+                    error(string.format("Unexpected value type for '>': '%s'", expression.value_type))
+                end
+            elseif operator == "<" then
+                if expression.value_type == "int" then
+                    emit(string.format("%s = icmp slt i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fcmp olt double %s, %s", result_var, left_var, right_var))
+                else
+                    error(string.format("Unexpected value type for '<': '%s'", expression.value_type))
+                end
+            elseif operator == ">=" then
+                if expression.value_type == "int" then
+                    emit(string.format("%s = icmp sge i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fcmp oge double %s, %s", result_var, left_var, right_var))
+                else
+                    error(string.format("Unexpected value type for '>=': '%s'", expression.value_type))
+                end
+            elseif operator == "<=" then
+                if expression.value_type == "int" then
+                    emit(string.format("%s = icmp sle i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fcmp ole double %s, %s", result_var, left_var, right_var))
+                else
+                    error(string.format("Unexpected value type for '<=': '%s'", expression.value_type))
+                end
+            else
+                error(string.format("Unexpected comparison operator: '%s'", operator))
+            end
+
+            return result_var
         elseif expression.type == "integer" then
             return tostring(expression.value)
         elseif expression.type == "float" then
@@ -894,11 +1028,9 @@ local function generate_llvm(ast, file)
                 i = i + 1
             end
 
-            if name == "llvm__printf" then
-                name = "printf"
+            if name == "printf" then
                 emit_top("declare i32 @printf(i8*, ...) nounwind")
-            elseif name == "llvm__sprintf" then
-                name = "sprintf"
+            elseif name == "sprintf" then
                 emit_top("declare i32 @sprintf(i8*, i8*, ...) nounwind")
             end
 
@@ -937,6 +1069,8 @@ local function generate_llvm(ast, file)
             generate_function_return(statement)
         elseif type == "function_call" then
             generate_expression(statement)
+        elseif type == "if_statement" then
+            generate_if_statement(statement)
         elseif type == "ignore" or type == "newline" then
         else
             error(string.format("Unrecognized statement type found: '%s'", type))
@@ -951,15 +1085,10 @@ local function generate_llvm(ast, file)
 end
 
 local function compile()
-    local std = io.open("require/std.zk", "rb")
-    if not std then print("No std") os.exit(1) end
-    local content = std:read("a")
-    std:close()
-
     local file_name = arg[1]
     local file = io.open(file_name, "rb")
     if not file then print("No file") os.exit(1) end
-    content = content .. "\n" .. file:read("a")
+    local content = file:read("a")
     file:close()
 
     local toks = lex(content, file_name)
