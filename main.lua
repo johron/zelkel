@@ -486,6 +486,26 @@ local function parse(toks, file)
         }
     end
 
+    function parse_while_statement()
+        expect("identifier", "while")
+        expect("parenthesis", "(")
+        local cond = parse_expression()
+
+        expect("parenthesis", ")")
+        expect("parenthesis", "{")
+        local body = parse_body()
+
+        enter_scope()
+        expect("parenthesis", "}")
+        exit_scope()
+
+        return {
+            type = "while_statement",
+            condition = cond,
+            body = body
+        }
+    end
+
     function parse_expression()
         local function parse_primary()
             local t = current()
@@ -495,6 +515,12 @@ local function parse(toks, file)
                         error(string.format("Function not defined in current scope: '%s'", t.value))
                     end
                     return parse_function_call()
+                elseif t.value == "true" then
+                    i = i + 1
+                    return {type = "integer", value = 1, value_type = "int"}
+                elseif t.value == "false" then
+                    i = i + 1
+                    return {type = "integer", value = 0, value_type = "int"}
                 else
                     if not has_variable_in_scope(t.value) then
                         error(string.format("Variable not defined in current scope: '%s'", t.value))
@@ -610,6 +636,8 @@ local function parse(toks, file)
                 return parse_function_declaration()
             elseif value == "if" then
                 return parse_if_statement()
+            elseif value == "while" then
+                return parse_while_statement()
             elseif value == "let" then
                 return parse_variable_assignment(true)
             elseif value == "const" then
@@ -750,10 +778,10 @@ local function generate_llvm(ast, file)
 
         emit("")
         if type == "void" then
-            emit(string.format("define i32 @%s(%s) {", name, args_str))
-        else
-            emit(string.format("define %s @%s(%s) {", type, name, args_str))
+            type = "i32"
         end
+
+        emit(string.format("define %s @%s(%s) nounwind {", type, name, args_str))
         emit("entry:")
         generate_body(body)
         emit("}")
@@ -868,10 +896,10 @@ local function generate_llvm(ast, file)
 
             if name == "llvm__printf" then
                 name = "printf"
-                emit_top("declare i32 @printf(i8*, ...)")
+                emit_top("declare i32 @printf(i8*, ...) nounwind")
             elseif name == "llvm__sprintf" then
                 name = "sprintf"
-                emit_top("declare i32 @sprintf(i8*, i8*, ...)")
+                emit_top("declare i32 @sprintf(i8*, i8*, ...) nounwind")
             end
 
             if type == "void" then
@@ -928,7 +956,7 @@ local function compile()
     local content = std:read("a")
     std:close()
 
-    local file_name = "test.zk"
+    local file_name = arg[1]
     local file = io.open(file_name, "rb")
     if not file then print("No file") os.exit(1) end
     content = content .. "\n" .. file:read("a")
