@@ -1,9 +1,11 @@
 fn main(): void {
-    let x: float = 2.5;
+    let x: float = 2.6;
     if (x == 0.5) {
         printf("if\n");
     } else if (x == 2.5) {
-        printf("else if\n");
+        printf("else if1\n");
+    } else if (x == 2.6) {
+        printf("else if2\n");
     } else {
         printf("else\n");
     }
