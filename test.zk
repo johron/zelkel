@@ -1,4 +1,9 @@
 fn main(): void {
-    printf("Hello, world!\n");
+    let i: int = 0;
+    while (i < 10) {
+        printf("loop\n");
+        i = i + 1;
+    }
+
     return;
 }
