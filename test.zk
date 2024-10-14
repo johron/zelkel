@@ -1,9 +1,14 @@
-fn main(): void {
-    let i: int = 0;
-    while (i < 10) {
-        printf("loop\n");
-        i = i + 1;
-    }
+// can make loop like this for now, have to do something like this for the actual while implementation?
 
+fn loop(i: int): int {
+    if (i < 10) {
+        printf("%i\n", i);
+        return loop(i + 1);
+    }
+    return i;
+}
+
+fn main(): void {
+    loop(0);
     return;
 }
