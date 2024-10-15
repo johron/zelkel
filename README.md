@@ -17,5 +17,10 @@
       maybe combine the zelkel code into one and compile that
     - no ending ("std"): a standard, bundled library, library in a main directory
     - with ending ("lib.zk"): user defined library, can have path and stuff
+    
+    - require "stdlib/io" as *;
+      - println("hi");
+    - require "stdlib/io" as io;
+      - io.println("hi");
 - [ ] Rewrite in itself
 - [ ] Make sure every function has a return and it's value should be same type as function declaration return type
