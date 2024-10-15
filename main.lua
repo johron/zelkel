@@ -309,10 +309,11 @@ local function parse(toks, file)
         local expr = parse_expression()
         expect("punctuation", ";")
 
-        add_variable_to_scope({name = name, mutable = mutable, value_type = expr.value_type})
+        add_variable_to_scope({name = name, mutable = mutable, value_type = expr.value_type, counter = 0})
         return {
             type = str .. "_variable_assignment",
             name = name,
+            counter = 0,
             value_type = value_type,
             expression = expr
         }
@@ -329,7 +330,10 @@ local function parse(toks, file)
         local expr = parse_expression()
         expect("punctuation", ";")
 
+        variable_in_scope_set_value(name, "counter", variable_in_scope_get_value(name, "counter") + 1)
+
         return {
+            counter = variable_in_scope_get_value(name, "counter"),
             type = "mutable_variable_reassignment",
             name = name,
             value_type = expr.value_type,
@@ -393,7 +397,7 @@ local function parse(toks, file)
 
         if args ~= nil then
             for _, arg in ipairs(args) do
-                add_variable_to_scope({name = arg.name, mutable = arg.mutable, value_type = arg.type, isarg = true})
+                add_variable_to_scope({name = arg.name, mutable = arg.mutable, value_type = arg.type, counter = 0, isarg = true})
             end
         end
 
@@ -482,7 +486,7 @@ local function parse(toks, file)
         }
     end
 
-    function parse_while_statement()
+    --[[function parse_while_statement()
         expect("identifier", "while")
         expect("parenthesis", "(")
         local cond = parse_expression()
@@ -500,7 +504,7 @@ local function parse(toks, file)
             condition = cond,
             body = body
         }
-    end
+    end]]
 
     function parse_expression()
         local function parse_primary()
@@ -523,8 +527,9 @@ local function parse(toks, file)
                     end
                     i = i + 1
                     local value_type = variable_in_scope_get_value(t.value, "value_type")
+                    local counter = variable_in_scope_get_value(t.value, "counter")
                     local isarg = variable_in_scope_get_value(t.value, "isarg")
-                    return {type = "variable", name = t.value, value_type = value_type, isarg = isarg}
+                    return {type = "variable", name = t.value, value_type = value_type, counter = counter, isarg = isarg}
                 end
             elseif t.type == "integer" then
                 i = i + 1
@@ -736,7 +741,7 @@ local function generate_llvm(ast, file)
         local value_type = assignment.value_type
         if assignment.type == "immutable_variable_assignment" or assignment.type == "mutable_variable_assignment" then
             local type = convert_type(value_type)
-            emit("%" .. assignment.name .. "_" .. assignment.counter .. " = alloca " .. type) -- implement new var counting system, can't have it like i have had it, need some runtime thing????
+            emit("%" .. assignment.name .. "_" .. assignment.counter .. " = alloca " .. type)
             emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name .. "_" .. assignment.counter)
         elseif assignment.type == "mutable_variable_reassignment" then
             local type = convert_type(value_type)
@@ -1122,8 +1127,8 @@ local function generate_llvm(ast, file)
             generate_expression(statement)
         elseif type == "if_statement" then
             generate_if_statement(statement)
-        elseif type == "while_statement" then
-            generate_while_statement(statement)
+        --elseif type == "while_statement" then
+        --    generate_while_statement(statement)
         elseif type == "ignore" or type == "newline" then
         else
             error(string.format("Unrecognized statement type found: '%s'", type))
