@@ -631,8 +631,8 @@ local function parse(toks, file)
                 return parse_function_declaration()
             elseif value == "if" then
                 return parse_if_statement()
-            elseif value == "while" then
-                return parse_while_statement()
+            --elseif value == "while" then
+            --    return parse_while_statement()
             elseif value == "let" then
                 return parse_variable_assignment(true)
             elseif value == "const" then
@@ -908,7 +908,7 @@ local function generate_llvm(ast, file)
         emit(end_label .. ":")
     end
 
-    local function generate_while_statement(statement)
+    --[[local function generate_while_statement(statement)
         local body_label = new_label()
         local end_label = new_label()
 
@@ -923,7 +923,7 @@ local function generate_llvm(ast, file)
         emit(string.format("br i1 %s, label %%%s, label %%%s", cond_var, body_label, end_label))
 
         emit(end_label .. ":")
-    end
+    end]]
 
     function generate_expression(expression)
         if expression.type == "binary_expression" then

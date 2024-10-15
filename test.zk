@@ -1,5 +1,3 @@
-// can make loop like this for now, have to do something like this for the actual while implementation?
-
 fn loop(i: int): int {
     if (i < 10) {
         printf("%i\n", i);
