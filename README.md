@@ -2,6 +2,7 @@
 
 ## TODO
 - [ ] Function declaration args do not have correct code generated for them since mutable variable updates. Something to do with types
+- [ ] Remove variable counter since no longer used
 - [ ] Standard functions like println and print need to be thought and done about
     - Remove hard coded standard functions
     - Do not have string() function hard coded. have it in std library and then use sprintf for it in th

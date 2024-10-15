@@ -740,7 +740,7 @@ local function generate_llvm(ast, file)
         local expr = generate_expression(assignment.expression)
         local value_type = assignment.value_type
         local type = convert_type(value_type)
-        
+
         if assignment.type == "immutable_variable_assignment" or assignment.type == "mutable_variable_assignment" then
             emit("%" .. assignment.name .. " = alloca " .. type)
             emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
