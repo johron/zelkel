@@ -1,12 +1,9 @@
-fn loop(i: int): int {
-    if (i < 10) {
-        printf("%i\n", i);
-        return loop(i + 1);
-    }
-    return i;
+fn add(x: int, y: int): int {
+    return x + y;
 }
 
 fn main(): void {
-    loop(0);
+    let x: int = add((2 + 1), 1);
+    printf("%i\n", x);
     return;
 }

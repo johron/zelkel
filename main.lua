@@ -255,7 +255,7 @@ local function parse(toks, file)
 
         local args = {}
         local start = i
-        while i <= #toks and current().type ~= "parenthesis" and current().value ~= ")" do
+        while i <= #toks and current().value ~= ")" do
             if i ~= start then
                 expect("punctuation", ",")
             end
@@ -741,12 +741,12 @@ local function generate_llvm(ast, file)
         local value_type = assignment.value_type
         if assignment.type == "immutable_variable_assignment" or assignment.type == "mutable_variable_assignment" then
             local type = convert_type(value_type)
-            emit("%" .. assignment.name .. "_" .. assignment.counter .. " = alloca " .. type)
-            emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name .. "_" .. assignment.counter)
+            emit("%" .. assignment.name .. "." .. assignment.counter .. " = alloca " .. type)
+            emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name .. "." .. assignment.counter)
         elseif assignment.type == "mutable_variable_reassignment" then
             local type = convert_type(value_type)
-            emit("%" .. assignment.name .. "_" .. assignment.counter .. " = alloca " .. type)
-            emit("store " .. convert_type(value_type) .. " " .. expr .. ", " .. convert_type(value_type) .. "* %" .. assignment.name .. "_" .. assignment.counter)
+            emit("%" .. assignment.name .. "." .. assignment.counter .. " = alloca " .. type)
+            emit("store " .. convert_type(value_type) .. " " .. expr .. ", " .. convert_type(value_type) .. "* %" .. assignment.name .. "." .. assignment.counter)
         else
             error(string.format("Unsupported assignment type: '%s'", assignment.type))
         end
@@ -775,7 +775,7 @@ local function generate_llvm(ast, file)
 
             local arg = args[i]
             local type = convert_type(arg.type)
-            args_str = args_str .. type .. " %" .. arg.name .. "_0"
+            args_str = args_str .. type .. " %" .. arg.name .. ".0"
 
             i = i + 1
         end
@@ -1046,7 +1046,7 @@ local function generate_llvm(ast, file)
         elseif expression.type == "string" then
             local str = expression.value:gsub("\\n", "\\0A")
             local str_var = new_var()
-            local str_name = "@.str_" .. #top_code -- TODO: fix length
+            local str_name = "@.str." .. #top_code -- TODO: fix length
             local str_len = #str + 1
             for _ in string.gmatch(str, "\\0A") do
                 str_len = str_len - 2
@@ -1058,10 +1058,10 @@ local function generate_llvm(ast, file)
             local value_type = convert_type(expression.value_type)
             local var = new_var()
             if not expression.isarg or expression.isarg ~= true then
-                emit(var .. " = load " .. value_type .. ", " .. value_type .. "* " .. "%" .. expression.name .. "_" .. expression.counter)
+                emit(var .. " = load " .. value_type .. ", " .. value_type .. "* " .. "%" .. expression.name .. "." .. expression.counter)
                 return var
             end
-            return "%" .. expression.name .. "_" .. expression.counter
+            return "%" .. expression.name .. "." .. expression.counter
         elseif expression.type == "function_call" then
             local args = expression.args
             local name = expression.name
