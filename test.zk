@@ -3,7 +3,8 @@ fn add(x: int, y: int): int {
 }
 
 fn main(): void {
-    let x: int = add((2 + 1), 1);
+    let x: int = add(2, 3);
+    x = x + 1;
     printf("%i\n", x);
     return;
 }
