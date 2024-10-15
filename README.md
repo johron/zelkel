@@ -1,6 +1,7 @@
 # Zelkel
 
 ## TODO
+- [ ] Function declaration args do not have correct code generated for them since mutable variable updates. Something to do with types
 - [ ] Standard functions like println and print need to be thought and done about
     - Remove hard coded standard functions
     - Do not have string() function hard coded. have it in std library and then use sprintf for it in th
@@ -9,10 +10,6 @@
 - [ ] Convert strings to int, float
 - [ ] Some type conversion for: "2.5 * 5" to be converted to "2.5 * 5.0" for some usability, "5/2" should be a valid float for a variable
 - [ ] String concatination
-- [ ] While loops
-    - The mutable variable counter has to be updated for every iteration of the loop which i am not sure how i can do
-      since the counter things are done in the parser and not in codegen. So maybe this has to be moved?
-    - This is actually a problem with mutable variables, I am kind of stuck on this
 - [ ] Global variables, variables in top scope
 - [ ] Tables, Lists
 - [ ] Requiring other files, libraries: standard

@@ -1,10 +1,8 @@
-fn add(x: int, y: int): int {
-    return x + y;
-}
-
 fn main(): void {
-    let x: int = add(2, 3);
-    x = x + 1;
-    printf("%i\n", x);
+    let i: int = 0;
+    while (i < 10) {
+        printf("%i\n", i);
+        i = i + 1;
+    }
     return;
 }

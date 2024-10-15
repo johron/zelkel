@@ -486,7 +486,7 @@ local function parse(toks, file)
         }
     end
 
-    --[[function parse_while_statement()
+    function parse_while_statement()
         expect("identifier", "while")
         expect("parenthesis", "(")
         local cond = parse_expression()
@@ -504,7 +504,7 @@ local function parse(toks, file)
             condition = cond,
             body = body
         }
-    end]]
+    end
 
     function parse_expression()
         local function parse_primary()
@@ -636,8 +636,8 @@ local function parse(toks, file)
                 return parse_function_declaration()
             elseif value == "if" then
                 return parse_if_statement()
-            --elseif value == "while" then
-            --    return parse_while_statement()
+            elseif value == "while" then
+                return parse_while_statement()
             elseif value == "let" then
                 return parse_variable_assignment(true)
             elseif value == "const" then
@@ -736,22 +736,6 @@ local function generate_llvm(ast, file)
         end
     end
 
-    --local function generate_assignment(assignment)
-    --    local expr = generate_expression(assignment.expression)
-    --    local value_type = assignment.value_type
-    --    if assignment.type == "immutable_variable_assignment" or assignment.type == "mutable_variable_assignment" then
-    --        local type = convert_type(value_type)
-    --        emit("%" .. assignment.name .. "." .. assignment.counter .. " = alloca " .. type)
-    --        emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name .. "." .. assignment.counter)
-    --    elseif assignment.type == "mutable_variable_reassignment" then
-    --        local type = convert_type(value_type)
-    --        emit("%" .. assignment.name .. "." .. assignment.counter .. " = alloca " .. type)
-    --        emit("store " .. convert_type(value_type) .. " " .. expr .. ", " .. convert_type(value_type) .. "* %" .. assignment.name .. "." .. assignment.counter)
-    --    else
-    --        error(string.format("Unsupported assignment type: '%s'", assignment.type))
-    --    end
-    --end
-
     local function generate_assignment(assignment)
         local expr = generate_expression(assignment.expression)
         local value_type = assignment.value_type
@@ -766,7 +750,6 @@ local function generate_llvm(ast, file)
             error(string.format("Unsupported assignment type: '%s'", assignment.type))
         end
     end
-    
 
     local function generate_body(body)
         local i = 1
@@ -929,7 +912,7 @@ local function generate_llvm(ast, file)
         emit(end_label .. ":")
     end
 
-    --[[local function generate_while_statement(statement)
+    local function generate_while_statement(statement)
         local body_label = new_label()
         local end_label = new_label()
 
@@ -938,13 +921,13 @@ local function generate_llvm(ast, file)
 
         emit(body_label .. ":")
         generate_body(statement.body)
-        emit(string.format("br label %%%s", body_label))
+        --emit(string.format("br label %%%s", body_label))
 
         local cond_var = generate_condition_check(statement.condition)
         emit(string.format("br i1 %s, label %%%s, label %%%s", cond_var, body_label, end_label))
 
         emit(end_label .. ":")
-    end]]
+    end
 
     function generate_expression(expression)
         if expression.type == "binary_expression" then
@@ -1140,8 +1123,8 @@ local function generate_llvm(ast, file)
             generate_expression(statement)
         elseif type == "if_statement" then
             generate_if_statement(statement)
-        --elseif type == "while_statement" then
-        --    generate_while_statement(statement)
+        elseif type == "while_statement" then
+            generate_while_statement(statement)
         elseif type == "ignore" or type == "newline" then
         else
             error(string.format("Unrecognized statement type found: '%s'", type))
