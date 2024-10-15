@@ -1,4 +1,12 @@
+fn loop(i: int): int {
+    if (i < 10) {
+        printf("%i\n", i);
+        return loop(i + 1);
+    }
+    return i;
+}
+
 fn main(): void {
-    printf("Hello, world!\n");
+    loop(0);
     return;
 }
