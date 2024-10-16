@@ -132,6 +132,10 @@ local function parse(toks, file)
         return scope_stack[#scope_stack] or scope_stack[#scope_stack - 1] or {variables = {}, functions = {}}
     end
 
+    local function is_global_scope()
+        return #scope_stack == 1
+    end
+
     local function enter_scope()
         local parent_scope = current_scope()
         local new_scope = {
@@ -314,6 +318,7 @@ local function parse(toks, file)
             type = str .. "_variable_assignment",
             name = name,
             counter = 0,
+            global = is_global_scope(0),
             value_type = value_type,
             expression = expr
         }
@@ -379,6 +384,9 @@ local function parse(toks, file)
     end
 
     local function parse_function_declaration()
+        if not is_global_scope() then
+            error("Function declaration only in global scope")
+        end
         expect("identifier", "fn")
         local name = expect("identifier").value
         if has_function_in_scope(name) then
@@ -742,7 +750,11 @@ local function generate_llvm(ast, file)
         local type = convert_type(value_type)
 
         if assignment.type == "immutable_variable_assignment" or assignment.type == "mutable_variable_assignment" then
-            emit("%" .. assignment.name .. " = alloca " .. type)
+            if assignment.global == true then
+                error("Global variables not implemented")
+            else
+                emit("%" .. assignment.name .. " = alloca " .. type)
+            end
             emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
         elseif assignment.type == "mutable_variable_reassignment" then
             emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)

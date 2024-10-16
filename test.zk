@@ -1,5 +1,6 @@
+let i: int = 0;
+
 fn main(): void {
-    let i: int = 0;
     while (i < 10) {
         printf("%i\n", i);
         i = i + 1;
