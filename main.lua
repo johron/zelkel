@@ -1072,9 +1072,10 @@ local function generate_llvm(ast, file)
             return str_var
         elseif expression.type == "variable" then
             local value_type = convert_type(expression.value_type)
-            local var = new_var()
-            emit(var .. " = load " .. value_type .. ", " .. value_type .. "* %" .. expression.name)
-            return var
+            --local var = new_var()
+            --emit(var .. " = load " .. value_type .. ", " .. value_type .. "* %" .. expression.name)
+            --return var
+            return "%" .. expression.name -- This above fixes mutable variabls, but it should not load the values when they are from functions in declarations.
         elseif expression.type == "function_call" then
             local args = expression.args
             local name = expression.name

@@ -1,7 +1,17 @@
+fn fib(n: int): int {
+    if (n == 0) {
+        return 0;
+    } else if (n == 1) {
+        return 1;
+    } else {
+        return fib(n - 1) + fib(n - 2);
+    }
+}
+
 fn main(): void {
     let i: int = 0;
     while (i < 10) {
-        printf("%i\n", i);
+        printf("%i\n", fib(i));
         i = i + 1;
     }
     return;
