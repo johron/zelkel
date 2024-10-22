@@ -753,14 +753,15 @@ local function generate_llvm(ast, file)
             if assignment.global == true then
                 error("Global variables not implemented")
             end
+            local temp = new_var()
+            --emit("%" .. assignment.name .. "." .. assignment.counter .. " = alloca " .. type)
+            --emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name .. "." .. assignment.counter)
+            --emit("store " .. type .. " %" .. assignment.name .. "." .. assignment.counter .. ", " .. type .. "* %" .. assignment.name)
+            
             emit("%" .. assignment.name .. " = alloca " .. type)
-            emit("%" .. assignment.name .. "." .. assignment.counter .. " = alloca " .. type)
-            emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name .. "." .. assignment.counter)
-            emit("store " .. type .. " %" .. assignment.name .. "." .. assignment.counter .. ", " .. type .. "* %" .. assignment.name)
-        elseif assignment.type == "mutable_variable_reassignment" then
-            emit("%" .. assignment.name .. "." .. assignment.counter .. " = alloca " .. type)
             emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
-            emit("store " .. type .. " %" .. assignment.name .. "." .. assignment.counter .. ", " .. type .. "* %" .. assignment.name)
+        elseif assignment.type == "mutable_variable_reassignment" then
+            emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
         else
             error(string.format("Unsupported assignment type: '%s'", assignment.type))
         end
@@ -1070,9 +1071,9 @@ local function generate_llvm(ast, file)
             return str_var
         elseif expression.type == "variable" then
             local value_type = convert_type(expression.value_type)
-            --local var = new_var()
-            --emit(var .. " = load " .. value_type .. ", " .. value_type .. "* %" .. expression.name)
-            return "%" .. expression.name--var
+            local var = new_var()
+            emit(var .. " = load " .. value_type .. ", " .. value_type .. "* %" .. expression.name)
+            return var
         elseif expression.type == "function_call" then
             local args = expression.args
             local name = expression.name
