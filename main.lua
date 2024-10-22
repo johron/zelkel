@@ -929,18 +929,19 @@ local function generate_llvm(ast, file)
     end
 
     local function generate_while_statement(statement)
+        local cond_label = new_label()
         local body_label = new_label()
         local end_label = new_label()
 
+        emit(string.format("br label %%%s", cond_label))
+
+        emit(cond_label .. ":")
         local cond_var = generate_condition_check(statement.condition)
         emit(string.format("br i1 %s, label %%%s, label %%%s", cond_var, body_label, end_label))
 
         emit(body_label .. ":")
         generate_body(statement.body)
-        --emit(string.format("br label %%%s", body_label))
-
-        local cond_var = generate_condition_check(statement.condition)
-        emit(string.format("br i1 %s, label %%%s, label %%%s", cond_var, body_label, end_label))
+        emit(string.format("br label %%%s", cond_label))
 
         emit(end_label .. ":")
     end
