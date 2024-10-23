@@ -416,6 +416,10 @@ local function parse(toks, file)
         end
 
         local body = parse_body()
+        if #body == 0 or body[#body].type ~= "function_return" then
+            error("Function body must end with a return statement")
+        end
+
         expect("parenthesis", "}")
         exit_scope()
 
@@ -525,10 +529,10 @@ local function parse(toks, file)
                     return parse_function_call()
                 elseif t.value == "true" then
                     i = i + 1
-                    return {type = "integer", value = 1, value_type = "int"}
+                    return {type = "bool", value = 1, value_type = "bool"}
                 elseif t.value == "false" then
                     i = i + 1
-                    return {type = "integer", value = 0, value_type = "int"}
+                    return {type = "integer", value = 0, value_type = "bool"}
                 else
                     if not has_variable_in_scope(t.value) then
                         error(string.format("Variable not defined in current scope: '%s'", t.value))
@@ -726,6 +730,8 @@ local function generate_llvm(ast, file)
             return "i8*"
         elseif type == "void" then
             return "void"
+        elseif type == "bool" then
+            return "i1"
         else
             error(string.format("Unsupported value type: '%s'", type))
         end
@@ -881,6 +887,10 @@ local function generate_llvm(ast, file)
         elseif condition.type == "float" then
             local result_var = new_var()
             emit(string.format("%s = fcmp one double %f, 0.0", result_var, condition.value))
+            return result_var
+        elseif condition.type == "bool" then
+            local result_var = new_var()
+            emit(string.format("%s = icmp ne i32 %d, 0", result_var, condition.value))
             return result_var
         else
             error(string.format("Unsupported condition type: '%s'", condition.type))
@@ -1072,10 +1082,15 @@ local function generate_llvm(ast, file)
             return str_var
         elseif expression.type == "variable" then
             local value_type = convert_type(expression.value_type)
-            --local var = new_var()
-            --emit(var .. " = load " .. value_type .. ", " .. value_type .. "* %" .. expression.name)
-            --return var
-            return "%" .. expression.name -- This above fixes mutable variabls, but it should not load the values when they are from functions in declarations.
+            local isarg = expression.isarg
+            
+            if isarg then
+                return "%" .. expression.name
+            else
+                local var = new_var()
+                emit(var .. " = load " .. value_type .. ", " .. value_type .. "* %" .. expression.name)
+                return var
+            end
         elseif expression.type == "function_call" then
             local args = expression.args
             local name = expression.name
