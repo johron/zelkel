@@ -98,6 +98,9 @@ local function lex(input, file)
         elseif is_in_table(c, {"(", ")", "{", "}"}) then
             table.insert(toks, {type = "parenthesis", value = c})
             i = i + 1
+        elseif c == "." and chars[i + 1] == "." and chars[i + 2] == "." then
+            table.insert(toks, {type = "identifier", value = "..."})
+            i = i + 3
         elseif c == "\n" then
             table.insert(toks, {type = "newline", value = "\n"})
             line = line + 1
@@ -376,7 +379,6 @@ local function parse(toks, file)
             local name = expect("identifier").value
             expect("punctuation", ":")
             local type = expect("identifier").value
-
             table.insert(args, {name = name, mutable = false, type = type})
         end
 
@@ -673,8 +675,8 @@ local function parse(toks, file)
     end
 
     local function add_standard_functions()
-        add_function_to_scope("printf", "int")
-        add_function_to_scope("sprintf", "int")
+        add_function_to_scope("printf", "void")
+        add_function_to_scope("sprintf", "void")
     end
 
     enter_scope()
@@ -759,11 +761,6 @@ local function generate_llvm(ast, file)
             if assignment.global == true then
                 error("Global variables not implemented")
             end
-            local temp = new_var()
-            --emit("%" .. assignment.name .. "." .. assignment.counter .. " = alloca " .. type)
-            --emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name .. "." .. assignment.counter)
-            --emit("store " .. type .. " %" .. assignment.name .. "." .. assignment.counter .. ", " .. type .. "* %" .. assignment.name)
-            
             emit("%" .. assignment.name .. " = alloca " .. type)
             emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
         elseif assignment.type == "mutable_variable_reassignment" then
@@ -795,8 +792,12 @@ local function generate_llvm(ast, file)
             end
 
             local arg = args[i]
-            local type = convert_type(arg.type)
-            args_str = args_str .. type .. " %" .. arg.name
+            if arg.name == "..." then
+                args_str = args_str .. arg.name
+            else
+                local type = convert_type(arg.type)
+                args_str = args_str .. type .. " %" .. arg.name
+            end
 
             i = i + 1
         end
@@ -1083,7 +1084,7 @@ local function generate_llvm(ast, file)
         elseif expression.type == "variable" then
             local value_type = convert_type(expression.value_type)
             local isarg = expression.isarg
-            
+
             if isarg then
                 return "%" .. expression.name
             else
@@ -1094,10 +1095,9 @@ local function generate_llvm(ast, file)
         elseif expression.type == "function_call" then
             local args = expression.args
             local name = expression.name
-            local value_type = expression.value_type
+            local type = convert_type(expression.value_type)
 
             local args_str = ""
-            local type = convert_type(value_type)
 
             local i = 1
             while i <= #args do

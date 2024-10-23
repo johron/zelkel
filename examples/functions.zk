@@ -4,6 +4,6 @@ fn add(a: int, b: int): int {
 
 fn main(): void {
     const result: int = add(2, 3);
-    print("%s\n", result);
+    printf("%i\n", result);
     return;
 }

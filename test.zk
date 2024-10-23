@@ -1,1 +1,9 @@
-fn main(): 
+fn println(a: string): void {
+    printf("%s\n", a);
+    return;
+}
+
+fn main(): void {
+    println("Hello, World!");
+    return;
+}
