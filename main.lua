@@ -41,7 +41,7 @@ local function lex(input, file)
                 v = v .. chars[i]
                 i = i + 1
             end
-            table.insert(toks, {type = "identifier", value = v})
+            table.insert(toks, {type = "identifier", value = v, line = line})
         elseif is_digit(c) then
             local found_dot = false
             local type = "integer"
@@ -55,7 +55,7 @@ local function lex(input, file)
                 i = i + 1
             end
 
-            table.insert(toks, {type = type, value = tonumber(v)})
+            table.insert(toks, {type = type, value = tonumber(v), line = line})
         elseif c == "\"" then
             local v = ""
             i = i + 1
@@ -67,7 +67,7 @@ local function lex(input, file)
                 v = v .. chars[i]
                 i = i + 1
             end
-            table.insert(toks, {type = "string", value = v})
+            table.insert(toks, {type = "string", value = v, line = line})
         elseif is_in_table(c, {"+", "-", "*", "/", "="}) then
             local cmt = ""
             if c == "/" and chars[i + 1] == "/" then
@@ -78,31 +78,27 @@ local function lex(input, file)
                     line = line + 1
                 end
             elseif c == "=" and chars[i + 1] == "=" then
-                table.insert(toks, {type = "operator", value = c .. chars[i]})
+                table.insert(toks, {type = "operator", value = c .. chars[i], line = line})
                 i = i + 1
             else
-                table.insert(toks, {type = "operator", value = c})
+                table.insert(toks, {type = "operator", value = c, line = line})
             end
             i = i + 1
         elseif is_in_table(c, {">", "<", "!"}) then
             if chars[i + 1] == "=" then
-                table.insert(toks, {type = "operator", value = c .. chars[i + 1]})
+                table.insert(toks, {type = "operator", value = c .. chars[i + 1], line = line})
                 i = i + 1
             else
-                table.insert(toks, {type = "operator", value = c})
+                table.insert(toks, {type = "operator", value = c, line = line})
             end
             i = i + 1
         elseif is_in_table(c, {";", ":", ","}) then
-            table.insert(toks, {type = "punctuation", value = c})
+            table.insert(toks, {type = "punctuation", value = c, line = line})
             i = i + 1
         elseif is_in_table(c, {"(", ")", "{", "}"}) then
-            table.insert(toks, {type = "parenthesis", value = c})
+            table.insert(toks, {type = "parenthesis", value = c, line = line})
             i = i + 1
-        elseif c == "." and chars[i + 1] == "." and chars[i + 2] == "." then
-            table.insert(toks, {type = "identifier", value = "..."})
-            i = i + 3
         elseif c == "\n" then
-            table.insert(toks, {type = "newline", value = "\n"})
             line = line + 1
             i = i + 1
         elseif is_in_table(c, {" ", "\r"}) then -- disregard
@@ -142,8 +138,8 @@ local function parse(toks, file)
     local function enter_scope()
         local parent_scope = current_scope()
         local new_scope = {
-            variables = {table.unpack(parent_scope.variables)}, -- remove table.unpack ? TODO: 
-            functions = {table.unpack(parent_scope.functions)}
+            variables = parent_scope.variables,
+            functions = parent_scope.functions
         }
         table.insert(scope_stack, new_scope)
     end
@@ -233,22 +229,16 @@ local function parse(toks, file)
         end
     end
 
-    local function expect(type, value)
+    local function expect(token)
         local t = current()
         if t == nil then
             error("current() is nil")
         end
 
-        if t.type == "newline" then
-            line = line + 1
-            i = i + 1
-            return expect(type, value)
-        end
-
-        if value ~= nil and t.value ~= value then
-            error(string.format("Expected '%s', but found '%s'", value, t.value))
-        elseif t.type ~= type then
-            error(string.format("Expected '%s', but found '%s'", type, t.value))
+        if token.value ~= nil and t.value ~= value then
+            error(string.format("Expected '%s', but found '%s'", token.value, t.value))
+        elseif t.type ~= token.type then
+            error(string.format("Expected '%s', but found '%s'", token.type, t.value))
         end
 
         i = i + 1
@@ -264,7 +254,7 @@ local function parse(toks, file)
         local start = i
         while i <= #toks and current().value ~= ")" do
             if i ~= start then
-                expect("punctuation", ",")
+                expect({type = "punctuation", value = ","})
             end
             table.insert(args, parse_expression())
         end
@@ -660,10 +650,6 @@ local function parse(toks, file)
             else
                 error(string.format("Unrecognized token found while parsing: '%s'", value))
             end
-        elseif type == "newline" and value == "\n" then
-            line = line + 1
-            i = i + 1
-            return nil
         else
             error(string.format("Unexpected token found while parsing statement: '%s'", value))
         end
@@ -1153,7 +1139,6 @@ local function generate_llvm(ast, file)
             generate_if_statement(statement)
         elseif type == "while_statement" then
             generate_while_statement(statement)
-        elseif type == "ignore" or type == "newline" then
         else
             error(string.format("Unrecognized statement type found: '%s'", type))
         end
