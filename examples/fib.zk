@@ -6,7 +6,6 @@ fn fib(n: int): int {
     } else {
         return fib(n - 1) + fib(n - 2);
     }
-    return 0;
 }
 
 fn main(): void {
