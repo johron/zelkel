@@ -10,7 +10,7 @@ local function is_in_table(v, t)
     return false
 end
 
-local function lex(input, file)
+function lex(input, file)
     local toks = {}
     local line = 1
 
@@ -111,7 +111,7 @@ local function lex(input, file)
     return toks
 end
 
-local function parse(toks, file)
+function parse(toks, file)
     local ast = {}
     local i = 1
 
@@ -203,6 +203,8 @@ local function parse(toks, file)
         if toks[i] then
             return toks[i]
         else
+            print(inspect(toks))
+            print(file)
             error("Attempt to access token out of bounds")
         end
     end
@@ -618,6 +620,32 @@ local function parse(toks, file)
         return expr
     end
 
+
+    local function parse_require()
+        expect("identifier", "require")
+        local to_require = expect("string").value .. ".zk"
+        expect("identifier", "as")
+        expect("operator", "*")
+        expect("punctuation", ";")
+
+        print(to_require)
+
+        local sub_file = io.open(to_require, "rb")
+        if not sub_file then
+            error(string.format("Cannot open required file: '%s'", to_require))
+        end
+
+        local content = sub_file:read("a")
+        sub_file:close()
+
+        local sub_toks = lex(content, to_require)
+        local sub_ast = parse(sub_toks, to_require)
+
+        for _, node in ipairs(sub_ast) do
+            table.insert(ast, node)
+        end
+    end
+
     function parse_statement()
         local curr = current()
 
@@ -627,6 +655,8 @@ local function parse(toks, file)
         if type == "identifier" then
             if value == "fn" then
                 return parse_function_declaration()
+            elseif value == "require" then
+                return parse_require()
             elseif value == "if" then
                 return parse_if_statement()
             elseif value == "while" then
@@ -670,7 +700,7 @@ local function parse(toks, file)
     return ast
 end
 
-local function generate_llvm(ast, file)
+function generate_llvm(ast, file)
     local llvm = {}
     local top_code = {}
     local var_counter = 0

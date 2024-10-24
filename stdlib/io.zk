@@ -1,0 +1,5 @@
+fn println(a: string): void {
+    printf("%s\n", a);
+    // printf("{a}\n");
+    return;
+}
