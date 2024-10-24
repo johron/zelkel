@@ -112,18 +112,8 @@ local function lex(input, file)
 end
 
 local function parse(toks, file)
-    local line = 1
     local ast = {}
     local i = 1
-
-    local function luaerror(msg)
-        error(msg)
-    end
-
-    local function error(msg)
-        print(string.format("%s:%s: %s", file, line, msg))
-        os.exit(1)
-    end
 
     local scope_stack = {}
 
@@ -166,18 +156,6 @@ local function parse(toks, file)
     local function add_variable_to_scope(var)
         local scope = current_scope()
         table.insert(scope.variables, var)
-    end
-
-    local function variable_in_scope_set_value(name, value, v)
-        for j = #scope_stack, 1, -1 do
-            local scope = scope_stack[j]
-            for _, var in ipairs(scope.variables) do
-                if var.name == name then
-                    var[value] = v
-                    return
-                end
-            end
-        end
     end
 
     local function variable_in_scope_get_value(name, value)
@@ -229,16 +207,21 @@ local function parse(toks, file)
         end
     end
 
-    local function expect(token)
+    local function error(msg)
+        print(string.format("%s:%s: %s", file, current().line, msg))
+        os.exit(1)
+    end
+
+    local function expect(type, value)
         local t = current()
         if t == nil then
             error("current() is nil")
         end
 
-        if token.value ~= nil and t.value ~= value then
-            error(string.format("Expected '%s', but found '%s'", token.value, t.value))
-        elseif t.type ~= token.type then
-            error(string.format("Expected '%s', but found '%s'", token.type, t.value))
+        if value ~= nil and t.value ~= value then
+            error(string.format("Expected '%s', but found '%s'", value, t.value))
+        elseif t.type ~= type then
+            error(string.format("Expected '%s', but found '%s'", type, t.value))
         end
 
         i = i + 1
@@ -254,7 +237,7 @@ local function parse(toks, file)
         local start = i
         while i <= #toks and current().value ~= ")" do
             if i ~= start then
-                expect({type = "punctuation", value = ","})
+                expect("punctuation", ",")
             end
             table.insert(args, parse_expression())
         end
@@ -263,20 +246,21 @@ local function parse(toks, file)
     end
 
     local function parse_function_call()
-        local name = expect("identifier").value
+        local name = expect("identifier")
         expect("parenthesis", "(")
 
         local args = parse_function_call_args()
 
         expect("parenthesis", ")")
 
-        local value_type = function_in_scope_get_value(name, "value_type")
+        local value_type = function_in_scope_get_value(name.value, "value_type")
 
         return {
             type = "function_call",
-            name = name,
+            name = name.value,
             args = args,
-            value_type = value_type
+            value_type = value_type,
+            line = name.line
         }
     end
 
@@ -290,9 +274,10 @@ local function parse(toks, file)
             str = "immutable"
         end
 
-        local name = expect("identifier").value
-        if has_variable_in_scope(name) then
-            error(string.format("Variable already defined in current scope: '%s'", name))
+        local name = expect("identifier")
+        local name_val = name.value
+        if has_variable_in_scope(name_val) then
+            error(string.format("Variable already defined in current scope: '%s'", name_val))
         end
 
         expect("punctuation", ":")
@@ -306,21 +291,22 @@ local function parse(toks, file)
         local expr = parse_expression()
         expect("punctuation", ";")
 
-        add_variable_to_scope({name = name, mutable = mutable, value_type = expr.value_type})
+        add_variable_to_scope({name = name_val, mutable = mutable, value_type = expr.value_type})
         return {
             type = str .. "_variable_assignment",
-            name = name,
-            global = is_global_scope(0),
+            name = name_val,
+            global = is_global_scope(),
             value_type = value_type,
-            expression = expr
+            expression = expr,
+            line = name.value
         }
     end
 
     local function parse_variable_reassignment()
-        local name = expect("identifier").value
+        local name = expect("identifier")
 
-        if not variable_in_scope_get_value(name, "mutable") then
-            error(string.format("Cannot reasign immutable variable: '%s'", name))
+        if not variable_in_scope_get_value(name.value, "mutable") then
+            error(string.format("Cannot reasign immutable variable: '%s'", name.value))
         end
 
         expect("operator", "=")
@@ -329,13 +315,14 @@ local function parse(toks, file)
 
         return {
             type = "mutable_variable_reassignment",
-            name = name,
+            name = name.value,
             value_type = expr.value_type,
-            expression = expr
+            expression = expr,
+            line = name.line
         }
     end
 
-    local function parse_body()
+    local function parse_body(need_return)
         local body = {}
         while i <= #toks and not (current().type == "parenthesis" and current().value == "}") do
             if current().type == "parenthesis" or current().value == "}" then
@@ -347,6 +334,16 @@ local function parse(toks, file)
                 stmt = parse_statement()
             end
             table.insert(body, stmt)
+        end
+
+        if need_return and need_return == true then
+            if #body == 0 or body[#body].type ~= "function_return" then
+                if body[#body].type == "if_statement" and body[#body].else_body and body[#body].else_body[#body[#body].else_body].type == "function_return" then
+                    table.insert(body, {type = "revision", value = "unreachable", line = current().line})
+                else
+                    error("Statement must return something")
+                end
+            end
         end
 
         return body
@@ -375,7 +372,7 @@ local function parse(toks, file)
         if not is_global_scope() then
             error("Function declaration only in global scope")
         end
-        expect("identifier", "fn")
+        local line = expect("identifier", "fn").line
         local name = expect("identifier").value
         if has_function_in_scope(name) then
             error(string.format("Function already declared in current scope: '%s'", name))
@@ -399,14 +396,11 @@ local function parse(toks, file)
 
         expect("parenthesis", "{")
 
-        if not is_in_table(type, {"void", "int", "float"}) then
+        if not is_in_table(type, {"void", "int", "float", "string"}) then
             error(string.format("Unrecognized return type: '%s'", type))
         end
 
-        local body = parse_body()
-        if #body == 0 or body[#body].type ~= "function_return" then
-            error("Function body must end with a return statement")
-        end
+        local body = parse_body(true)
 
         expect("parenthesis", "}")
         exit_scope()
@@ -416,12 +410,13 @@ local function parse(toks, file)
             name = name,
             args = args,
             value_type = type,
-            body = body
+            body = body,
+            line = line
         }
     end
 
     local function parse_function_return()
-        expect("identifier", "return")
+        local line = expect("identifier", "return").line
 
         local expr = {}
         if current().type ~= "punctuation" and current().value ~= ";" then
@@ -433,12 +428,13 @@ local function parse(toks, file)
         return {
             type = "function_return",
             expression = expr,
-            value_type = expr.value_type or "void"
+            value_type = expr.value_type or "void",
+            line = line
         }
     end
 
     local function parse_if_statement()
-        expect("identifier", "if")
+        local line = expect("identifier", "if").line
         expect("parenthesis", "(")
 
         local cond = parse_expression()
@@ -465,7 +461,7 @@ local function parse(toks, file)
             local elseif_body = parse_body()
             expect("parenthesis", "}")
             exit_scope()
-            table.insert(elseif_statements, {condition = elseif_cond, body = elseif_body})
+            table.insert(elseif_statements, {condition = elseif_cond, body = elseif_body, line = elseif_cond.line})
         end
 
         if i <= #toks and current().type == "identifier" and current().value == "else" then
@@ -482,12 +478,13 @@ local function parse(toks, file)
             condition = cond,
             body = body,
             elseif_statements = elseif_statements,
-            else_body = else_body
+            else_body = else_body,
+            line = line
         }
     end
 
     function parse_while_statement()
-        expect("identifier", "while")
+        local line = expect("identifier", "while").line
         expect("parenthesis", "(")
         local cond = parse_expression()
 
@@ -502,7 +499,8 @@ local function parse(toks, file)
         return {
             type = "while_statement",
             condition = cond,
-            body = body
+            body = body,
+            line = line
         }
     end
 
@@ -517,10 +515,10 @@ local function parse(toks, file)
                     return parse_function_call()
                 elseif t.value == "true" then
                     i = i + 1
-                    return {type = "bool", value = 1, value_type = "bool"}
+                    return {type = "bool", value = 1, value_type = "bool", line = t.line}
                 elseif t.value == "false" then
                     i = i + 1
-                    return {type = "integer", value = 0, value_type = "bool"}
+                    return {type = "integer", value = 0, value_type = "bool", line = t.line}
                 else
                     if not has_variable_in_scope(t.value) then
                         error(string.format("Variable not defined in current scope: '%s'", t.value))
@@ -528,26 +526,22 @@ local function parse(toks, file)
                     i = i + 1
                     local value_type = variable_in_scope_get_value(t.value, "value_type")
                     local isarg = variable_in_scope_get_value(t.value, "isarg")
-                    return {type = "variable", name = t.value, value_type = value_type, isarg = isarg}
+                    return {type = "variable", name = t.value, value_type = value_type, isarg = isarg, line = t.line}
                 end
             elseif t.type == "integer" then
                 i = i + 1
-                return {type = "integer", value = t.value, value_type = "int"}
+                return {type = "integer", value = t.value, value_type = "int", line = t.line}
             elseif t.type == "float" then
                 i = i + 1
-                return {type = "float", value = t.value, value_type = "float"}
+                return {type = "float", value = t.value, value_type = "float", line = t.line}
             elseif t.type == "string" then
                 i = i + 1
-                return {type = "string", value = t.value, value_type = "string"}
+                return {type = "string", value = t.value, value_type = "string", line = t.line}
             elseif t.type == "parenthesis" and t.value == "(" then
                 i = i + 1
                 local expr = parse_expression()
                 expect("parenthesis", ")")
                 return expr
-            elseif t.type == "newline" and t.value == "\n" then
-                i = i + 1
-                line = line + 1
-                return parse_primary()
             elseif t.type == "parenthesis" and t.value == "}" then
                 i = i + 1
                 error(string.format("Unexpected token in primary expression: '%s', could be missing ';' on line above", t.value))
@@ -565,7 +559,7 @@ local function parse(toks, file)
                 if expr.value_type ~= "int" and expr.value_type ~= "float" then
                     error(string.format("Unary operator '%s' cannot be applied to type '%s'", t.value, expr.value_type))
                 end
-                return {type = "unary_expression", operator = t.value, operand = expr, value_type = expr.value_type}
+                return {type = "unary_expression", operator = t.value, operand = expr, value_type = expr.value_type, line = t.line}
             else
                 return parse_primary()
             end
@@ -583,7 +577,7 @@ local function parse(toks, file)
                 if expr.value_type == "string" then
                     error(string.format("Operator '%s' cannot be applied to type 'string'", op))
                 end
-                expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type}
+                expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type, line = expr.line}
             end
             return expr
         end
@@ -597,7 +591,7 @@ local function parse(toks, file)
                 if expr.value_type ~= right.value_type then
                     error(string.format("Type mismatch in comparison expression: '%s' and '%s'", expr.value_type, right.value_type))
                 end
-                expr = {type = "comparison_expression", operator = op, left = expr, right = right}
+                expr = {type = "comparison_expression", operator = op, left = expr, right = right, line = expr.line}
             end
             return expr
         end
@@ -613,7 +607,7 @@ local function parse(toks, file)
             if expr.value_type == "string" and op ~= "+" then
                 error(string.format("Operator '%s' cannot be applied to type 'string'", op))
             end
-            expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type}
+            expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type, line = expr.line}
         end
         return expr
     end
@@ -648,10 +642,13 @@ local function parse(toks, file)
             elseif has_function_in_scope(value) then
                 return parse_expression_as_statement()
             else
-                error(string.format("Unrecognized token found while parsing: '%s'", value))
+                error(string.format("Attempt to reference undefined: '%s'", value))
             end
+        elseif type == "revision" and value == "unreachable" then
+            i = i + 1
+            return {type = "revision", value = "unreachable", line = current().line}
         else
-            error(string.format("Unexpected token found while parsing statement: '%s'", value))
+            error(string.format("Cannot parse '%s' as statement", value))
         end
     end
 
@@ -679,9 +676,10 @@ local function generate_llvm(ast, file)
     local var_counter = 0
     local label_counter = 0
     local indent = 0
+    local line = 1
 
     local function error(msg)
-        print(string.format("%s: %s", file, msg))
+        print(string.format("%s:%s: %s", file, line, msg))
         os.exit(1)
     end
 
@@ -734,6 +732,7 @@ local function generate_llvm(ast, file)
     end
 
     local function generate_assignment(assignment)
+        line = assignment.line
         local expr = generate_expression(assignment.expression)
         local value_type = assignment.value_type
         local type = convert_type(value_type)
@@ -760,6 +759,7 @@ local function generate_llvm(ast, file)
     end
 
     local function generate_function_declaration(func)
+        line = func.line
         local name = func.name
         local args = func.args
         local body = func.body
@@ -790,13 +790,14 @@ local function generate_llvm(ast, file)
             type = "i32"
         end
 
-        emit(string.format("define %s @%s(%s) nounwind {", type, name, args_str))
+        emit(string.format("define %s @%s(%s) {", type, name, args_str))
         emit("entry:")
         generate_body(body)
         emit("}")
     end
 
     local function generate_function_return(statement)
+        line = statement.line
         local expression = statement.expression
         local value_type = statement.value_type
 
@@ -811,6 +812,7 @@ local function generate_llvm(ast, file)
     end
 
     local function generate_comparison_check(left, right, operator)
+        line = left.line
         local left_var = generate_expression(left)
         local right_var = generate_expression(right)
         local result_var = new_var()
@@ -855,6 +857,7 @@ local function generate_llvm(ast, file)
     end
 
     local function generate_condition_check(condition)
+        line = condition.line
         if condition.type == "comparison_expression" then
             return generate_comparison_check(condition.left, condition.right, condition.operator)
         elseif condition.type == "variable" then
@@ -880,6 +883,7 @@ local function generate_llvm(ast, file)
     end
 
     local function generate_if_statement(statement)
+        line = statement.line
         local condition = statement.condition
         local body = statement.body
         local else_body = statement.else_body
@@ -921,6 +925,7 @@ local function generate_llvm(ast, file)
     end
 
     local function generate_while_statement(statement)
+        line = statement.line
         local cond_label = new_label()
         local body_label = new_label()
         local end_label = new_label()
@@ -939,6 +944,7 @@ local function generate_llvm(ast, file)
     end
 
     function generate_expression(expression)
+        line = expression.line
         if expression.type == "binary_expression" then
             local left = expression.left
             local right = expression.right
@@ -1095,9 +1101,9 @@ local function generate_llvm(ast, file)
             end
 
             if name == "printf" then
-                emit_top("declare i32 @printf(i8*, ...) nounwind")
+                emit_top("declare i32 @printf(i8*, ...)")
             elseif name == "sprintf" then
-                emit_top("declare i32 @sprintf(i8*, i8*, ...) nounwind")
+                emit_top("declare i32 @sprintf(i8*, i8*, ...)")
             end
 
             if type == "void" then
@@ -1125,6 +1131,15 @@ local function generate_llvm(ast, file)
         end
     end
 
+    local function generate_revision(statement)
+        local value = statement.value
+        if value == "unreachable" then
+            emit("unreachable")
+        else
+            error("You are not at fault for this error")
+        end
+    end
+
     function generate_statement(statement)
         local type = statement.type
         if type == "function_declaration" then
@@ -1139,6 +1154,8 @@ local function generate_llvm(ast, file)
             generate_if_statement(statement)
         elseif type == "while_statement" then
             generate_while_statement(statement)
+        elseif type == "revision" then
+            generate_revision(statement)
         else
             error(string.format("Unrecognized statement type found: '%s'", type))
         end
