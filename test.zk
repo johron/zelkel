@@ -1,10 +1,6 @@
 fn main(): void {
-    let a = 5.25;
-    let b = 3;
-    let c = "hey";
+    let a = 5/2;
 
-    printf("Float is %f\n", a);
-    printf("Number is %i\n", b);
-    printf("String is '%s'\n", c);
+    printf("%f\n", a);
     return;
 }

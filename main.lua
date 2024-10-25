@@ -292,9 +292,14 @@ function parse(toks, file)
         expect("operator", "=")
 
         local expr = parse_expression()
-        expect("punctuation", ";")
 
         value_type = value_type or expr.value_type
+
+        if value_type ~= expr.value_type then
+            error(string.format("Type mismatch between casted type '%s' and expression type '%s'", value_type, expr.value_type))
+        end
+
+        expect("punctuation", ";")
 
         add_variable_to_scope({name = name_val, mutable = mutable, value_type = value_type})
         return {
@@ -303,7 +308,7 @@ function parse(toks, file)
             global = is_global_scope(),
             value_type = value_type,
             expression = expr,
-            line = name.value
+            line = name.line
         }
     end
 
@@ -700,6 +705,8 @@ function parse(toks, file)
         end
         table.insert(ast, node)
     end
+
+    print(inspect(ast))
 
     exit_scope()
 
@@ -1172,7 +1179,7 @@ function generate_llvm(ast, file)
         if value == "unreachable" then
             emit("unreachable")
         else
-            error("You are not at fault for this error")
+            error("Invalid revision value")
         end
     end
 
