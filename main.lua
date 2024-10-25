@@ -401,15 +401,16 @@ function parse(toks, file)
         end
 
         local body = parse_body()
-
         if #body == 0 or body[#body].type ~= "function_return" then
             if body[#body].type == "if_statement" and body[#body].else_body and body[#body].else_body[#body[#body].else_body].type == "function_return" then
-                table.insert(body, {type = "revision", value = "unreachable", line = current().line})
+                table.insert(body, {type = "revision", value = "unreachable", line = current().line}) -- TODO: fix the weird thing with values taking function declaration's value_type
             elseif value_type == "void" then
-                table.insert(body, {type = "revision", value = "ret void"})
+                table.insert(body, {type = "revision", value = "ret void", line = current().line})
             else
                 error(string.format("Missing return statement for function '%s'", name))
             end
+        elseif body[#body].type == "function_return" and body[#body].value_type ~= value_type then
+            error(string.format("Return type mismatch in function '%s': expected '%s', got '%s'", name, value_type, body[#body].value_type))
         end
 
         expect("parenthesis", "}")
@@ -705,8 +706,6 @@ function parse(toks, file)
         end
         table.insert(ast, node)
     end
-
-    print(inspect(ast))
 
     exit_scope()
 
