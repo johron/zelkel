@@ -1,4 +1,3 @@
 fn main(): void {
     printf("Hello, world!\n");
-    return;
 }

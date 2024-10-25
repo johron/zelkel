@@ -9,10 +9,9 @@ fn fib(n: int): int {
 }
 
 fn main(): void {
-    let i: int = 0;
+    let i = 0;
     while (i < 10) {
         printf("%i: %i\n", i, fib(i));
         i = i + 1;
     }
-    return;
 }

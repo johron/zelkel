@@ -5,5 +5,4 @@ fn add(a: int, b: int): int {
 fn main(): void {
     const result: int = add(2, 3);
     printf("%i\n", result);
-    return;
 }
