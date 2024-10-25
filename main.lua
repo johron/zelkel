@@ -504,6 +504,29 @@ function parse(toks, file)
         }
     end
 
+    local function parse_require()
+        expect("identifier", "require")
+        local to_require = expect("string").value .. ".zk"
+        expect("identifier", "as")
+        expect("operator", "*")
+        expect("punctuation", ";")
+
+        local sub_file = io.open(to_require, "rb")
+        if not sub_file then
+            error(string.format("Cannot open required file: '%s'", to_require))
+        end
+
+        local sub_content = sub_file:read("a")
+        sub_file:close()
+
+        local sub_toks = lex(sub_content, to_require)
+        local sub_ast = parse(sub_toks, to_require)
+
+        print(inspect(table.unpack(sub_ast)))
+
+        return table.unpack(sub_ast)
+    end
+
     function parse_expression()
         local function parse_primary()
             local t = current()
@@ -617,39 +640,12 @@ function parse(toks, file)
         return expr
     end
 
-
-    local function parse_require()
-        local line = expect("identifier", "require").line
-        local to_require = expect("string").value .. ".zk"
-        expect("identifier", "as")
-        expect("operator", "*")
-        expect("punctuation", ";")
-
-        local sub_file = io.open(to_require, "rb")
-        if not sub_file then
-            error(string.format("Cannot open required file: '%s'", to_require))
-        end
-
-        local content = sub_file:read("a")
-        sub_file:close()
-
-        local sub_toks = lex(content, to_require)
-        local sub_ast = parse(sub_toks, to_require)
-        --for _, node in ipairs(sub_ast) do
-        --    table.insert(ast, node)
-        --end
-
-        return table.unpack(sub_ast)
-    end
-
-    local got_nil = false 
     function parse_statement()
-        if not toks[i] then
-            i = i - 1
-            got_nil = true
+        if toks[i] == nil then
+            return {type = "EOF", value = file}
         end
-        local curr = current()
 
+        local curr = current()
         local type = curr.type
         local value = curr.value
 
@@ -678,8 +674,6 @@ function parse(toks, file)
         elseif type == "revision" and value == "unreachable" then
             i = i + 1
             return {type = "revision", value = "unreachable", line = current().line}
-        elseif type == "parenthesis" and value == "}" and got_nil == true then
-            return nil
         else
             error(string.format("Cannot parse '%s' as statement", value))
         end
@@ -695,7 +689,10 @@ function parse(toks, file)
 
     while i <= #toks do
         local node = parse_statement()
-        if node == nil then break end
+        if node.type == "EOF" then
+            print(node.type, node.value, file)
+            break
+        end
         table.insert(ast, node)
     end
 
