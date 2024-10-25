@@ -1,6 +1,7 @@
 require "stdlib/io" as *;
 
 fn main(): void {
+    printf("Hello, world!\n");
     println("Hello, world!");
     return;
 }

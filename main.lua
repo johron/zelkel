@@ -203,8 +203,6 @@ function parse(toks, file)
         if toks[i] then
             return toks[i]
         else
-            print(inspect(toks))
-            print(file)
             error("Attempt to access token out of bounds")
         end
     end
@@ -548,7 +546,6 @@ function parse(toks, file)
                 i = i + 1
                 error(string.format("Unexpected token in primary expression: '%s', could be missing ';' on line above", t.value))
             else
-                print(inspect(t))
                 error(string.format("Unexpected token in primary expression: '%s'", t.value))
             end
         end
@@ -622,13 +619,11 @@ function parse(toks, file)
 
 
     local function parse_require()
-        expect("identifier", "require")
+        local line = expect("identifier", "require").line
         local to_require = expect("string").value .. ".zk"
         expect("identifier", "as")
         expect("operator", "*")
         expect("punctuation", ";")
-
-        print(to_require)
 
         local sub_file = io.open(to_require, "rb")
         if not sub_file then
@@ -640,13 +635,19 @@ function parse(toks, file)
 
         local sub_toks = lex(content, to_require)
         local sub_ast = parse(sub_toks, to_require)
+        --for _, node in ipairs(sub_ast) do
+        --    table.insert(ast, node)
+        --end
 
-        for _, node in ipairs(sub_ast) do
-            table.insert(ast, node)
-        end
+        return table.unpack(sub_ast)
     end
 
+    local got_nil = false 
     function parse_statement()
+        if not toks[i] then
+            i = i - 1
+            got_nil = true
+        end
         local curr = current()
 
         local type = curr.type
@@ -677,6 +678,8 @@ function parse(toks, file)
         elseif type == "revision" and value == "unreachable" then
             i = i + 1
             return {type = "revision", value = "unreachable", line = current().line}
+        elseif type == "parenthesis" and value == "}" and got_nil == true then
+            return nil
         else
             error(string.format("Cannot parse '%s' as statement", value))
         end
@@ -692,6 +695,7 @@ function parse(toks, file)
 
     while i <= #toks do
         local node = parse_statement()
+        if node == nil then break end
         table.insert(ast, node)
     end
 
@@ -1186,6 +1190,7 @@ function generate_llvm(ast, file)
             generate_while_statement(statement)
         elseif type == "revision" then
             generate_revision(statement)
+        elseif type == "ignore" then
         else
             error(string.format("Unrecognized statement type found: '%s'", type))
         end
@@ -1207,8 +1212,6 @@ local function compile()
 
     local toks = lex(content, file_name)
     local ast = parse(toks, file_name)
-
-    print(inspect(ast))
 
     local llvm = generate_llvm(ast, file_name)
 
