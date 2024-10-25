@@ -1206,8 +1206,18 @@ end
 
 local function compile()
     local file_name = arg[1]
+    if not file_name then
+        file_name = "test.zk"
+    end
+
+    local trimmed_name = file_name:match("([^/]+)%.%w+$")
+
     local file = io.open(file_name, "rb")
-    if not file then print("No file") os.exit(1) end
+    if not file then
+        print("No file")
+        os.exit(1)
+    end
+
     local content = file:read("a")
     file:close()
 
@@ -1216,7 +1226,7 @@ local function compile()
 
     local llvm = generate_llvm(ast, file_name)
 
-    local out = io.open("out/" .. file_name .. ".ll", "w")
+    local out = io.open("out/" .. trimmed_name .. ".ll", "w")
     if out == nil then
         print("file is nil")
         os.exit(1)
@@ -1226,9 +1236,13 @@ local function compile()
     out:close()
 
     if is_in_table("-opt", arg) then
-        os.execute(string.format("opt -O2 -S ./out/%s.ll -o ./out/%s.ll", file_name, file_name))
+        os.execute(string.format("opt -O2 -S ./out/%s.ll -o ./out/%s.ll", trimmed_name, trimmed_name))
     end
-    os.execute(string.format("clang ./out/%s.ll -o ./out/%s.out", file_name, file_name))
+    os.execute(string.format("clang ./out/%s.ll -o ./out/%s.out", trimmed_name, trimmed_name))
+
+    if is_in_table("-run", arg) then
+        os.execute(string.format("./out/%s.out", trimmed_name))
+    end
 end
 
 compile()
