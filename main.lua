@@ -280,10 +280,13 @@ function parse(toks, file)
             error(string.format("Variable already defined in current scope: '%s'", name_val))
         end
 
-        expect("punctuation", ":")
-        local value_type = expect("identifier").value
-        if value_type == "void" then
-            error("Cannot set variable value type as void")
+        local value_type = nil
+        if toks[i].value == ":" then
+            expect("punctuation", ":")
+            value_type = expect("identifier").value
+            if value_type == "void" then
+                error("Cannot set variable value type as void")
+            end
         end
 
         expect("operator", "=")
@@ -291,7 +294,9 @@ function parse(toks, file)
         local expr = parse_expression()
         expect("punctuation", ";")
 
-        add_variable_to_scope({name = name_val, mutable = mutable, value_type = expr.value_type})
+        value_type = value_type or expr.value_type
+
+        add_variable_to_scope({name = name_val, mutable = mutable, value_type = value_type})
         return {
             type = str .. "_variable_assignment",
             name = name_val,
