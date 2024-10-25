@@ -332,7 +332,7 @@ function parse(toks, file)
         }
     end
 
-    local function parse_body(need_return)
+    local function parse_body()
         local body = {}
         while i <= #toks and not (current().type == "parenthesis" and current().value == "}") do
             if current().type == "parenthesis" or current().value == "}" then
@@ -344,16 +344,6 @@ function parse(toks, file)
                 stmt = parse_statement()
             end
             table.insert(body, stmt)
-        end
-
-        if need_return and need_return == true then
-            if #body == 0 or body[#body].type ~= "function_return" then
-                if body[#body].type == "if_statement" and body[#body].else_body and body[#body].else_body[#body[#body].else_body].type == "function_return" then
-                    table.insert(body, {type = "revision", value = "unreachable", line = current().line})
-                else
-                    error("Statement must return something")
-                end
-            end
         end
 
         return body
@@ -394,8 +384,8 @@ function parse(toks, file)
 
         expect("parenthesis", ")")
         expect("punctuation", ":")
-        local type = expect("identifier").value
-        add_function_to_scope(name, type)
+        local value_type = expect("identifier").value
+        add_function_to_scope(name, value_type)
         enter_scope()
 
         if args ~= nil then
@@ -406,11 +396,21 @@ function parse(toks, file)
 
         expect("parenthesis", "{")
 
-        if not is_in_table(type, {"void", "int", "float", "string"}) then
-            error(string.format("Unrecognized return type: '%s'", type))
+        if not is_in_table(value_type, {"void", "int", "float", "string"}) then
+            error(string.format("Unrecognized return type: '%s'", value_type))
         end
 
-        local body = parse_body(true)
+        local body = parse_body()
+
+        if #body == 0 or body[#body].type ~= "function_return" then
+            if body[#body].type == "if_statement" and body[#body].else_body and body[#body].else_body[#body[#body].else_body].type == "function_return" then
+                table.insert(body, {type = "revision", value = "unreachable", line = current().line})
+            elseif value_type == "void" then
+                table.insert(body, {type = "revision", value = "ret void"})
+            else
+                error(string.format("Missing return statement for function '%s'", name))
+            end
+        end
 
         expect("parenthesis", "}")
         exit_scope()
@@ -419,7 +419,7 @@ function parse(toks, file)
             type = "function_declaration",
             name = name,
             args = args,
-            value_type = type,
+            value_type = value_type,
             body = body,
             line = line
         }
@@ -829,9 +829,6 @@ function generate_llvm(ast, file)
         local type = convert_type(value_type)
 
         emit("")
-        if type == "void" then
-            type = "i32"
-        end
 
         emit(string.format("define %s @%s(%s) {", type, name, args_str))
         emit("entry:")
@@ -847,7 +844,7 @@ function generate_llvm(ast, file)
         local type = convert_type(value_type)
 
         if type == "void" then
-            emit(string.format("ret i32 0"))
+            emit(string.format("ret void"))
         else
             local expr = generate_expression(expression)
             emit(string.format("ret %s %s", type, expr))
@@ -1175,12 +1172,7 @@ function generate_llvm(ast, file)
     end
 
     local function generate_revision(statement)
-        local value = statement.value
-        if value == "unreachable" then
-            emit("unreachable")
-        else
-            error("Invalid revision value")
-        end
+        emit(statement.value)
     end
 
     function generate_statement(statement)
