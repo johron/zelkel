@@ -1,6 +1,5 @@
-require "stdlib/io" as *;
+require "stdlib/io" as io;
 
 fn main(): void {
-    println("Hello, world!");
-    exit(0);
+    io.println("Hello, world!");
 }

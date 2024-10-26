@@ -156,34 +156,54 @@ function preprocess(toks, file)
         return t
     end
 
+    local function preprocess_require()
+        expect("identifier", "require")
+        local to_require = expect("string").value .. ".zk"
+
+        local namespace
+        if current().type == "identifier" and current().value == "as" then
+            i = i + 1
+            namespace = current()
+            if namespace.type ~= "identifier" then
+                error("Invalid namespace for require")
+            end
+            i = i + 1
+        end
+        expect("punctuation", ";")
+
+        local sub_file = io.open(to_require, "rb")
+        if not sub_file then
+            error(string.format("Cannot open required file: '%s'", to_require))
+        end
+
+        local sub_content = sub_file:read("a")
+        sub_file:close()
+
+        local sub_toks = lex(sub_content, to_require)
+        local new_sub_toks = preprocess(sub_toks, to_require)
+
+        for _, tok in ipairs(new_sub_toks) do
+            if namespace and tok.type == "identifier" and tok.value == "fn" then
+                tok.namespace = namespace.value
+            end
+            table.insert(newtoks, tok)
+        end
+    end
+
     while i <= #toks do
-        if current().type == "identifier" and current().value == "require" then
-            expect("identifier", "require")
-            local to_require = expect("string").value .. ".zk"
-            expect("identifier", "as")
-            expect("operator", "*")
-            expect("punctuation", ";")
+        local curr = current()
+        local type = curr.type
+        local value = curr.value
 
-            local sub_file = io.open(to_require, "rb")
-            if not sub_file then
-                error(string.format("Cannot open required file: '%s'", to_require))
-            end
-
-            local sub_content = sub_file:read("a")
-            sub_file:close()
-
-            local sub_toks = lex(sub_content, to_require)
-            local new_sub_toks = preprocess(sub_toks, to_require)
-
-            for _, tok in ipairs(new_sub_toks) do
-                table.insert(newtoks, tok)
-            end
+        if type == "identifier" and value == "require" then
+            preprocess_require()
         else
             table.insert(newtoks, toks[i])
             i = i + 1
         end
     end
 
+    print(inspect(newtoks))
     return newtoks
 end
 
@@ -258,9 +278,9 @@ function parse(toks, file)
         return false
     end
 
-    local function add_function_to_scope(name, value_type)
+    local function add_function_to_scope(name, value_type, namespace)
         local scope = current_scope()
-        table.insert(scope.functions, {name = name, value_type = value_type})
+        table.insert(scope.functions, {name = name, value_type = value_type, namespace = namespace})
     end
 
     local function function_in_scope_get_value(name, value)
@@ -334,6 +354,7 @@ function parse(toks, file)
         return {
             type = "function_call",
             name = name.value,
+            namespace = function_in_scope_get_value(name.value, "namespace"),
             args = args,
             value_type = value_type,
             line = name.line
@@ -444,7 +465,10 @@ function parse(toks, file)
         if not is_global_scope() then
             error("Function declaration only in global scope")
         end
-        local line = expect("identifier", "fn").line
+        local line_ident = expect("identifier", "fn")
+        local line = line_ident.line
+        local namespace = line_ident.namespace
+
         local name = expect("identifier").value
         if has_function_in_scope(name) then
             error(string.format("Function already declared in current scope: '%s'", name))
@@ -457,7 +481,7 @@ function parse(toks, file)
         expect("parenthesis", ")")
         expect("punctuation", ":")
         local value_type = expect("identifier").value
-        add_function_to_scope(name, value_type)
+        add_function_to_scope(name, value_type, namespace)
         enter_scope()
 
         if args ~= nil then
@@ -491,6 +515,7 @@ function parse(toks, file)
         return {
             type = "function_declaration",
             name = name,
+            namespace = namespace,
             args = args,
             value_type = value_type,
             body = body,
@@ -732,7 +757,7 @@ function parse(toks, file)
     end
 
     local function add_standard_functions()
-        add_function_to_scope("printf", "int")
+        add_function_to_scope("print", "int")
         add_function_to_scope("exit", "int")
     end
 
@@ -866,7 +891,12 @@ function generate_llvm(ast, file)
 
         emit("")
 
-        emit(string.format("define %s @%s(%s) {", type, name, args_str))
+        local name_value = name
+        if func.namespace then
+            name_value = func.namespace .. "." .. name
+        end
+
+        emit(string.format("define %s @%s(%s) {", type, name_value, args_str))
         emit("entry:")
         generate_body(body)
         emit("}")
@@ -1019,6 +1049,48 @@ function generate_llvm(ast, file)
         emit(end_label .. ":")
     end
 
+    local function generate_function_call(expression)
+        local args = expression.args
+        local name = expression.name
+        local type = convert_type(expression.value_type)
+
+        local args_str = ""
+
+        local i = 1
+        while i <= #args do
+            if i ~= 1 then
+                args_str = args_str .. ", "
+            end
+
+            local arg = args[i]
+            local expr = generate_expression(arg)
+            local type = convert_type(arg.value_type)
+
+            args_str = args_str .. type .. " " .. expr
+            i = i + 1
+        end
+
+        if name == "print" then
+            name = "printf"
+            emit_top("declare i32 @printf(i8*, ...)")
+        elseif name == "exit" then
+            emit_top("declare i32 @exit(i32)")
+        end
+
+        local name_value = name
+        if expression.namespace then
+            name_value = expression.namespace .. "." .. name
+        end
+
+        if type == "void" then
+            emit(string.format("call %s @%s(%s)", type, name_value, args_str))
+        else
+            local result_var = new_var()
+            emit(string.format("%s = call %s @%s(%s)", result_var, type, name_value, args_str))
+            return result_var
+        end
+    end
+
     function generate_expression(expression)
         line = expression.line
         if expression.type == "binary_expression" then
@@ -1156,39 +1228,7 @@ function generate_llvm(ast, file)
                 return var
             end
         elseif expression.type == "function_call" then
-            local args = expression.args
-            local name = expression.name
-            local type = convert_type(expression.value_type)
-
-            local args_str = ""
-
-            local i = 1
-            while i <= #args do
-                if i ~= 1 then
-                    args_str = args_str .. ", "
-                end
-
-                local arg = args[i]
-                local expr = generate_expression(arg)
-                local type = convert_type(arg.value_type)
-
-                args_str = args_str .. type .. " " .. expr
-                i = i + 1
-            end
-
-            if name == "printf" then
-                emit_top("declare i32 @printf(i8*, ...)")
-            elseif name == "exit" then
-                emit_top("declare i32 @exit(i32)")
-            end
-
-            if type == "void" then
-                emit(string.format("call %s @%s(%s)", type, name, args_str))
-            else
-                local result_var = new_var()
-                emit(string.format("%s = call %s @%s(%s)", result_var, type, name, args_str))
-                return result_var
-            end
+            generate_function_call(expression)
         elseif expression.type == "unary_expression" then
             local operand_var = generate_expression(expression.operand)
             local result_var = new_var()
