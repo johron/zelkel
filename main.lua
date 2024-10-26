@@ -200,7 +200,7 @@ function parse(toks, file)
     end
 
     local function current()
-        if toks[i] then
+        if i <= #toks then
             return toks[i]
         else
             error("Attempt to access token out of bounds")
@@ -214,9 +214,6 @@ function parse(toks, file)
 
     local function expect(type, value)
         local t = current()
-        if t == nil then
-            error("current() is nil")
-        end
 
         if value ~= nil and t.value ~= value then
             error(string.format("Expected '%s', but found '%s'", value, t.value))
@@ -224,7 +221,10 @@ function parse(toks, file)
             error(string.format("Expected '%s', but found '%s'", type, t.value))
         end
 
-        i = i + 1
+        if i <= #toks then
+            i = i + 1
+        end
+
         return t
     end
 
@@ -335,10 +335,6 @@ function parse(toks, file)
     local function parse_body()
         local body = {}
         while i <= #toks and not (current().type == "parenthesis" and current().value == "}") do
-            if current().type == "parenthesis" or current().value == "}" then
-                return body
-            end
-
             local stmt = parse_statement()
             while stmt == nil and toks[i].value ~= "}" do
                 stmt = parse_statement()
@@ -532,10 +528,10 @@ function parse(toks, file)
 
         local sub_toks = lex(sub_content, to_require)
         local sub_ast = parse(sub_toks, to_require)
+        print("sub", inspect(table.unpack(sub_ast)), "ast")
 
-        print(inspect(table.unpack(sub_ast)))
-
-        return table.unpack(sub_ast)
+        return {type = "revision", value = ""}
+        --return table.unpack(sub_ast)
     end
 
     function parse_expression()
@@ -601,8 +597,7 @@ function parse(toks, file)
         local function parse_term()
             local expr = parse_unary()
             while i <= #toks and current().type == "operator" and (current().value == "*" or current().value == "/") and current().type ~= "punctuation" and current().value ~= ";" do
-                local op = current().value
-                i = i + 1
+                local op = expect("operator").value
                 local right = parse_unary()
                 if expr.value_type ~= right.value_type then
                     error(string.format("Type mismatch in binary expression: '%s' and '%s'", expr.value_type, right.value_type))
@@ -618,8 +613,7 @@ function parse(toks, file)
         local function parse_comparison()
             local expr = parse_term()
             while i <= #toks and current().type == "operator" and (current().value == "==" or current().value == "!=" or current().value == ">=" or current().value == "<=" or current().value == ">" or current().value == "<") and current().type ~= "punctuation" and current().value ~= ";" do
-                local op = current().value
-                i = i + 1
+                local op = expect("operator").value
                 local right = parse_term()
                 if expr.value_type ~= right.value_type then
                     error(string.format("Type mismatch in comparison expression: '%s' and '%s'", expr.value_type, right.value_type))
@@ -652,10 +646,9 @@ function parse(toks, file)
     end
 
     function parse_statement()
-        if toks[i] == nil then
-            return {type = "EOF", value = file}
+        if i > #toks then
+            return {type = "EOF"}
         end
-
         local curr = current()
         local type = curr.type
         local value = curr.value
@@ -701,10 +694,13 @@ function parse(toks, file)
     while i <= #toks do
         local node = parse_statement()
         if node.type == "EOF" then
-            print(node.type, node.value, file)
+            print(file)
+            print(inspect(node))
+            print(inspect(toks))
             break
         end
         table.insert(ast, node)
+        print("ins", inspect(node))
     end
 
     exit_scope()
@@ -1222,7 +1218,6 @@ local function compile()
 
     local toks = lex(content, file_name)
     local ast = parse(toks, file_name)
-
     local llvm = generate_llvm(ast, file_name)
 
     local out = io.open("out/" .. trimmed_name .. ".ll", "w")
