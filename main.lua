@@ -35,7 +35,19 @@ function lex(input, file)
     local i = 1
     while i <= #chars do
         local c = chars[i]
-        if is_alpha(c) then
+        if c == "f" and chars[i + 1] == "\"" then
+            local v = ""
+            i = i + 2
+            while i <= #chars do
+                if chars[i] == "\"" then
+                    i = i + 1
+                    break
+                end
+                v = v .. chars[i]
+                i = i + 1
+            end
+            table.insert(toks, {type = "fstring", value = v, line = line})
+        elseif is_alpha(c) then
             local v = ""
             while i <= #chars and (is_alpha(chars[i]) or is_digit(chars[i])) do
                 v = v .. chars[i]
@@ -109,6 +121,70 @@ function lex(input, file)
     end
 
     return toks
+end
+
+function preprocess(toks, file)
+    local newtoks = {}
+    local i = 1
+
+    local function current()
+        if i <= #toks then
+            return toks[i]
+        else
+            error("Attempt to access token out of bounds")
+        end
+    end
+
+    local function error(msg)
+        print(string.format("%s:%s: %s", file, current().line, msg))
+        os.exit(1)
+    end
+
+    local function expect(type, value)
+        local t = current()
+
+        if value ~= nil and t.value ~= value then
+            error(string.format("Expected '%s', but found '%s'", value, t.value))
+        elseif t.type ~= type then
+            error(string.format("Expected '%s', but found '%s'", type, t.value))
+        end
+
+        if i <= #toks then
+            i = i + 1
+        end
+
+        return t
+    end
+
+    while i <= #toks do
+        if current().type == "identifier" and current().value == "require" then
+            expect("identifier", "require")
+            local to_require = expect("string").value .. ".zk"
+            expect("identifier", "as")
+            expect("operator", "*")
+            expect("punctuation", ";")
+
+            local sub_file = io.open(to_require, "rb")
+            if not sub_file then
+                error(string.format("Cannot open required file: '%s'", to_require))
+            end
+
+            local sub_content = sub_file:read("a")
+            sub_file:close()
+
+            local sub_toks = lex(sub_content, to_require)
+            local new_sub_toks = preprocess(sub_toks, to_require)
+
+            for _, tok in ipairs(new_sub_toks) do
+                table.insert(newtoks, tok)
+            end
+        else
+            table.insert(newtoks, toks[i])
+            i = i + 1
+        end
+    end
+
+    return newtoks
 end
 
 function parse(toks, file)
@@ -511,29 +587,6 @@ function parse(toks, file)
         }
     end
 
-    local function parse_require()
-        expect("identifier", "require")
-        local to_require = expect("string").value .. ".zk"
-        expect("identifier", "as")
-        expect("operator", "*")
-        expect("punctuation", ";")
-
-        local sub_file = io.open(to_require, "rb")
-        if not sub_file then
-            error(string.format("Cannot open required file: '%s'", to_require))
-        end
-
-        local sub_content = sub_file:read("a")
-        sub_file:close()
-
-        local sub_toks = lex(sub_content, to_require)
-        local sub_ast = parse(sub_toks, to_require)
-        print("sub", inspect(table.unpack(sub_ast)), "ast")
-
-        return {type = "revision", value = ""}
-        --return table.unpack(sub_ast)
-    end
-
     function parse_expression()
         local function parse_primary()
             local t = current()
@@ -646,9 +699,6 @@ function parse(toks, file)
     end
 
     function parse_statement()
-        if i > #toks then
-            return {type = "EOF"}
-        end
         local curr = current()
         local type = curr.type
         local value = curr.value
@@ -656,8 +706,6 @@ function parse(toks, file)
         if type == "identifier" then
             if value == "fn" then
                 return parse_function_declaration()
-            elseif value == "require" then
-                return parse_require()
             elseif value == "if" then
                 return parse_if_statement()
             elseif value == "while" then
@@ -684,8 +732,8 @@ function parse(toks, file)
     end
 
     local function add_standard_functions()
-        add_function_to_scope("printf", "void")
-        add_function_to_scope("sprintf", "void")
+        add_function_to_scope("printf", "int")
+        add_function_to_scope("exit", "int")
     end
 
     enter_scope()
@@ -693,14 +741,7 @@ function parse(toks, file)
 
     while i <= #toks do
         local node = parse_statement()
-        if node.type == "EOF" then
-            print(file)
-            print(inspect(node))
-            print(inspect(toks))
-            break
-        end
         table.insert(ast, node)
-        print("ins", inspect(node))
     end
 
     exit_scope()
@@ -1093,9 +1134,9 @@ function generate_llvm(ast, file)
         elseif expression.type == "float" then
             return tostring(expression.value)
         elseif expression.type == "string" then
-            local str = expression.value:gsub("\\n", "\\0A")
+            local str = expression.value:gsub("\\n", "\\0A")--:gsub("%%", "%%%%")
             local str_var = new_var()
-            local str_name = "@.str_" .. #top_code -- TODO: fix length
+            local str_name = "@.str_" .. #top_code
             local str_len = #str + 1
             for _ in string.gmatch(str, "\\0A") do
                 str_len = str_len - 2
@@ -1137,8 +1178,8 @@ function generate_llvm(ast, file)
 
             if name == "printf" then
                 emit_top("declare i32 @printf(i8*, ...)")
-            elseif name == "sprintf" then
-                emit_top("declare i32 @sprintf(i8*, i8*, ...)")
+            elseif name == "exit" then
+                emit_top("declare i32 @exit(i32)")
             end
 
             if type == "void" then
@@ -1217,7 +1258,8 @@ local function compile()
     file:close()
 
     local toks = lex(content, file_name)
-    local ast = parse(toks, file_name)
+    local preprocessed = preprocess(toks, file_name)
+    local ast = parse(preprocessed, file_name)
     local llvm = generate_llvm(ast, file_name)
 
     local out = io.open("out/" .. trimmed_name .. ".ll", "w")
