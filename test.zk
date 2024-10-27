@@ -1,5 +1,3 @@
-require "stdlib/math";
-
 fn main(): void {
-    print("%f\n", sqrt(25.0));
+    print("Hello, world!\n");
 }

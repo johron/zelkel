@@ -463,9 +463,9 @@ function parse(toks)
             error("Function declaration only in global scope")
         end
 
-        local fnid = expect("identifier", "fn")
-        local line = fnid.line
-        local file = fnid.file
+        local fn_id = expect("identifier", "fn")
+        local line = fn_id.line
+        local file = fn_id.file
 
         local name = expect("identifier").value
         if has_function_in_scope(name) then
@@ -499,7 +499,12 @@ function parse(toks)
             if body[#body].type == "if_statement" and body[#body].else_body and body[#body].else_body[#body[#body].else_body].type == "function_return" then
                 table.insert(body, {type = "revision", value = "unreachable", line = current().line}) -- TODO: fix the weird thing with values taking function declaration's value_type
             elseif value_type == "void" then
-                table.insert(body, {type = "revision", value = "ret void", line = current().line})
+                if name == "main" then
+                    value_type = "int"
+                    table.insert(body, {type = "revision", value = "ret i32 0", line = current().line})
+                else
+                    table.insert(body, {type = "revision", value = "ret void", line = current().line})
+                end
             else
                 error(string.format("Missing return statement for function '%s'", name))
             end
@@ -541,7 +546,7 @@ function parse(toks)
     end
 
     local function parse_if_statement()
-        local ifid = expect("identifier", "if")
+        local if_id = expect("identifier", "if")
         expect("parenthesis", "(")
 
         local cond = parse_expression()
@@ -586,13 +591,13 @@ function parse(toks)
             body = body,
             elseif_statements = elseif_statements,
             else_body = else_body,
-            line = ifid.line,
-            file = ifid.file
+            line = if_id.line,
+            file = if_id.file
         }
     end
 
     function parse_while_statement()
-        local whileid = expect("identifier", "while")
+        local while_id = expect("identifier", "while")
         expect("parenthesis", "(")
         local cond = parse_expression()
 
@@ -608,8 +613,8 @@ function parse(toks)
             type = "while_statement",
             condition = cond,
             body = body,
-            line = whileid.line,
-            file = whileid.file
+            line = while_id.line,
+            file = while_id.file
         }
     end
 
@@ -645,7 +650,12 @@ function parse(toks)
                 return {type = "float", value = t.value, value_type = "float", line = t.line, file = t.file}
             elseif t.type == "string" then
                 i = i + 1
-                return {type = "string", value = t.value, value_type = "string", line = t.line, file = t.file}
+                local value = t.value:gsub("\\n", "\\0A")--:gsub("%%", "%%%%") -- TODO: add this back again
+                local length = #value + 1
+                for _ in string.gmatch(value, "\\0A") do
+                    length = length - 2
+                end
+                return {type = "string", value = value, length = length, value_type = "string", line = t.line, file = t.file}
             elseif t.type == "parenthesis" and t.value == "(" then
                 i = i + 1
                 local expr = parse_expression()
@@ -1217,13 +1227,10 @@ function generate_llvm(ast)
         elseif expression.type == "float" then
             return tostring(expression.value)
         elseif expression.type == "string" then
-            local str = expression.value:gsub("\\n", "\\0A")--:gsub("%%", "%%%%")
+            local str = expression.value
             local str_var = new_var()
             local str_name = "@.str_" .. #top_code
-            local str_len = #str + 1
-            for _ in string.gmatch(str, "\\0A") do
-                str_len = str_len - 2
-            end
+            local str_len = expression.length
             table.insert(top_code, string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
             emit(string.format("%s = getelementptr [%d x i8], [%d x i8]* %s, i32 0, i32 0", str_var, str_len, str_len, str_name))
             return str_var
