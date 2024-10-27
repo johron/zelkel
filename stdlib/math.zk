@@ -1,0 +1,46 @@
+fn abs(x: float): float {
+    if (x < 0.0) {
+        return -x;
+    }
+    return x;
+}
+
+fn pow(x: float, y: float): float {
+    if (y == 0.0) {
+        return 1.0;
+    }
+    if (y < 0.0) {
+        return 1.0 / pow(x, -y);
+    }
+
+    let result = 1.0;
+    while (y > 0) {
+        if (y % 2 != 0) {
+            result = result * x;
+        }
+        x = x * x;
+        y = y / 2;
+    }
+
+    return result;
+}
+
+fn root(x: float, y: float): float {
+    if (x < 0.0) { return 0.0; }
+    // if (x == 0 || x == 1) {}
+    if (x == 0.0) { return x; }
+    if (x == 1.0) { return x; }
+
+    let z = x;
+    let i = 0.0;
+    while (i < 10.0) {
+        z = z - (z*z - x) / (y * z);
+        i = i + 1.0;
+    }
+
+    return z;
+}
+
+fn sqrt(x: float): float {
+    return root(x, 2);
+}

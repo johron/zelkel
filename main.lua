@@ -125,6 +125,7 @@ function lex(input, file)
     return toks
 end
 
+local required = {}
 function preprocess(toks)
     local newtoks = {}
     local i = 1
@@ -169,19 +170,22 @@ function preprocess(toks)
 
         expect("punctuation", ";")
 
-        local sub_file = io.open(to_require, "rb")
-        if not sub_file then
-            error(string.format("Cannot open required file: '%s'", to_require))
-        end
+        if not is_in_table(to_require, required) then
+            table.insert(required, to_require)
+            local sub_file = io.open(to_require, "rb")
+            if not sub_file then
+                error(string.format("Cannot find required file: '%s'", to_require))
+            end
 
-        local sub_content = sub_file:read("a")
-        sub_file:close()
+            local sub_content = sub_file:read("a")
+            sub_file:close()
 
-        local sub_toks = lex(sub_content, to_require)
-        local new_sub_toks = preprocess(sub_toks)
+            local sub_toks = lex(sub_content, to_require)
+            local new_sub_toks = preprocess(sub_toks)
 
-        for _, tok in ipairs(new_sub_toks) do
-            table.insert(newtoks, tok)
+            for _, tok in ipairs(new_sub_toks) do
+                table.insert(newtoks, tok)
+            end
         end
     end
 
@@ -367,6 +371,7 @@ function parse(toks)
         local name = expect("identifier")
         local name_val = name.value
         if has_variable_in_scope(name_val) then
+            print(inspect(scope_stack))
             error(string.format("Variable already defined in current scope: '%s'", name_val))
         end
 
@@ -428,9 +433,6 @@ function parse(toks)
         local body = {}
         while i <= #toks and not (current().type == "parenthesis" and current().value == "}") do
             local stmt = parse_statement()
-            while stmt == nil and toks[i].value ~= "}" do
-                stmt = parse_statement()
-            end
             table.insert(body, stmt)
         end
 
@@ -1237,13 +1239,19 @@ function generate_llvm(ast)
                 return var
             end
         elseif expression.type == "function_call" then
-            generate_function_call(expression)
+            return generate_function_call(expression)
         elseif expression.type == "unary_expression" then
             local operand_var = generate_expression(expression.operand)
             local result_var = new_var()
 
             if expression.operator == "-" then
-                emit(string.format("%s = sub i32 0, %s", result_var, operand_var))
+                if expression.value_type == "int" then
+                    emit(string.format("%s = sub i32 0, %s", result_var, operand_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = fsub double 0.0, %s", result_var, operand_var))
+                else
+                    error(string.format("Unsupported value type for unary expression: '%s'", expression.value_type))
+                end
             elseif expression.operator == "+" then
                 return operand_var
             else
@@ -1308,7 +1316,9 @@ local function compile()
 
     local toks = lex(content, file_name)
     local preprocessed = preprocess(toks)
+    print(inspect(preprocessed))
     local ast = parse(preprocessed)
+    print(inspect(ast))
     local llvm = generate_llvm(ast)
 
     local out = io.open("out/" .. trimmed_name .. ".ll", "w")
