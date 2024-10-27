@@ -22,3 +22,6 @@
       - io.println("hi");
 - [ ] Rewrite in itself
 - [ ] Make sure every function has a return and it's value should be same type as function declaration return type
+
+## License
+Licensed under the MIT License; please see the [license file](LICENSE.md) for terms.
