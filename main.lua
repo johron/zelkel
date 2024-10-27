@@ -46,14 +46,14 @@ function lex(input, file)
                 v = v .. chars[i]
                 i = i + 1
             end
-            table.insert(toks, {type = "fstring", value = v, line = line})
+            table.insert(toks, {type = "fstring", value = v})
         elseif is_alpha(c) then
             local v = ""
             while i <= #chars and (is_alpha(chars[i]) or is_digit(chars[i])) do
                 v = v .. chars[i]
                 i = i + 1
             end
-            table.insert(toks, {type = "identifier", value = v, line = line})
+            table.insert(toks, {type = "identifier", value = v})
         elseif is_digit(c) then
             local found_dot = false
             local type = "integer"
@@ -67,7 +67,7 @@ function lex(input, file)
                 i = i + 1
             end
 
-            table.insert(toks, {type = type, value = tonumber(v), line = line})
+            table.insert(toks, {type = type, value = tonumber(v)})
         elseif c == "\"" then
             local v = ""
             i = i + 1
@@ -79,9 +79,8 @@ function lex(input, file)
                 v = v .. chars[i]
                 i = i + 1
             end
-            table.insert(toks, {type = "string", value = v, line = line})
+            table.insert(toks, {type = "string", value = v})
         elseif is_in_table(c, {"+", "-", "*", "/", "="}) then
-            local cmt = ""
             if c == "/" and chars[i + 1] == "/" then
                 while i <= #chars and chars[i] ~= "\n" do
                     i = i + 1
@@ -90,25 +89,25 @@ function lex(input, file)
                     line = line + 1
                 end
             elseif c == "=" and chars[i + 1] == "=" then
-                table.insert(toks, {type = "operator", value = c .. chars[i], line = line})
+                table.insert(toks, {type = "operator", value = c .. chars[i]})
                 i = i + 1
             else
-                table.insert(toks, {type = "operator", value = c, line = line})
+                table.insert(toks, {type = "operator", value = c})
             end
             i = i + 1
         elseif is_in_table(c, {">", "<", "!"}) then
             if chars[i + 1] == "=" then
-                table.insert(toks, {type = "operator", value = c .. chars[i + 1], line = line})
+                table.insert(toks, {type = "operator", value = c .. chars[i + 1]})
                 i = i + 1
             else
-                table.insert(toks, {type = "operator", value = c, line = line})
+                table.insert(toks, {type = "operator", value = c})
             end
             i = i + 1
         elseif is_in_table(c, {";", ":", ","}) then
-            table.insert(toks, {type = "punctuation", value = c, line = line})
+            table.insert(toks, {type = "punctuation", value = c})
             i = i + 1
         elseif is_in_table(c, {"(", ")", "{", "}"}) then
-            table.insert(toks, {type = "parenthesis", value = c, line = line})
+            table.insert(toks, {type = "parenthesis", value = c})
             i = i + 1
         elseif c == "\n" then
             line = line + 1
@@ -118,12 +117,15 @@ function lex(input, file)
         else
             error(string.format("Unexpected character found by lexer: '%s'", c))
         end
+
+        toks[#toks].line = line
+        toks[#toks].file = file
     end
 
     return toks
 end
 
-function preprocess(toks, file)
+function preprocess(toks)
     local newtoks = {}
     local i = 1
 
@@ -136,7 +138,7 @@ function preprocess(toks, file)
     end
 
     local function error(msg)
-        print(string.format("%s:%s: %s", file, current().line, msg))
+        print(string.format("%s:%s: %s", current().file, current().line, msg))
         os.exit(1)
     end
 
@@ -158,17 +160,13 @@ function preprocess(toks, file)
 
     local function preprocess_require()
         expect("identifier", "require")
-        local to_require = expect("string").value .. ".zk"
 
-        local namespace
-        if current().type == "identifier" and current().value == "as" then
-            i = i + 1
-            namespace = current()
-            if namespace.type ~= "identifier" then
-                error("Invalid namespace for require")
-            end
-            i = i + 1
+        local to_require = current().value .. ".zk"
+        if to_require == current().file then
+            error("Cannot require itself")
         end
+        i = i + 1
+
         expect("punctuation", ";")
 
         local sub_file = io.open(to_require, "rb")
@@ -180,12 +178,9 @@ function preprocess(toks, file)
         sub_file:close()
 
         local sub_toks = lex(sub_content, to_require)
-        local new_sub_toks = preprocess(sub_toks, to_require)
+        local new_sub_toks = preprocess(sub_toks)
 
         for _, tok in ipairs(new_sub_toks) do
-            if namespace and tok.type == "identifier" and tok.value == "fn" then
-                tok.namespace = namespace.value
-            end
             table.insert(newtoks, tok)
         end
     end
@@ -203,11 +198,10 @@ function preprocess(toks, file)
         end
     end
 
-    print(inspect(newtoks))
     return newtoks
 end
 
-function parse(toks, file)
+function parse(toks)
     local ast = {}
     local i = 1
 
@@ -278,9 +272,9 @@ function parse(toks, file)
         return false
     end
 
-    local function add_function_to_scope(name, value_type, namespace)
+    local function add_function_to_scope(name, value_type)
         local scope = current_scope()
-        table.insert(scope.functions, {name = name, value_type = value_type, namespace = namespace})
+        table.insert(scope.functions, {name = name, value_type = value_type})
     end
 
     local function function_in_scope_get_value(name, value)
@@ -304,7 +298,7 @@ function parse(toks, file)
     end
 
     local function error(msg)
-        print(string.format("%s:%s: %s", file, current().line, msg))
+        print(string.format("%s:%s: %s", current().file, current().line, msg))
         os.exit(1)
     end
 
@@ -350,14 +344,13 @@ function parse(toks, file)
         expect("parenthesis", ")")
 
         local value_type = function_in_scope_get_value(name.value, "value_type")
-
         return {
             type = "function_call",
             name = name.value,
-            namespace = function_in_scope_get_value(name.value, "namespace"),
             args = args,
             value_type = value_type,
-            line = name.line
+            line = name.line,
+            file = name.file
         }
     end
 
@@ -405,7 +398,8 @@ function parse(toks, file)
             global = is_global_scope(),
             value_type = value_type,
             expression = expr,
-            line = name.line
+            line = name.line,
+            file = name.file
         }
     end
 
@@ -425,7 +419,8 @@ function parse(toks, file)
             name = name.value,
             value_type = expr.value_type,
             expression = expr,
-            line = name.line
+            line = name.line,
+            file = name.file
         }
     end
 
@@ -465,9 +460,10 @@ function parse(toks, file)
         if not is_global_scope() then
             error("Function declaration only in global scope")
         end
-        local line_ident = expect("identifier", "fn")
-        local line = line_ident.line
-        local namespace = line_ident.namespace
+
+        local fnid = expect("identifier", "fn")
+        local line = fnid.line
+        local file = fnid.file
 
         local name = expect("identifier").value
         if has_function_in_scope(name) then
@@ -481,7 +477,7 @@ function parse(toks, file)
         expect("parenthesis", ")")
         expect("punctuation", ":")
         local value_type = expect("identifier").value
-        add_function_to_scope(name, value_type, namespace)
+        add_function_to_scope(name, value_type)
         enter_scope()
 
         if args ~= nil then
@@ -515,16 +511,16 @@ function parse(toks, file)
         return {
             type = "function_declaration",
             name = name,
-            namespace = namespace,
             args = args,
             value_type = value_type,
             body = body,
-            line = line
+            line = line,
+            file = file
         }
     end
 
     local function parse_function_return()
-        local line = expect("identifier", "return").line
+        local ret = expect("identifier", "return")
 
         local expr = {}
         if current().type ~= "punctuation" and current().value ~= ";" then
@@ -537,12 +533,13 @@ function parse(toks, file)
             type = "function_return",
             expression = expr,
             value_type = expr.value_type or "void",
-            line = line
+            line = ret.line,
+            file = ret.file
         }
     end
 
     local function parse_if_statement()
-        local line = expect("identifier", "if").line
+        local ifid = expect("identifier", "if")
         expect("parenthesis", "(")
 
         local cond = parse_expression()
@@ -587,12 +584,13 @@ function parse(toks, file)
             body = body,
             elseif_statements = elseif_statements,
             else_body = else_body,
-            line = line
+            line = ifid.line,
+            file = ifid.file
         }
     end
 
     function parse_while_statement()
-        local line = expect("identifier", "while").line
+        local whileid = expect("identifier", "while")
         expect("parenthesis", "(")
         local cond = parse_expression()
 
@@ -608,7 +606,8 @@ function parse(toks, file)
             type = "while_statement",
             condition = cond,
             body = body,
-            line = line
+            line = whileid.line,
+            file = whileid.file
         }
     end
 
@@ -623,10 +622,10 @@ function parse(toks, file)
                     return parse_function_call()
                 elseif t.value == "true" then
                     i = i + 1
-                    return {type = "bool", value = 1, value_type = "bool", line = t.line}
+                    return {type = "bool", value = 1, value_type = "bool", line = t.line, file = t.file}
                 elseif t.value == "false" then
                     i = i + 1
-                    return {type = "integer", value = 0, value_type = "bool", line = t.line}
+                    return {type = "integer", value = 0, value_type = "bool", line = t.line, file = t.file}
                 else
                     if not has_variable_in_scope(t.value) then
                         error(string.format("Variable not defined in current scope: '%s'", t.value))
@@ -634,17 +633,17 @@ function parse(toks, file)
                     i = i + 1
                     local value_type = variable_in_scope_get_value(t.value, "value_type")
                     local isarg = variable_in_scope_get_value(t.value, "isarg")
-                    return {type = "variable", name = t.value, value_type = value_type, isarg = isarg, line = t.line}
+                    return {type = "variable", name = t.value, value_type = value_type, isarg = isarg, line = t.line, file = t.file}
                 end
             elseif t.type == "integer" then
                 i = i + 1
-                return {type = "integer", value = t.value, value_type = "int", line = t.line}
+                return {type = "integer", value = t.value, value_type = "int", line = t.line, file = t.file}
             elseif t.type == "float" then
                 i = i + 1
-                return {type = "float", value = t.value, value_type = "float", line = t.line}
+                return {type = "float", value = t.value, value_type = "float", line = t.line, file = t.file}
             elseif t.type == "string" then
                 i = i + 1
-                return {type = "string", value = t.value, value_type = "string", line = t.line}
+                return {type = "string", value = t.value, value_type = "string", line = t.line, file = t.file}
             elseif t.type == "parenthesis" and t.value == "(" then
                 i = i + 1
                 local expr = parse_expression()
@@ -666,7 +665,7 @@ function parse(toks, file)
                 if expr.value_type ~= "int" and expr.value_type ~= "float" then
                     error(string.format("Unary operator '%s' cannot be applied to type '%s'", t.value, expr.value_type))
                 end
-                return {type = "unary_expression", operator = t.value, operand = expr, value_type = expr.value_type, line = t.line}
+                return {type = "unary_expression", operator = t.value, operand = expr, value_type = expr.value_type, line = t.line, file = t.file}
             else
                 return parse_primary()
             end
@@ -683,7 +682,7 @@ function parse(toks, file)
                 if expr.value_type == "string" then
                     error(string.format("Operator '%s' cannot be applied to type 'string'", op))
                 end
-                expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type, line = expr.line}
+                expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type, line = expr.line, file = expr.file}
             end
             return expr
         end
@@ -696,7 +695,7 @@ function parse(toks, file)
                 if expr.value_type ~= right.value_type then
                     error(string.format("Type mismatch in comparison expression: '%s' and '%s'", expr.value_type, right.value_type))
                 end
-                expr = {type = "comparison_expression", operator = op, left = expr, right = right, line = expr.line}
+                expr = {type = "comparison_expression", operator = op, left = expr, right = right, line = expr.line, file = expr.file}
             end
             return expr
         end
@@ -712,7 +711,7 @@ function parse(toks, file)
             if expr.value_type == "string" and op ~= "+" then
                 error(string.format("Operator '%s' cannot be applied to type 'string'", op))
             end
-            expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type, line = expr.line}
+            expr = {type = "binary_expression", operator = op, left = expr, right = right, value_type = expr.value_type, line = expr.line, file = expr.file}
         end
         return expr
     end
@@ -774,13 +773,14 @@ function parse(toks, file)
     return ast
 end
 
-function generate_llvm(ast, file)
+function generate_llvm(ast)
     local llvm = {}
     local top_code = {}
     local var_counter = 0
     local label_counter = 0
     local indent = 0
     local line = 1
+    local file = ""
 
     local function error(msg)
         print(string.format("%s:%s: %s", file, line, msg))
@@ -837,6 +837,8 @@ function generate_llvm(ast, file)
 
     local function generate_assignment(assignment)
         line = assignment.line
+        file = assignment.file
+
         local expr = generate_expression(assignment.expression)
         local value_type = assignment.value_type
         local type = convert_type(value_type)
@@ -864,6 +866,8 @@ function generate_llvm(ast, file)
 
     local function generate_function_declaration(func)
         line = func.line
+        file = func.file
+
         local name = func.name
         local args = func.args
         local body = func.body
@@ -891,12 +895,7 @@ function generate_llvm(ast, file)
 
         emit("")
 
-        local name_value = name
-        if func.namespace then
-            name_value = func.namespace .. "." .. name
-        end
-
-        emit(string.format("define %s @%s(%s) {", type, name_value, args_str))
+        emit(string.format("define %s @%s(%s) {", type, name, args_str))
         emit("entry:")
         generate_body(body)
         emit("}")
@@ -904,6 +903,8 @@ function generate_llvm(ast, file)
 
     local function generate_function_return(statement)
         line = statement.line
+        file = statement.file
+
         local expression = statement.expression
         local value_type = statement.value_type
 
@@ -919,6 +920,8 @@ function generate_llvm(ast, file)
 
     local function generate_comparison_check(left, right, operator)
         line = left.line
+        file = left.file
+
         local left_var = generate_expression(left)
         local right_var = generate_expression(right)
         local result_var = new_var()
@@ -964,6 +967,8 @@ function generate_llvm(ast, file)
 
     local function generate_condition_check(condition)
         line = condition.line
+        file = condition.file
+
         if condition.type == "comparison_expression" then
             return generate_comparison_check(condition.left, condition.right, condition.operator)
         elseif condition.type == "variable" then
@@ -990,6 +995,8 @@ function generate_llvm(ast, file)
 
     local function generate_if_statement(statement)
         line = statement.line
+        file = statement.file
+
         local condition = statement.condition
         local body = statement.body
         local else_body = statement.else_body
@@ -1032,6 +1039,8 @@ function generate_llvm(ast, file)
 
     local function generate_while_statement(statement)
         line = statement.line
+        file = statement.file
+
         local cond_label = new_label()
         local body_label = new_label()
         local end_label = new_label()
@@ -1050,6 +1059,9 @@ function generate_llvm(ast, file)
     end
 
     local function generate_function_call(expression)
+        line = expression.line
+        file = expression.file
+
         local args = expression.args
         local name = expression.name
         local type = convert_type(expression.value_type)
@@ -1077,22 +1089,19 @@ function generate_llvm(ast, file)
             emit_top("declare i32 @exit(i32)")
         end
 
-        local name_value = name
-        if expression.namespace then
-            name_value = expression.namespace .. "." .. name
-        end
-
         if type == "void" then
-            emit(string.format("call %s @%s(%s)", type, name_value, args_str))
+            emit(string.format("call %s @%s(%s)", type, name, args_str))
         else
             local result_var = new_var()
-            emit(string.format("%s = call %s @%s(%s)", result_var, type, name_value, args_str))
+            emit(string.format("%s = call %s @%s(%s)", result_var, type, name, args_str))
             return result_var
         end
     end
 
     function generate_expression(expression)
         line = expression.line
+        file = expression.file
+
         if expression.type == "binary_expression" then
             local left = expression.left
             local right = expression.right
@@ -1298,9 +1307,9 @@ local function compile()
     file:close()
 
     local toks = lex(content, file_name)
-    local preprocessed = preprocess(toks, file_name)
-    local ast = parse(preprocessed, file_name)
-    local llvm = generate_llvm(ast, file_name)
+    local preprocessed = preprocess(toks)
+    local ast = parse(preprocessed)
+    local llvm = generate_llvm(ast)
 
     local out = io.open("out/" .. trimmed_name .. ".ll", "w")
     if out == nil then
