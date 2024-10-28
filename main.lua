@@ -495,21 +495,26 @@ function parse(toks)
         end
 
         local body = parse_body()
-        if #body == 0 or body[#body].type ~= "function_return" then
-            if body[#body].type == "if_statement" and body[#body].else_body and body[#body].else_body[#body[#body].else_body].type == "function_return" then
-                table.insert(body, {type = "revision", value = "unreachable", line = current().line}) -- TODO: fix the weird thing with values taking function declaration's value_type
-            elseif value_type == "void" then
-                if name == "main" then
-                    value_type = "int"
-                    table.insert(body, {type = "revision", value = "ret i32 0", line = current().line})
+        if #body ~= 0 then
+            if body[#body].type ~= "function_return" then
+                if body[#body].type == "if_statement" and body[#body].else_body and body[#body].else_body[#body[#body].else_body].type == "function_return" then
+                    table.insert(body, {type = "revision", value = "unreachable", line = current().line}) -- TODO: fix the weird thing with values taking function declaration's value_type
+                elseif value_type == "void" then
+                    if name == "main" then
+                        value_type = "int"
+                        table.insert(body, {type = "revision", value = "ret i32 0", line = current().line})
+                    else
+                        table.insert(body, {type = "revision", value = "ret void", line = current().line})
+                    end
                 else
-                    table.insert(body, {type = "revision", value = "ret void", line = current().line})
+                    error(string.format("Missing return statement for function '%s'", name))
                 end
-            else
-                error(string.format("Missing return statement for function '%s'", name))
+            elseif body[#body].type == "function_return" and body[#body].value_type ~= value_type then
+                error(string.format("Return type mismatch in function '%s': expected '%s', got '%s'", name, value_type, body[#body].value_type))
             end
-        elseif body[#body].type == "function_return" and body[#body].value_type ~= value_type then
-            error(string.format("Return type mismatch in function '%s': expected '%s', got '%s'", name, value_type, body[#body].value_type))
+        else
+            value_type = "void"
+            table.insert(body, {type = "revision", value = "ret void"})
         end
 
         expect("parenthesis", "}")
@@ -517,7 +522,7 @@ function parse(toks)
 
         return {
             type = "function_declaration",
-            name = name,
+            name =  name,
             args = args,
             value_type = value_type,
             body = body,
@@ -1228,12 +1233,10 @@ function generate_llvm(ast)
             return tostring(expression.value)
         elseif expression.type == "string" then
             local str = expression.value
-            local str_var = new_var()
             local str_name = "@.str_" .. #top_code
             local str_len = expression.length
             table.insert(top_code, string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
-            emit(string.format("%s = getelementptr [%d x i8], [%d x i8]* %s, i32 0, i32 0", str_var, str_len, str_len, str_name))
-            return str_var
+            return str_name
         elseif expression.type == "variable" then
             local value_type = convert_type(expression.value_type)
             local isarg = expression.isarg
@@ -1338,7 +1341,7 @@ local function compile()
     out:close()
 
     if is_in_table("-opt", arg) then
-        os.execute(string.format("opt -O2 -S ./out/%s.ll -o ./out/%s.ll", trimmed_name, trimmed_name))
+        os.execute(string.format("opt -Oz -S ./out/%s.ll -o ./out/%s.ll", trimmed_name, trimmed_name))
     end
     os.execute(string.format("clang ./out/%s.ll -o ./out/%s.out", trimmed_name, trimmed_name))
 
