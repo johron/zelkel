@@ -1,17 +1,10 @@
-fn fib(n: int): int {
-    if (n == 0) {
-        return 0;
-    } else if (n == 1) {
-        return 1;
-    } else {
-        return fib(n - 1) + fib(n - 2);
-    }
+require "stdlib/io";
+
+fn add(a: int, b: int): int {
+    return a + b;
 }
 
 fn main(): void {
-    let i = 0;
-    while (i < 10) {
-        print("%i: %i\n", i, fib(i));
-        i = i + 1;
-    }
+    const result: int = add(2, 3);
+    print("%i\n", result);
 }

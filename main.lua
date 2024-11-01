@@ -206,13 +206,12 @@ function preprocess(toks)
 end
 
 function parse(toks)
+    local scope_stack = {}
     local ast = {}
     local i = 1
 
-    local scope_stack = {}
-
     local function current_scope()
-        return scope_stack[#scope_stack] or scope_stack[#scope_stack - 1] or {variables = {}, functions = {}}
+        return scope_stack[#scope_stack] or scope_stack[#scope_stack - 1] or {variables = {}, functions = {}, currentfunc = {}}
     end
 
     local function is_global_scope()
@@ -223,16 +222,27 @@ function parse(toks)
         local parent_scope = current_scope()
         local new_scope = {
             variables = parent_scope.variables,
-            functions = parent_scope.functions
+            functions = parent_scope.functions,
+            currentfunc = parent_scope.currentfunc
         }
         table.insert(scope_stack, new_scope)
     end
 
     local function exit_scope()
-        if #scope_stack == 0 then
+        if #scope_stack > 0 then
+            table.remove(scope_stack)
+        else
             error(string.format("Scope out of bounds"))
         end
-        table.remove(scope_stack)
+    end
+
+    local function set_currentfunc(func)
+        local scope = current_scope()
+        table.insert(scope.currentfunc, func)
+    end
+
+    local function get_currentfunc()
+        return current_scope().currentfunc[1]
     end
 
     local function has_variable_in_scope(name)
@@ -276,9 +286,9 @@ function parse(toks)
         return false
     end
 
-    local function add_function_to_scope(name, value_type)
+    local function add_function_to_scope(func)
         local scope = current_scope()
-        table.insert(scope.functions, {name = name, value_type = value_type})
+        table.insert(scope.functions, func)
     end
 
     local function function_in_scope_get_value(name, value)
@@ -344,10 +354,24 @@ function parse(toks)
         expect("parenthesis", "(")
 
         local args = parse_function_call_args()
+        local decl_args = function_in_scope_get_value(name.value, "args")
+
+        if decl_args ~= nil and #args ~= #decl_args then
+            error(string.format("Argument count mismatch for function '%s'", name.value))
+        end
+
+        if decl_args ~= nil then
+            for j = 1, #args do
+                if args[j].value_type ~= decl_args[j].type then
+                error(string.format("Type mismatch for argument '%s' in function '%s': expected '%s', got '%s'", decl_args[j].name, name.value, decl_args[j].type, args[j].value_type))
+                end
+            end
+        end
 
         expect("parenthesis", ")")
 
         local value_type = function_in_scope_get_value(name.value, "value_type")
+
         return {
             type = "function_call",
             name = name.value,
@@ -384,6 +408,7 @@ function parse(toks)
             end
         end
 
+        -- TODO: if current().value == "=" then -- add for undefined variables, but this will need a null type? 
         expect("operator", "=")
 
         local expr = parse_expression()
@@ -455,7 +480,12 @@ function parse(toks)
             table.insert(args, {name = name, mutable = false, type = type})
         end
 
-        return args
+        local short = {}
+        for _, arg in ipairs(args) do
+            table.insert(short, {name = arg.name, type = arg.type})
+        end
+
+        return {long = args, short = short}
     end
 
     local function parse_function_declaration()
@@ -474,13 +504,16 @@ function parse(toks)
 
         expect("parenthesis", "(")
 
-        local args = parse_function_declaration_args()
+        local args_res = parse_function_declaration_args()
+        local args = args_res.long
+        local short = args_res.short
 
         expect("parenthesis", ")")
         expect("punctuation", ":")
         local value_type = expect("identifier").value
-        add_function_to_scope(name, value_type)
+        add_function_to_scope({name = name, value_type = value_type, args = short})
         enter_scope()
+        set_currentfunc(name)
 
         if args ~= nil then
             for _, arg in ipairs(args) do
@@ -509,8 +542,6 @@ function parse(toks)
                 else
                     error(string.format("Missing return statement for function '%s'", name))
                 end
-            elseif body[#body].type == "function_return" and body[#body].value_type ~= value_type then
-                error(string.format("Return type mismatch in function '%s': expected '%s', got '%s'", name, value_type, body[#body].value_type))
             end
         else
             value_type = "void"
@@ -539,12 +570,26 @@ function parse(toks)
             expr = parse_expression()
         end
 
+        local func_value_type = function_in_scope_get_value(get_currentfunc(), "value_type")
+        if expr.value_type ~= nil and func_value_type ~= expr.value_type then
+            error(string.format("Expected type '%s' for function return, but got '%s' instead", func_value_type, expr.value_type))
+        end
+
+        local value_type = expr.value_type
+        if value_type == nil then
+            if func_value_type == "void" then
+                value_type = "void"
+            else
+                error(string.format("Expected type '%s' for function return, but got 'void' instead", func_value_type))
+            end
+        end
+
         expect("punctuation", ";")
 
         return {
             type = "function_return",
             expression = expr,
-            value_type = expr.value_type or "void",
+            value_type = value_type,
             line = ret.line,
             file = ret.file
         }
@@ -773,8 +818,8 @@ function parse(toks)
     end
 
     local function add_standard_functions()
-        add_function_to_scope("print", "int")
-        add_function_to_scope("exit", "int")
+        add_function_to_scope({name = "print", value_type = "int"})
+        add_function_to_scope({name = "exit", value_type = "int"})
     end
 
     enter_scope()
@@ -1326,9 +1371,9 @@ local function compile()
 
     local toks = lex(content, file_name)
     local preprocessed = preprocess(toks)
-    print(inspect(preprocessed))
+    --print(inspect(preprocessed))
     local ast = parse(preprocessed)
-    print(inspect(ast))
+    --print(inspect(ast))
     local llvm = generate_llvm(ast)
 
     local out = io.open("out/" .. trimmed_name .. ".ll", "w")
