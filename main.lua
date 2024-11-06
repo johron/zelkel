@@ -231,12 +231,11 @@ function parse(toks)
 
     local function set_currentfunc(func)
         local scope = current_scope()
-        table.remove(scope.currentfunc)
-        table.insert(scope.currentfunc, func)
+        scope.currentfunc = func
     end
 
     local function get_currentfunc()
-        return current_scope().currentfunc[1]
+        return current_scope().currentfunc
     end
 
     local function has_variable_in_scope(name)
