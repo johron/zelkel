@@ -10,9 +10,9 @@ local function is_in_table(v, t)
     return false
 end
 
-function lex(input, file)
+function lex(input, file, line)
     local toks = {}
-    local line = 1
+    local line = line or 1
 
     local function error(msg)
         print(string.format("%s:%s: %s", file, line, msg))
@@ -35,19 +35,7 @@ function lex(input, file)
     local i = 1
     while i <= #chars do
         local c = chars[i]
-        if c == "f" and chars[i + 1] == "\"" then
-            local v = ""
-            i = i + 2
-            while i <= #chars do
-                if chars[i] == "\"" then
-                    i = i + 1
-                    break
-                end
-                v = v .. chars[i]
-                i = i + 1
-            end
-            table.insert(toks, {type = "fstring", value = v})
-        elseif is_alpha(c) then
+        if is_alpha(c) then
             local v = ""
             while i <= #chars and (is_alpha(chars[i]) or is_digit(chars[i])) do
                 v = v .. chars[i]
@@ -230,7 +218,12 @@ function parse(toks)
 
     local function exit_scope()
         if #scope_stack > 0 then
-            table.remove(scope_stack)
+            local scope = table.remove(scope_stack)
+            for i = #scope.variables, 1, -1 do
+                if scope.variables[i].isarg then
+                    table.remove(scope.variables, i)
+                end
+            end
         else
             error(string.format("Scope out of bounds"))
         end
@@ -238,6 +231,7 @@ function parse(toks)
 
     local function set_currentfunc(func)
         local scope = current_scope()
+        table.remove(scope.currentfunc)
         table.insert(scope.currentfunc, func)
     end
 
@@ -259,10 +253,15 @@ function parse(toks)
 
     local function add_variable_to_scope(var)
         local scope = current_scope()
+        if has_variable_in_scope(var.name) then
+            error(string.format("Variable '%s' is already defined", var.name))
+        end
         table.insert(scope.variables, var)
     end
 
     local function variable_in_scope_get_value(name, value)
+        print("_")
+        print(inspect(scope_stack))
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
             for _, var in ipairs(scope.variables) do
@@ -303,7 +302,7 @@ function parse(toks)
         return nil
     end
 
-    local function current()
+    function current()
         if i <= #toks then
             return toks[i]
         else
@@ -311,7 +310,7 @@ function parse(toks)
         end
     end
 
-    local function error(msg)
+    function error(msg)
         print(string.format("%s:%s: %s", current().file, current().line, msg))
         os.exit(1)
     end
@@ -395,7 +394,6 @@ function parse(toks)
         local name = expect("identifier")
         local name_val = name.value
         if has_variable_in_scope(name_val) then
-            print(inspect(scope_stack))
             error(string.format("Variable already defined in current scope: '%s'", name_val))
         end
 
@@ -477,6 +475,7 @@ function parse(toks)
             local name = expect("identifier").value
             expect("punctuation", ":")
             local type = expect("identifier").value
+
             table.insert(args, {name = name, mutable = false, type = type})
         end
 
@@ -700,7 +699,7 @@ function parse(toks)
                 return {type = "float", value = t.value, value_type = "float", line = t.line, file = t.file}
             elseif t.type == "string" then
                 i = i + 1
-                local value = t.value:gsub("\\n", "\\0A")--:gsub("%%", "%%%%") -- TODO: add this back again
+                local value = t.value:gsub("\\n", "\\0A")
                 local length = #value + 1
                 for _ in string.gmatch(value, "\\0A") do
                     length = length - 2
