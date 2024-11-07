@@ -102,6 +102,9 @@ function lex(input, file, line)
             i = i + 1
         elseif is_in_table(c, {" ", "\r"}) then -- disregard
             i = i + 1
+        elseif c == "." and #chars - i >= 3 and chars[i + 1] == "." and chars[i + 2] == "." then
+            table.insert(toks, {type = "ellipsis", value = "..."})
+            i = i + 3
         else
             error(string.format("Unexpected character found by lexer: '%s'", c))
         end
@@ -259,8 +262,6 @@ function parse(toks)
     end
 
     local function variable_in_scope_get_value(name, value)
-        print("_")
-        print(inspect(scope_stack))
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
             for _, var in ipairs(scope.variables) do
@@ -341,7 +342,13 @@ function parse(toks)
             if i ~= start then
                 expect("punctuation", ",")
             end
-            table.insert(args, parse_expression())
+
+            if current().type == "ellipsis" then
+                expect("ellipsis", "...")
+                table.insert(args, {type = "ellipsis", name = "...", file = current().file, line = current().line})
+            else
+                table.insert(args, parse_expression())
+            end
         end
 
         return args
@@ -353,6 +360,7 @@ function parse(toks)
 
         local args = parse_function_call_args()
         local decl_args = function_in_scope_get_value(name.value, "args")
+        print(inspect(decl_args))
 
         if decl_args ~= nil and #args ~= #decl_args then
             error(string.format("Argument count mismatch for function '%s'", name.value))
@@ -361,7 +369,7 @@ function parse(toks)
         if decl_args ~= nil then
             for j = 1, #args do
                 if args[j].value_type ~= decl_args[j].type then
-                error(string.format("Type mismatch for argument '%s' in function '%s': expected '%s', got '%s'", decl_args[j].name, name.value, decl_args[j].type, args[j].value_type))
+                    error(string.format("Type mismatch for argument '%s' in function '%s': expected '%s', got '%s'", decl_args[j].name, name.value, decl_args[j].type, args[j].value_type))
                 end
             end
         end
@@ -405,29 +413,43 @@ function parse(toks)
             end
         end
 
-        -- TODO: if current().value == "=" then -- add for undefined variables, but this will need a null type? 
-        expect("operator", "=")
+        if current().value == "=" then -- but this will need a null type? 
+            expect("operator", "=")
 
-        local expr = parse_expression()
+            local expr = parse_expression()
 
-        value_type = value_type or expr.value_type
+            value_type = value_type or expr.value_type
 
-        if value_type ~= expr.value_type then
-            error(string.format("Type mismatch between casted type '%s' and expression type '%s'", value_type, expr.value_type))
+            if value_type ~= expr.value_type then
+                error(string.format("Type mismatch between casted type '%s' and expression type '%s'", value_type, expr.value_type))
+            end
+
+            expect("punctuation", ";")
+
+            add_variable_to_scope({name = name_val, mutable = mutable, value_type = value_type})
+            return {
+                type = str .. "_variable_assignment",
+                name = name_val,
+                global = is_global_scope(),
+                value_type = value_type,
+                expression = expr,
+                line = name.line,
+                file = name.file
+            }
+        else
+            expect("punctuation", ";")
+            add_variable_to_scope({name = name_val, mutable = mutable, value_type = value_type})
+
+            return {
+                type = str .. "_variable_assignment",
+                name = name_val,
+                global = is_global_scope(),
+                value_type = value_type,
+                line = name.line,
+                file = name.file,
+                null = true
+            }
         end
-
-        expect("punctuation", ";")
-
-        add_variable_to_scope({name = name_val, mutable = mutable, value_type = value_type})
-        return {
-            type = str .. "_variable_assignment",
-            name = name_val,
-            global = is_global_scope(),
-            value_type = value_type,
-            expression = expr,
-            line = name.line,
-            file = name.file
-        }
     end
 
     local function parse_variable_reassignment()
@@ -471,16 +493,23 @@ function parse(toks)
                 return {}
             end
 
-            local name = expect("identifier").value
-            expect("punctuation", ":")
-            local type = expect("identifier").value
+            if current().type ~= "ellipsis" then
+                local name = expect("identifier").value
+                expect("punctuation", ":")
+                local type = expect("identifier").value
 
-            table.insert(args, {name = name, mutable = false, type = type})
+                table.insert(args, {name = name, mutable = false, type = type})
+            else
+                expect("ellipsis", "...")
+                table.insert(args, {type = "ellipsis", mutable = false})
+            end
         end
 
         local short = {}
         for _, arg in ipairs(args) do
-            table.insert(short, {name = arg.name, type = arg.type})
+            if arg.type ~= "ellipsis" then
+                table.insert(short, {name = arg.name, type = arg.type})
+            end
         end
 
         return {long = args, short = short}
@@ -817,6 +846,7 @@ function parse(toks)
 
     local function add_standard_functions()
         add_function_to_scope({name = "print", value_type = "int"})
+        add_function_to_scope({name = "vsprintf", value_type = "int"})
         add_function_to_scope({name = "exit", value_type = "int"})
     end
 
@@ -899,7 +929,11 @@ function generate_llvm(ast)
         line = assignment.line
         file = assignment.file
 
-        local expr = generate_expression(assignment.expression)
+        local expr
+        if not assignment.null then
+            expr = generate_expression(assignment.expression)
+        end
+
         local value_type = assignment.value_type
         local type = convert_type(value_type)
 
@@ -908,7 +942,9 @@ function generate_llvm(ast)
                 error("Global variables not implemented")
             end
             emit("%" .. assignment.name .. " = alloca " .. type)
-            emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
+            if expr then
+                emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
+            end
         elseif assignment.type == "mutable_variable_reassignment" then
             emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
         else
@@ -941,8 +977,8 @@ function generate_llvm(ast)
             end
 
             local arg = args[i]
-            if arg.name == "..." then
-                args_str = args_str .. arg.name
+            if arg.type == "ellipsis" then
+                args_str = args_str .. "..."
             else
                 local type = convert_type(arg.type)
                 args_str = args_str .. type .. " %" .. arg.name
@@ -1135,11 +1171,20 @@ function generate_llvm(ast)
             end
 
             local arg = args[i]
-            local expr = generate_expression(arg)
-            local type = convert_type(arg.value_type)
+            if arg.type == "ellipsis" then
+                local var = new_var()
+                local arg_list = new_var()
+                emit(string.format("va_list %s;", arg_list))
+                emit(string.format("va_start(%s, var)", arg_list))
+                args_str = args_str .. "i32 " .. var
+                i = i + 1
+            else
+                local expr = generate_expression(arg)
+                local type = convert_type(arg.value_type)
 
-            args_str = args_str .. type .. " " .. expr
-            i = i + 1
+                args_str = args_str .. type .. " " .. expr
+                i = i + 1
+            end
         end
 
         if name == "print" then
@@ -1147,6 +1192,8 @@ function generate_llvm(ast)
             emit_top("declare i32 @printf(i8*, ...)")
         elseif name == "exit" then
             emit_top("declare i32 @exit(i32)")
+        elseif name == "vsprintf" then
+            emit_top("declare i32 @vsprintf(i8*, i8*, ...)")
         end
 
         if type == "void" then

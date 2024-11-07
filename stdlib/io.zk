@@ -1,3 +1,5 @@
-fn println(a: string): void {
-    print("%s\n", a);
+fn println(a: string, ...): void {
+    let buffer: string;
+    vsprintf(buffer, "%s\n", a, ...);
+    print(buffer);
 }
