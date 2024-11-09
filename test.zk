@@ -1,6 +1,6 @@
 require "stdlib/io";
 
 fn main(): void {
-    println("Hey");
+    println("number is %i", 5);
     return;
 }

@@ -360,15 +360,15 @@ function parse(toks)
 
         local args = parse_function_call_args()
         local decl_args = function_in_scope_get_value(name.value, "args")
-        print(inspect(decl_args))
 
-        if decl_args ~= nil and #args ~= #decl_args then
+        if decl_args ~= nil and #args < #decl_args then
             error(string.format("Argument count mismatch for function '%s'", name.value))
         end
 
         if decl_args ~= nil then
             for j = 1, #args do
                 if args[j].value_type ~= decl_args[j].type then
+                    if decl_args[j].type == "ellipsis" then break end -- stop checking types
                     error(string.format("Type mismatch for argument '%s' in function '%s': expected '%s', got '%s'", decl_args[j].name, name.value, decl_args[j].type, args[j].value_type))
                 end
             end
@@ -486,30 +486,35 @@ function parse(toks)
     local function parse_function_declaration_args()
         local args = {}
         local start = i
+        local found_ellipsis = false
+
         while i <= #toks and toks[i].type ~= "parenthesis" and toks[i].value ~= ")" do
+            if found_ellipsis == true then
+                error("Cannot have more arguments after an ellipsis")
+            end
+
             if i ~= start then
                 expect("punctuation", ",")
             elseif toks[i + 1].type == "parenthesis" and toks[i + 1].value == ")" then
                 return {}
             end
 
-            if current().type ~= "ellipsis" then
+            if current().type == "ellipsis" then
+                expect("ellipsis", "...")
+                found_ellipsis = true
+                table.insert(args, {type = "ellipsis", mutable = false})
+            else
                 local name = expect("identifier").value
                 expect("punctuation", ":")
                 local type = expect("identifier").value
 
                 table.insert(args, {name = name, mutable = false, type = type})
-            else
-                expect("ellipsis", "...")
-                table.insert(args, {type = "ellipsis", mutable = false})
             end
         end
 
         local short = {}
         for _, arg in ipairs(args) do
-            if arg.type ~= "ellipsis" then
-                table.insert(short, {name = arg.name, type = arg.type})
-            end
+            table.insert(short, {name = arg.name, type = arg.type})
         end
 
         return {long = args, short = short}
@@ -847,6 +852,8 @@ function parse(toks)
     local function add_standard_functions()
         add_function_to_scope({name = "print", value_type = "int"})
         add_function_to_scope({name = "vsprintf", value_type = "int"})
+        add_function_to_scope({name = "va_start", value_type = "int"})
+        add_function_to_scope({name = "va_end", value_type = "int"})
         add_function_to_scope({name = "exit", value_type = "int"})
     end
 
@@ -1173,10 +1180,8 @@ function generate_llvm(ast)
             local arg = args[i]
             if arg.type == "ellipsis" then
                 local var = new_var()
-                local arg_list = new_var()
-                emit(string.format("va_list %s;", arg_list))
-                emit(string.format("va_start(%s, var)", arg_list))
-                args_str = args_str .. "i32 " .. var
+
+                args_str = args_str .. "i8* " .. var
                 i = i + 1
             else
                 local expr = generate_expression(arg)
