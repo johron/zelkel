@@ -1,10 +1,5 @@
 fn println(a: string, ...): void {
-    let va_list: string;
-    
-    va_start(va_list);
-    const arg1: int = 
-    print("%d\n")
-    va_end(va_list);
-
+    vprintf(a, ...);
+    print("\n");
     return;
 }

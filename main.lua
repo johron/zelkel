@@ -851,7 +851,7 @@ function parse(toks)
 
     local function add_standard_functions()
         add_function_to_scope({name = "print", value_type = "int"})
-        add_function_to_scope({name = "vsprintf", value_type = "int"})
+        add_function_to_scope({name = "vprintf", value_type = "int"})
         add_function_to_scope({name = "va_start", value_type = "int"})
         add_function_to_scope({name = "va_end", value_type = "int"})
         add_function_to_scope({name = "exit", value_type = "int"})
@@ -878,6 +878,7 @@ function generate_llvm(ast)
     local indent = 0
     local line = 1
     local file = ""
+    local has_variadic = false
 
     local function error(msg)
         print(string.format("%s:%s: %s", file, line, msg))
@@ -978,6 +979,7 @@ function generate_llvm(ast)
 
         local args_str = ""
         local i = 1
+        has_variadic = false
         while i <= #args do
             if i ~= 1 then
                 args_str = args_str .. ", "
@@ -986,6 +988,7 @@ function generate_llvm(ast)
             local arg = args[i]
             if arg.type == "ellipsis" then
                 args_str = args_str .. "..."
+                has_variadic = true
             else
                 local type = convert_type(arg.type)
                 args_str = args_str .. type .. " %" .. arg.name
@@ -997,9 +1000,16 @@ function generate_llvm(ast)
         local type = convert_type(value_type)
 
         emit("")
-
         emit(string.format("define %s @%s(%s) {", type, name, args_str))
         emit("entry:")
+
+        if has_variadic then
+            emit_top("declare void @llvm.va_start(i8*)")
+            emit_top("declare void @llvm.va_end(i8*)")
+            emit("%zk.ellipsis = alloca i8*")
+            emit("call void @llvm.va_start(i8* %zk.ellipsis)")
+        end
+
         generate_body(body)
         emit("}")
     end
@@ -1012,6 +1022,10 @@ function generate_llvm(ast)
         local value_type = statement.value_type
 
         local type = convert_type(value_type)
+
+        if has_variadic then
+            emit("call void @llvm.va_end(i8* %zk.ellipsis)")
+        end
 
         if type == "void" then
             emit(string.format("ret void"))
@@ -1178,15 +1192,15 @@ function generate_llvm(ast)
             end
 
             local arg = args[i]
+            local lastarg = ""
             if arg.type == "ellipsis" then
-                local var = new_var()
-
-                args_str = args_str .. "i8* " .. var
+                args_str = args_str .. "i8* %zk.ellipsis"
+                last_arg = var
                 i = i + 1
             else
                 local expr = generate_expression(arg)
                 local type = convert_type(arg.value_type)
-
+                last_arg = expr
                 args_str = args_str .. type .. " " .. expr
                 i = i + 1
             end
@@ -1197,8 +1211,8 @@ function generate_llvm(ast)
             emit_top("declare i32 @printf(i8*, ...)")
         elseif name == "exit" then
             emit_top("declare i32 @exit(i32)")
-        elseif name == "vsprintf" then
-            emit_top("declare i32 @vsprintf(i8*, i8*, ...)")
+        elseif name == "vprintf" then
+            emit_top("declare i32 @vprintf(i8*, i8*)")
         end
 
         if type == "void" then
