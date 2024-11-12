@@ -224,7 +224,7 @@ function parse(toks)
             local scope = table.remove(scope_stack)
             for i = #scope.variables, 1, -1 do
                 if scope.variables[i].isarg then
-                    table.remove(scope.variables, i)
+                    table.remove(scope.variables, i) -- TODO: this removes incorrectly try running fib.zk program to see the error
                 end
             end
         else
@@ -850,11 +850,11 @@ function parse(toks)
     end
 
     local function add_standard_functions()
-        add_function_to_scope({name = "print", value_type = "int"})
-        add_function_to_scope({name = "vprintf", value_type = "int"})
-        add_function_to_scope({name = "va_start", value_type = "int"})
-        add_function_to_scope({name = "va_end", value_type = "int"})
-        add_function_to_scope({name = "exit", value_type = "int"})
+        add_function_to_scope({name = "print", value_type = "void"})
+        add_function_to_scope({name = "vprintf", value_type = "void"})
+        add_function_to_scope({name = "va_start", value_type = "void"})
+        add_function_to_scope({name = "va_end", value_type = "void"})
+        add_function_to_scope({name = "exit", value_type = "void"})
     end
 
     enter_scope()
@@ -887,12 +887,12 @@ function generate_llvm(ast)
 
     local function new_var()
         var_counter = var_counter + 1
-        return "%t" .. var_counter
+        return "%.tmp_" .. var_counter
     end
 
     local function new_label()
         label_counter = label_counter + 1
-        return "lb" .. label_counter
+        return "lbl_" .. label_counter
     end
 
     local function emit_top(str)
@@ -1006,8 +1006,8 @@ function generate_llvm(ast)
         if has_variadic then
             emit_top("declare void @llvm.va_start(i8*)")
             emit_top("declare void @llvm.va_end(i8*)")
-            emit("%zk.ellipsis = alloca i8*")
-            emit("call void @llvm.va_start(i8* %zk.ellipsis)")
+            emit("%.ellipsis = alloca i8")
+            emit("call void @llvm.va_start(i8* %.ellipsis)")
         end
 
         generate_body(body)
@@ -1024,7 +1024,7 @@ function generate_llvm(ast)
         local type = convert_type(value_type)
 
         if has_variadic then
-            emit("call void @llvm.va_end(i8* %zk.ellipsis)")
+            emit("call void @llvm.va_end(i8* %.ellipsis)")
         end
 
         if type == "void" then
@@ -1192,15 +1192,12 @@ function generate_llvm(ast)
             end
 
             local arg = args[i]
-            local lastarg = ""
             if arg.type == "ellipsis" then
-                args_str = args_str .. "i8* %zk.ellipsis"
-                last_arg = var
+                args_str = args_str .. "i8* %.ellipsis"
                 i = i + 1
             else
                 local expr = generate_expression(arg)
                 local type = convert_type(arg.value_type)
-                last_arg = expr
                 args_str = args_str .. type .. " " .. expr
                 i = i + 1
             end
@@ -1208,11 +1205,11 @@ function generate_llvm(ast)
 
         if name == "print" then
             name = "printf"
-            emit_top("declare i32 @printf(i8*, ...)")
+            emit_top("declare void @printf(i8*, ...)")
         elseif name == "exit" then
-            emit_top("declare i32 @exit(i32)")
+            emit_top("declare void @exit(i32)")
         elseif name == "vprintf" then
-            emit_top("declare i32 @vprintf(i8*, i8*)")
+            emit_top("declare void @vprintf(i8*, i8*)")
         end
 
         if type == "void" then
@@ -1344,7 +1341,7 @@ function generate_llvm(ast)
             local str = expression.value
             local str_name = "@.str_" .. #top_code
             local str_len = expression.length
-            table.insert(top_code, string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
+            emit_top(string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
             return str_name
         elseif expression.type == "variable" then
             local value_type = convert_type(expression.value_type)
