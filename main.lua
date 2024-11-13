@@ -1006,7 +1006,7 @@ function generate_llvm(ast)
         if has_variadic then
             emit_top("declare void @llvm.va_start(i8*)")
             emit_top("declare void @llvm.va_end(i8*)")
-            emit("%.ellipsis = alloca i8")
+            emit("%.ellipsis = alloca i8*")
             emit("call void @llvm.va_start(i8* %.ellipsis)")
         end
 
