@@ -980,6 +980,8 @@ function generate_llvm(ast)
         local args_str = ""
         local i = 1
         has_variadic = false
+        last_arg_type = ""
+        last_arg_name = ""
         while i <= #args do
             if i ~= 1 then
                 args_str = args_str .. ", "
@@ -992,6 +994,8 @@ function generate_llvm(ast)
             else
                 local type = convert_type(arg.type)
                 args_str = args_str .. type .. " %" .. arg.name
+                last_arg_type = type
+                last_arg_name = "%" .. arg.name
             end
 
             i = i + 1
@@ -1004,10 +1008,18 @@ function generate_llvm(ast)
         emit("entry:")
 
         if has_variadic then
-            emit_top("declare void @llvm.va_start(i8*)")
-            emit_top("declare void @llvm.va_end(i8*)")
-            emit("%.ellipsis = alloca i8*")
-            emit("call void @llvm.va_start(i8* %.ellipsis)")
+            emit_top("declare void @llvm.va_start.p0(ptr) #1")
+            emit_top("declare void @llvm.va_end.p0(ptr) #1")
+            emit_top("%.va_list_tag = type { i32, i32, ptr, ptr }")
+
+            local first = new_var()
+            local second = new_var()
+            local third = new_var()
+            emit(string.format("%s = alloca %s", first, last_arg_type))
+            emit(string.format("%s = alloca [1 x %%.va_list_tag]", second))
+            emit(string.format("store %s %s, %s %s", last_arg_type, last_arg_name, last_arg_type, first))
+            emit(string.format("%s = getelementptr inbounds [1 x %%.va_list_tag], %s %s, i32 0, i32 0", third, last_arg_type, second))
+            emit(string.format("call void @llvm.va_start(%s %s)", last_arg_type, last_arg_name))
         end
 
         generate_body(body)
