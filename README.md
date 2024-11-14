@@ -23,5 +23,29 @@
 - [ ] Rewrite in itself
 - [x] Make sure every function has a return and it's value should be same type as function declaration return type
 
+## Docs
+### Functions
+```zelkel
+fn greet(name: string): void {
+    print("Hello, %s!\n", name);
+}
+```
+- The `print` function may be renamed or something down the line
+- Programs require a main function
+
+### Variables
+```zelkel
+fn main(): void {
+    let mutable: int = 5;
+    const immutable: int = 10;
+}
+```
+
+### Requiring files
+```zelkel
+require "library";
+```
+- The require strings do not contain the file ending and automatically append `.zk` to the end
+
 ## License
 Licensed under the MIT License; please see the [license file](LICENSE.md) for terms.
