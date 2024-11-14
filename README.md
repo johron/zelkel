@@ -10,7 +10,7 @@
 - [ ] String concatination
 - [ ] Global variables, variables in top scope
 - [ ] Tables, Lists
-- [x] Requiring other files, libraries: standard
+- [/] Requiring other files, libraries: standard
     - Tokenize, parse, generate this zelkel file and combine them:
       maybe combine the zelkel code into one and compile that
     - no ending ("std"): a standard, bundled library, library in a main directory
