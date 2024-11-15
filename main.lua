@@ -852,8 +852,6 @@ function parse(toks)
     local function add_standard_functions()
         add_function_to_scope({name = "print", value_type = "void"})
         add_function_to_scope({name = "vprintf", value_type = "void"})
-        add_function_to_scope({name = "va_start", value_type = "void"})
-        add_function_to_scope({name = "va_end", value_type = "void"})
         add_function_to_scope({name = "exit", value_type = "void"})
     end
 
@@ -885,8 +883,10 @@ function generate_llvm(ast)
         os.exit(1)
     end
 
-    local function new_var()
-        var_counter = var_counter + 1
+    local function new_var(old)
+        if not old or old == false then
+            var_counter = var_counter + 1
+        end
         return "%.tmp_" .. var_counter
     end
 
@@ -968,6 +968,9 @@ function generate_llvm(ast)
         end
     end
 
+    local last_arg_type = ""
+    local last_arg_name = ""
+
     local function generate_function_declaration(func)
         line = func.line
         file = func.file
@@ -980,8 +983,7 @@ function generate_llvm(ast)
         local args_str = ""
         local i = 1
         has_variadic = false
-        last_arg_type = ""
-        last_arg_name = ""
+
         while i <= #args do
             if i ~= 1 then
                 args_str = args_str .. ", "
@@ -1012,14 +1014,11 @@ function generate_llvm(ast)
             emit_top("declare void @llvm.va_end.p0(ptr) #1")
             emit_top("%.va_list_tag = type { i32, i32, ptr, ptr }")
 
-            local first = new_var()
-            local second = new_var()
-            local third = new_var()
-            emit(string.format("%s = alloca %s", first, last_arg_type))
-            emit(string.format("%s = alloca [1 x %%.va_list_tag]", second))
-            emit(string.format("store %s %s, %s %s", last_arg_type, last_arg_name, last_arg_type, first))
-            emit(string.format("%s = getelementptr inbounds [1 x %%.va_list_tag], %s %s, i32 0, i32 0", third, last_arg_type, second))
-            emit(string.format("call void @llvm.va_start(%s %s)", last_arg_type, last_arg_name))
+            emit(string.format("%%.vri_1 = alloca %s", last_arg_type))
+            emit(string.format("%%.vri_2 = alloca [1 x %%.va_list_tag]"))
+            emit(string.format("store %s %s, %s %%.vri_1", last_arg_type, last_arg_name, last_arg_type))
+            emit(string.format("%%.vri_3 = getelementptr inbounds [1 x %%.va_list_tag], %s %%.vri_2, i32 0, i32 0", last_arg_type))
+            emit(string.format("call void @llvm.va_start.p0(%s %s)", last_arg_type, last_arg_name))
         end
 
         generate_body(body)
@@ -1036,7 +1035,9 @@ function generate_llvm(ast)
         local type = convert_type(value_type)
 
         if has_variadic then
-            emit("call void @llvm.va_end(i8* %.ellipsis)")
+            local var = new_var()
+            emit(string.format("%s = getelementptr inbounds [1 x %%.va_list_tag], %s %%.vri_3, i32 0, i32 0", var, last_arg_type))
+            emit(string.format("call void @llvm.va_end.p0(%s %s)", last_arg_type, var))
         end
 
         if type == "void" then
@@ -1205,7 +1206,12 @@ function generate_llvm(ast)
 
             local arg = args[i]
             if arg.type == "ellipsis" then
-                args_str = args_str .. "i8* %.ellipsis"
+                local var1 = new_var()
+                local var2 = new_var()
+
+                emit(string.format("%s = load %s, %s %s", var1, last_arg_type, last_arg_type, last_arg_name))
+                emit(string.format("%s = getelementptr inbounds [1 x %%.va_list_tag], %s %%.vri_1, i32 0, i32 0", var2, last_arg_type))
+                args_str = args_str .. last_arg_type .. " " .. var2
                 i = i + 1
             else
                 local expr = generate_expression(arg)
