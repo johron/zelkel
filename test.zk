@@ -1,6 +1,7 @@
 require "stdlib/io";
 
-fn main(): void {
-    println("number is %i", 5);
-    return;
+fn main(): int {
+    const name: string = "Juan";
+    println("hi %s", name);
+    return 0;
 }

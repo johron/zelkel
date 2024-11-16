@@ -1010,15 +1010,10 @@ function generate_llvm(ast)
         emit("entry:")
 
         if has_variadic then
-            emit_top("declare void @llvm.va_start.p0(ptr) #1")
-            emit_top("declare void @llvm.va_end.p0(ptr) #1")
-            emit_top("%.va_list_tag = type { i32, i32, ptr, ptr }")
-
-            emit(string.format("%%.vri_1 = alloca %s", last_arg_type))
-            emit(string.format("%%.vri_2 = alloca [1 x %%.va_list_tag]"))
-            emit(string.format("store %s %s, %s %%.vri_1", last_arg_type, last_arg_name, last_arg_type))
-            emit(string.format("%%.vri_3 = getelementptr inbounds [1 x %%.va_list_tag], %s %%.vri_2, i32 0, i32 0", last_arg_type))
-            emit(string.format("call void @llvm.va_start.p0(%s %s)", last_arg_type, last_arg_name))
+            emit_top("declare void @llvm.va_start(i8*)")
+            emit_top("declare void @llvm.va_end(i8*)")
+            emit("%.va_list = alloca i8, i32 128")
+            emit("call void @llvm.va_start(i8* %.va_list)")
         end
 
         generate_body(body)
@@ -1035,9 +1030,7 @@ function generate_llvm(ast)
         local type = convert_type(value_type)
 
         if has_variadic then
-            local var = new_var()
-            emit(string.format("%s = getelementptr inbounds [1 x %%.va_list_tag], %s %%.vri_3, i32 0, i32 0", var, last_arg_type))
-            emit(string.format("call void @llvm.va_end.p0(%s %s)", last_arg_type, var))
+            emit("call void @llvm.va_end(i8* %.va_list)")
         end
 
         if type == "void" then
@@ -1206,12 +1199,7 @@ function generate_llvm(ast)
 
             local arg = args[i]
             if arg.type == "ellipsis" then
-                local var1 = new_var()
-                local var2 = new_var()
-
-                emit(string.format("%s = load %s, %s %s", var1, last_arg_type, last_arg_type, last_arg_name))
-                emit(string.format("%s = getelementptr inbounds [1 x %%.va_list_tag], %s %%.vri_1, i32 0, i32 0", var2, last_arg_type))
-                args_str = args_str .. last_arg_type .. " " .. var2
+                args_str = args_str .. "i8* %.va_list"
                 i = i + 1
             else
                 local expr = generate_expression(arg)
