@@ -68,7 +68,7 @@ function lex(input, file, line)
                 i = i + 1
             end
             table.insert(toks, {type = "string", value = v})
-        elseif is_in_table(c, {"+", "-", "*", "/", "="}) then
+        elseif is_in_table(c, {"+", "-", "*", "/", "=", "%"}) then
             if c == "/" and chars[i + 1] == "/" then
                 while i <= #chars and chars[i] ~= "\n" do
                     i = i + 1
@@ -224,7 +224,7 @@ function parse(toks)
             local scope = table.remove(scope_stack)
             for i = #scope.variables, 1, -1 do
                 if scope.variables[i].isarg then
-                    table.remove(scope.variables, i) -- TODO: this removes incorrectly try running fib.zk program to see the error
+                    table.remove(scope.variables, i) -- TODO: this removes incorrectly try running fib.zk program to see the error: also math.zk
                 end
             end
         else
@@ -767,7 +767,7 @@ function parse(toks)
 
         local function parse_term()
             local expr = parse_unary()
-            while i <= #toks and current().type == "operator" and (current().value == "*" or current().value == "/") and current().type ~= "punctuation" and current().value ~= ";" do
+            while i <= #toks and current().type == "operator" and (current().value == "*" or current().value == "/" or current().value == "%") and current().type ~= "punctuation" and current().value ~= ";" do
                 local op = expect("operator").value
                 local right = parse_unary()
                 if expr.value_type ~= right.value_type then
@@ -1272,6 +1272,14 @@ function generate_llvm(ast)
                     emit(string.format("%s = fdiv double %s, %s", result_var, left_var, right_var))
                 else
                     error(string.format("Unexpected type found: '%s'", expression.value_type))
+                end
+            elseif operator == "%" then
+                if expression.value_type == "int" then
+                    emit(string.format("%s = urem i32 %s, %s", result_var, left_var, right_var))
+                elseif expression.value_type == "float" then
+                    emit(string.format("%s = frem double %s, %s", result_var, left_var, right_var))
+                else
+                    error(string.format("Unexpected value type for '%%': '%s'", expression.value_type))
                 end
             else
                 error(string.format("Unexpected binary operator: '%s'", operator))

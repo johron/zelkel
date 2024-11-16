@@ -1,7 +1,7 @@
 require "stdlib/io";
 
 fn main(): int {
-    const name: string = "Juan";
-    println("hi %s", name);
+    let result: float = 5.0 % 2.0;
+    println("%f", result);
     return 0;
 }
