@@ -35,7 +35,19 @@ function lex(input, file, line)
     local i = 1
     while i <= #chars do
         local c = chars[i]
-        if is_alpha(c) then
+        if c == "f" and chars[i + 1] == "\"" then
+            local v = ""
+            i = i + 2
+            while i <= #chars do
+                if chars[i] == "\"" then
+                    i = i + 1
+                    break
+                end
+                v = v .. chars[i]
+                i = i + 1
+            end
+            table.insert(toks, {type = "fstring", value = v})
+    elseif is_alpha(c) then
             local v = ""
             while i <= #chars and (is_alpha(chars[i]) or is_digit(chars[i])) do
                 v = v .. chars[i]
@@ -700,6 +712,75 @@ function parse(toks)
         }
     end
 
+    local function parse_fstring(t)
+        i = i + 1
+        local value = t.value:gsub("\\n", "\\0A"):gsub("%%", "%%%%")
+
+        local parts = {}
+        local j = 1
+        while j <= #value do
+            if value:sub(j, j) == "{" then
+                local h = j + 1
+                while h <= #value and value:sub(h, h) ~= "}" do
+                    h = h + 1
+                end
+                if h > #value then
+                    error("Unmatched '{' in fstring")
+                end
+                table.insert(parts, {type = "expression", value = value:sub(j + 1, h - 1)})
+                j = h + 1
+            else
+                local h = j
+                while h <= #value and value:sub(h, h) ~= "{" do
+                    h = h + 1
+                end
+                table.insert(parts, {type = "text", value = value:sub(j, h - 1)})
+                j = h
+            end
+        end
+
+        local comma_values = {}
+        for _, part in ipairs(parts) do
+            local formatter
+            if part.type == "expression" then
+                if has_variable_in_scope(part.value) then
+                    local value_type = variable_in_scope_get_value(part.value, "value_type")
+                    if value_type == "string" then
+                        formatter = "%%s"
+                    elseif value_type == "int" then
+                        formatter = "%%i"
+                    elseif value_type == "float" then
+                        formatter = "%%f"
+                    else
+                        error("Unexpected value_type in format string parsing")
+                    end
+                elseif math.type(tonumber(part.value)) == "integer" then
+                    formatter = "%%i"
+                elseif math.type(tonumber(part.value)) == "float" then
+                    formatter = "%%f"
+                else
+                    goto continue
+                end
+
+                value = value:gsub("{" .. part.value .. "}", formatter)
+                table.insert(comma_values, part.value)
+            else
+                print("Text: " .. part.value)
+            end
+            ::continue::
+        end
+
+        print(value)
+        print(inspect(comma_values))
+
+        local length = #value + 1
+        for _ in string.gmatch(value, "\\0A") do
+            length = length - 2
+        end
+
+        return {type = "fstring", value = value, comma_values = comma_values, length = length, value_type = "string", line = t.line, file = t.file}
+    end
+
     function parse_expression()
         local function parse_primary()
             local t = current()
@@ -732,12 +813,14 @@ function parse(toks)
                 return {type = "float", value = t.value, value_type = "float", line = t.line, file = t.file}
             elseif t.type == "string" then
                 i = i + 1
-                local value = t.value:gsub("\\n", "\\0A")
+                local value = t.value:gsub("\\n", "\\0A"):gsub("%%", "%%%%")
                 local length = #value + 1
                 for _ in string.gmatch(value, "\\0A") do
                     length = length - 2
                 end
                 return {type = "string", value = value, length = length, value_type = "string", line = t.line, file = t.file}
+            elseif t.type == "fstring" then
+                return parse_fstring(t)
             elseif t.type == "parenthesis" and t.value == "(" then
                 i = i + 1
                 local expr = parse_expression()
@@ -1352,6 +1435,12 @@ function generate_llvm(ast)
         elseif expression.type == "float" then
             return tostring(expression.value)
         elseif expression.type == "string" then
+            local str = expression.value
+            local str_name = "@.str_" .. #top_code
+            local str_len = expression.length
+            emit_top(string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
+            return str_name
+        elseif expression.type == "fstring" then
             local str = expression.value
             local str_name = "@.str_" .. #top_code
             local str_len = expression.length
