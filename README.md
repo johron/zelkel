@@ -1,11 +1,9 @@
 # Zelkel
+- LLVM-IR targeted programming language for computers
 
 ## TODO
-- [x] Values take the function declaration value_type in the ast for some reason
 - [ ] Standard functions like println and print need to be thought and done about
     - Remove hard coded standard functions
-- [x] Parser must make sure expression value_type is same as the variable value_type
-        - 1: doesnt check if given arguments to function are same type as the ones set in the function declarataion
 - [ ] Convert strings to int, float
 - [ ] String concatination
 - [ ] Global variables, variables in top scope
@@ -21,7 +19,7 @@
     - require "stdlib/io" as io;
       - io.println("hi");
 - [ ] Rewrite in itself
-- [x] Make sure every function has a return and it's value should be same type as function declaration return type
+- [ ] Fix problems with TODO comment
 
 ## Docs
 ### Functions
