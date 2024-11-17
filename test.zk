@@ -8,6 +8,7 @@ fn test((let)x: float, y: float): float {
 }
 
 fn main(): int {
-    println(f"%f", test(5.0, 2.0));
+    const val: float = test(5.0, 2.0);
+    println(f"{val} %f", val);
     return 0;
 }

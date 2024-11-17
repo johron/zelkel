@@ -472,6 +472,7 @@ function parse(toks)
             value_type = expr.value_type,
             expression = expr,
             line = name.line,
+            isarg = variable_in_scope_get_value(name.value, "isarg"),
             file = name.file
         }
     end
@@ -714,7 +715,7 @@ function parse(toks)
 
     local function parse_fstring(t)
         i = i + 1
-        local value = t.value:gsub("\\n", "\\0A")
+        local value = t.value:gsub("\\n", "\\0A"):gsub("%%", "%%%%")
 
         local parts = {}
         local j = 1
@@ -1038,17 +1039,32 @@ function generate_llvm(ast)
 
         local value_type = assignment.value_type
         local type = convert_type(value_type)
+        local isarg = assignment.isarg
+        print(isarg)
 
         if assignment.type == "immutable_variable_assignment" or assignment.type == "mutable_variable_assignment" then
             if assignment.global == true then
                 error("Global variables not implemented")
             end
-            emit("%" .. assignment.name .. " = alloca " .. type)
+            if assignment.isarg then
+                emit("%a." .. assignment.name .. " = alloca " .. type)
+            else
+                emit("%" .. assignment.name .. " = alloca " .. type)
+            end
             if expr then
-                emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
+                print(assignment.isarg)
+                if isarg then
+                    emit("store " .. type .. " " .. expr .. ", " .. type .. "* %a." .. assignment.name)
+                else
+                    emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
+                end
             end
         elseif assignment.type == "mutable_variable_reassignment" then
-            emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
+            if isarg then
+                emit("store " .. type .. " " .. expr .. ", " .. type .. "* %a." .. assignment.name)
+            else
+                emit("store " .. type .. " " .. expr .. ", " .. type .. "* %" .. assignment.name)
+            end
         else
             error(string.format("Unsupported assignment type: '%s'", assignment.type))
         end
@@ -1061,9 +1077,6 @@ function generate_llvm(ast)
             i = i + 1
         end
     end
-
-    local last_arg_type = ""
-    local last_arg_name = ""
 
     local function generate_function_declaration(func)
         line = func.line
@@ -1078,6 +1091,7 @@ function generate_llvm(ast)
         local i = 1
         has_variadic = false
 
+
         while i <= #args do
             if i ~= 1 then
                 args_str = args_str .. ", "
@@ -1090,8 +1104,6 @@ function generate_llvm(ast)
             else
                 local type = convert_type(arg.type)
                 args_str = args_str .. type .. " %" .. arg.name
-                last_arg_type = type
-                last_arg_name = "%" .. arg.name
             end
 
             i = i + 1
@@ -1101,7 +1113,25 @@ function generate_llvm(ast)
 
         emit("")
         emit(string.format("define %s @%s(%s) {", type, name, args_str))
+
+        i = 1
+        while i <= #args do
+            if i == 1 then
+                emit("args:")
+            end
+            local arg = args[i]
+            if arg.type ~= "ellipsis" then
+                local type = convert_type(arg.type)
+                emit("%a." .. arg.name .. " = alloca " .. type)
+                emit("store " .. type .. " %" .. arg.name .. ", " .. type .. "* %a." .. arg.name)
+            end
+
+            i = i + 1
+        end
+
+        emit("br label %entry")
         emit("entry:")
+
 
         if has_variadic then
             emit_top("declare void @llvm.va_start(i8*)")
@@ -1486,8 +1516,9 @@ function generate_llvm(ast)
             local isarg = expression.isarg
 
             if isarg then
-
-                return "%" .. expression.name
+                local var = new_var()
+                emit(var .. " = load " .. value_type .. ", " .. value_type .. "* %a." .. expression.name)
+                return var
             else
                 local var = new_var()
                 emit(var .. " = load " .. value_type .. ", " .. value_type .. "* %" .. expression.name)
