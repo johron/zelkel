@@ -1,5 +1,5 @@
 # Zelkel
-- LLVM-IR targeted programming language for computers
+LLVM-IR targeted programming language for computers
 
 ## TODO
 - [ ] Standard functions like println and print need to be thought and done about

@@ -1,7 +1,7 @@
 require "stdlib/io";
 
 fn main(): int {
-    let result: float = 5.0 % 2.0;
-    println(f"result is {result} {15.0012} {1}");
+    const x: int = 5;
+    println(f"result is {x}");
     return 0;
 }

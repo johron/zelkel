@@ -372,8 +372,9 @@ function parse(toks)
 
         local args = parse_function_call_args()
         local decl_args = function_in_scope_get_value(name.value, "args")
+        print(inspect(decl_args))
 
-        if decl_args ~= nil and #args < #decl_args then
+        if decl_args ~= nil and #args < #decl_args -1 then -- TODO: remove the -1 if i get problems
             error(string.format("Argument count mismatch for function '%s'", name.value))
         end
 
@@ -741,10 +742,10 @@ function parse(toks)
 
         local comma_values = {}
         for _, part in ipairs(parts) do
-            local formatter
+            local value_type
             if part.type == "expression" then
                 if has_variable_in_scope(part.value) then
-                    local value_type = variable_in_scope_get_value(part.value, "value_type")
+                    value_type = variable_in_scope_get_value(part.value, "value_type")
                     if value_type == "string" then
                         formatter = "%%s"
                     elseif value_type == "int" then
@@ -756,22 +757,27 @@ function parse(toks)
                     end
                 elseif math.type(tonumber(part.value)) == "integer" then
                     formatter = "%%i"
+                    value_type = "integer"
                 elseif math.type(tonumber(part.value)) == "float" then
                     formatter = "%%f"
+                    value_type = "float"
                 else
                     goto continue
                 end
 
                 value = value:gsub("{" .. part.value .. "}", formatter)
-                table.insert(comma_values, part.value)
-            else
-                print("Text: " .. part.value)
+                if value_type == "string" then
+                    table.insert(comma_values, "i8* %" .. part.value)
+                elseif value_type == "int" then
+                    table.insert(comma_values, "i32 %" .. part.value)
+                elseif value_type == "float" then
+                    table.insert(comma_values, "double %" .. part.value)
+                else
+                    error("Unexpected value_type in format string parsing")
+                end
             end
             ::continue::
         end
-
-        print(value)
-        print(inspect(comma_values))
 
         local length = #value + 1
         for _ in string.gmatch(value, "\\0A") do
@@ -935,6 +941,7 @@ function parse(toks)
     local function add_standard_functions()
         add_function_to_scope({name = "print", value_type = "void"})
         add_function_to_scope({name = "vprintf", value_type = "void"})
+        add_function_to_scope({name = "sprintf", value_type = "void"})
         add_function_to_scope({name = "exit", value_type = "void"})
     end
 
@@ -1299,6 +1306,8 @@ function generate_llvm(ast)
             emit_top("declare void @exit(i32)")
         elseif name == "vprintf" then
             emit_top("declare void @vprintf(i8*, i8*)")
+        elseif name == "sprintf" then
+            emit_top("declare i32 @sprintf(i8*, i8*, ...)")
         end
 
         if type == "void" then
@@ -1444,8 +1453,25 @@ function generate_llvm(ast)
             local str = expression.value
             local str_name = "@.str_" .. #top_code
             local str_len = expression.length
+            local var = new_var()
+
             emit_top(string.format('%s = private unnamed_addr constant [%d x i8] c"%s\\00"', str_name, str_len, str))
-            return str_name
+            emit_top("declare i32 @sprintf(i8*, i8*, ...)")
+
+            emit(string.format("%s = alloca i8*", var))
+            local tab = {}
+            for _, comma_value in ipairs(expression.comma_values) do
+                if _ == 1 then
+                    table.insert(tab, "")
+                end
+                local temp_var = new_var()
+                emit(string.format("%s = load %s, %s* %s", temp_var, comma_value:match("^(%S+)"), comma_value:match("^(%S+)"), comma_value:match("%s(%S+)$")))
+                table.insert(tab, comma_value:match("^(%S+)") .. " " .. temp_var)
+            end
+
+            emit(string.format("call void @sprintf(i8* %s, i8* %s%s)", var, str_name, table.concat(tab, ", ")))
+
+            return var
         elseif expression.type == "variable" then
             local value_type = convert_type(expression.value_type)
             local isarg = expression.isarg
