@@ -5,7 +5,7 @@ fn abs(x: float): float {
     return x;
 }
 
-fn pow(x: float, y: float): float {
+fn pow((let)x: float, (let)y: float): float {
     if (y == 0.0) {
         return 1.0;
     }
@@ -14,12 +14,12 @@ fn pow(x: float, y: float): float {
     }
 
     let result = 1.0;
-    while (y > 0) {
-        if (y % 2 != 0) {
+    while (y > 0.0) {
+        if (y % 2.0 != 0.0) {
             result = result * x;
         }
         x = x * x;
-        y = y / 2;
+        y = y / 2.0;
     }
 
     return result;
@@ -42,5 +42,5 @@ fn root(x: float, y: float): float {
 }
 
 fn sqrt(x: float): float {
-    return root(x, 2);
+    return root(x, 2.0);
 }

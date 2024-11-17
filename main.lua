@@ -213,35 +213,26 @@ function parse(toks)
     local ast = {}
     local i = 1
 
-    local function current_scope()
-        return scope_stack[#scope_stack] or scope_stack[#scope_stack - 1] or {variables = {}, functions = {}, currentfunc = {}}
-    end
-
-    local function is_global_scope()
-        return #scope_stack == 1
-    end
-
     local function enter_scope()
-        local parent_scope = current_scope()
+        local parent_scope = scope_stack[#scope_stack] or {}
         local new_scope = {
-            variables = parent_scope.variables,
-            functions = parent_scope.functions,
-            currentfunc = parent_scope.currentfunc
+            variables = {table.unpack(parent_scope.variables or {})},
+            functions = {table.unpack(parent_scope.functions or {})},
+            currentfunc = parent_scope.currentfunc or ""
         }
         table.insert(scope_stack, new_scope)
     end
 
     local function exit_scope()
-        if #scope_stack > 0 then
-            local scope = table.remove(scope_stack)
-            for i = #scope.variables, 1, -1 do
-                if scope.variables[i].isarg then
-                    table.remove(scope.variables, i) -- TODO: this removes incorrectly try running fib.zk program to see the error: also math.zk
-                end
-            end
-        else
-            error(string.format("Scope out of bounds"))
-        end
+        table.remove(scope_stack)
+    end
+
+    local function current_scope()
+        return scope_stack[#scope_stack]
+    end
+
+    local function is_global_scope()
+        return #scope_stack == 1
     end
 
     local function set_currentfunc(func)
@@ -500,26 +491,35 @@ function parse(toks)
         local start = i
         local found_ellipsis = false
 
-        while i <= #toks and toks[i].type ~= "parenthesis" and toks[i].value ~= ")" do
+        while i <= #toks and toks[i].value ~= ")" do
             if found_ellipsis == true then
                 error("Cannot have more arguments after an ellipsis")
             end
 
             if i ~= start then
                 expect("punctuation", ",")
-            elseif toks[i + 1].type == "parenthesis" and toks[i + 1].value == ")" then
+            elseif current().value == ")" and toks[i + 1].type == "parenthesis" and toks[i + 1].value == ")" then
                 return {}
             end
 
-            if current().type == "ellipsis" then
+            local curr = current()
+            if curr.type == "ellipsis" then
                 expect("ellipsis", "...")
                 found_ellipsis = true
                 table.insert(args, {type = "ellipsis", mutable = false})
+            elseif curr.type == "parenthesis" and curr.value == "(" then
+                expect("parenthesis", "(")
+                expect("identifier", "let")
+                expect("parenthesis", ")")
+
+                local name = expect("identifier").value
+                expect("punctuation", ":")
+                local type = expect("identifier").value
+                table.insert(args, {name = name, mutable = true, type = type})
             else
                 local name = expect("identifier").value
                 expect("punctuation", ":")
                 local type = expect("identifier").value
-
                 table.insert(args, {name = name, mutable = false, type = type})
             end
         end
@@ -808,9 +808,12 @@ function parse(toks)
                         error(string.format("Variable not defined in current scope: '%s'", t.value))
                     end
                     i = i + 1
+
                     local value_type = variable_in_scope_get_value(t.value, "value_type")
                     local isarg = variable_in_scope_get_value(t.value, "isarg")
-                    return {type = "variable", name = t.value, value_type = value_type, isarg = isarg, line = t.line, file = t.file}
+                    local mutable = variable_in_scope_get_value(t.value, "mutable")
+
+                    return {type = "variable", name = t.value, value_type = value_type, isarg = isarg, line = t.line, file = t.file, mutable = mutable}
                 end
             elseif t.type == "integer" then
                 i = i + 1
@@ -1483,6 +1486,7 @@ function generate_llvm(ast)
             local isarg = expression.isarg
 
             if isarg then
+
                 return "%" .. expression.name
             else
                 local var = new_var()

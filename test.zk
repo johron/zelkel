@@ -1,7 +1,13 @@
 require "stdlib/io";
 
+fn test((let)x: float, y: float): float {
+    let a: float = 5.0;
+    a = a + 2.0;
+    x = x + 1.0 + a;
+    return x + y;
+}
+
 fn main(): int {
-    const x: int = 5;
-    println(f"result is {x} {123}");
+    println(f"%f", test(5.0, 2.0));
     return 0;
 }
