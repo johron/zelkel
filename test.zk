@@ -2,6 +2,6 @@ require "stdlib/io";
 
 fn main(): int {
     const x: int = 5;
-    println(f"result is {x}");
+    println(f"result is {x} {123}");
     return 0;
 }

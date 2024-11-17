@@ -372,7 +372,6 @@ function parse(toks)
 
         local args = parse_function_call_args()
         local decl_args = function_in_scope_get_value(name.value, "args")
-        print(inspect(decl_args))
 
         if decl_args ~= nil and #args < #decl_args -1 then -- TODO: remove the -1 if i get problems
             error(string.format("Argument count mismatch for function '%s'", name.value))
@@ -715,7 +714,7 @@ function parse(toks)
 
     local function parse_fstring(t)
         i = i + 1
-        local value = t.value:gsub("\\n", "\\0A"):gsub("%%", "%%%%")
+        local value = t.value:gsub("\\n", "\\0A")
 
         local parts = {}
         local j = 1
@@ -753,11 +752,13 @@ function parse(toks)
                     elseif value_type == "float" then
                         formatter = "%%f"
                     else
-                        error("Unexpected value_type in format string parsing")
+                        error("Unexpected value type in format string parsing")
                     end
+
+                    part.value = "%" .. part.value
                 elseif math.type(tonumber(part.value)) == "integer" then
                     formatter = "%%i"
-                    value_type = "integer"
+                    value_type = "int"
                 elseif math.type(tonumber(part.value)) == "float" then
                     formatter = "%%f"
                     value_type = "float"
@@ -765,13 +766,13 @@ function parse(toks)
                     goto continue
                 end
 
-                value = value:gsub("{" .. part.value .. "}", formatter)
+                value = value:gsub("{" .. part.value:gsub("%%", "") .. "}", formatter)
                 if value_type == "string" then
-                    table.insert(comma_values, "i8* %" .. part.value)
+                    table.insert(comma_values, "i8* " .. part.value)
                 elseif value_type == "int" then
-                    table.insert(comma_values, "i32 %" .. part.value)
+                    table.insert(comma_values, "i32 " .. part.value)
                 elseif value_type == "float" then
-                    table.insert(comma_values, "double %" .. part.value)
+                    table.insert(comma_values, "double " .. part.value)
                 else
                     error("Unexpected value_type in format string parsing")
                 end
@@ -1464,9 +1465,14 @@ function generate_llvm(ast)
                 if _ == 1 then
                     table.insert(tab, "")
                 end
-                local temp_var = new_var()
-                emit(string.format("%s = load %s, %s* %s", temp_var, comma_value:match("^(%S+)"), comma_value:match("^(%S+)"), comma_value:match("%s(%S+)$")))
-                table.insert(tab, comma_value:match("^(%S+)") .. " " .. temp_var)
+                if comma_value:match("%%[a-zA-Z_]") then
+                    print("hier", comma_value)
+                    local temp_var = new_var()
+                    emit(string.format("%s = load %s, %s* %s", temp_var, comma_value:match("^(%S+)"), comma_value:match("^(%S+)"), comma_value:match("%s(%S+)$")))
+                    table.insert(tab, comma_value:match("^(%S+)") .. " " .. temp_var)
+                else
+                    table.insert(tab, comma_value)
+                end
             end
 
             emit(string.format("call void @sprintf(i8* %s, i8* %s%s)", var, str_name, table.concat(tab, ", ")))
