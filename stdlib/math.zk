@@ -27,7 +27,7 @@ fn pow((let)x: float, (let)y: float): float {
 
 fn root(x: float, y: float): float {
     if (x < 0.0) { return 0.0; }
-    // if (x == 0 || x == 1) {}
+    // if (x == 0 || x == 1) { return x; }
     if (x == 0.0) { return x; }
     if (x == 1.0) { return x; }
 

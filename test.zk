@@ -1,14 +1,8 @@
 require "stdlib/io";
-
-fn test((let)x: float, y: float): float {
-    let a: float = 5.0;
-    a = a + 2.0;
-    x = x + 1.0 + a;
-    return x + y;
-}
+require "stdlib/math";
 
 fn main(): int {
-    const val: float = test(5.0, 2.0);
-    println(f"{val} %f", val);
+    const result: float = pow(5.0, 2.0);
+    println(f"{result}");
     return 0;
 }
