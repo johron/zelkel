@@ -1,12 +1,8 @@
 require "stdlib/io";
 
-fn test((let) x: int): int {
-    x += 2;
-    return x;
-}
-
 fn main(): int {
-    let x: int = test(2);
-    println(f"{x}");
+    let i = 1;
+    i++;
+    println(f"{i}");
     return 0;
 }

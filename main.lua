@@ -10,6 +10,15 @@ local function is_in_table(v, t)
     return false
 end
 
+local function contains_string(t, str)
+    for _, v in ipairs(t) do
+        if v == str then
+            return true
+        end
+    end
+    return false
+end
+
 function lex(input, file, line)
     local toks = {}
     local line = line or 1
@@ -205,6 +214,22 @@ function preprocess(toks)
         table.insert(newtoks, {type = "operator", value = operator})
     end
 
+    local function preprocess_var_op_op() -- ++, --, i++; i--;
+        local name = expect("identifier").value
+        local op1 = expect("operator").value
+        local op2 = expect("operator").value
+
+        if op1 ~= op2 then
+            error(string.format("Unexpected tokens found: %s, %s, %s", name, op1, op2))
+        end
+
+        table.insert(newtoks, {type = "identifier", value = name})
+        table.insert(newtoks, {type = "operator", value = "="})
+        table.insert(newtoks, {type = "identifier", value = name})
+        table.insert(newtoks, {type = "operator", value = op1})
+        table.insert(newtoks, {type = "integer", value = "1"})
+    end
+
     while i <= #toks do
         local curr = current()
         local type = curr.type
@@ -212,8 +237,10 @@ function preprocess(toks)
 
         if type == "identifier" and value == "require" then
             preprocess_require()
-        elseif type == "identifier" and toks[i + 1].value and toks[i + 2].value and string.match(toks[i + 1].value, "^[%+%-%*/%%]") and toks[i + 2].value == "=" then
+        elseif type == "identifier" and toks[i + 1] and toks[i + 1].value and contains_string({"+", "-", "/", "*", "%"}, toks[i + 1].value) and toks[i + 2].value == "=" then
             preprocess_assignment_and_operator()
+        elseif type == "identifier" and contains_string({"+", "-"}, toks[i + 1].value) and contains_string({"+", "-"}, toks[i + 2].value) then
+            preprocess_var_op_op()
         else
             table.insert(newtoks, toks[i])
             i = i + 1
