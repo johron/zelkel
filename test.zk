@@ -1,8 +1,8 @@
 require "stdlib/io";
-require "stdlib/math";
 
 fn main(): int {
-    const result: float = pow(5.0, 2.0);
-    println(f"{result}");
+    let x: int = 5;
+    x += 1;
+    println(f"{x}");
     return 0;
 }

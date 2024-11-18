@@ -91,6 +91,9 @@ function lex(input, file, line)
             elseif c == "=" and chars[i + 1] == "=" then
                 table.insert(toks, {type = "operator", value = c .. chars[i]})
                 i = i + 1
+            elseif is_in_table(c, {"+", "-", "*", "/", "%"}) and chars[i + 1] == "=" then
+                table.insert(toks, {type = "operator", value = c .. chars[i + 1]})
+                i = i + 2
             else
                 table.insert(toks, {type = "operator", value = c})
             end
@@ -192,6 +195,15 @@ function preprocess(toks)
         end
     end
 
+    local function preprocess_assignment_and_operator()
+        local name = expect("identifier").value
+        local operator = expect("operator").value:sub(1,1)
+        table.insert(newtoks, {type = "identifier", value = name})
+        table.insert(newtoks, {type = "operator", value = "="})
+        table.insert(newtoks, {type = "identifier", value = name})
+        table.insert(newtoks, {type = "operator", value = operator})
+    end
+
     while i <= #toks do
         local curr = current()
         local type = curr.type
@@ -199,6 +211,8 @@ function preprocess(toks)
 
         if type == "identifier" and value == "require" then
             preprocess_require()
+        elseif type == "identifier" and toks[i + 1].value and string.match(toks[i + 1].value, "^[%+%-%*/%%]=") then
+            preprocess_assignment_and_operator()
         else
             table.insert(newtoks, toks[i])
             i = i + 1
@@ -1040,8 +1054,8 @@ function generate_llvm(ast)
         local value_type = assignment.value_type
         local type = convert_type(value_type)
         local isarg = assignment.isarg
-        print(isarg)
 
+        
         if assignment.type == "immutable_variable_assignment" or assignment.type == "mutable_variable_assignment" then
             if assignment.global == true then
                 error("Global variables not implemented")
