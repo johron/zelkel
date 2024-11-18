@@ -1,8 +1,8 @@
 require "stdlib/io";
 
 fn main(): int {
-    let i = 1;
-    i++;
-    println(f"{i}");
+    for (let i = 0; i < 10; i++) {
+        println(f"{i}");
+    }
     return 0;
 }

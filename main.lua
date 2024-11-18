@@ -497,7 +497,7 @@ function parse(toks)
         end
     end
 
-    local function parse_variable_reassignment()
+    local function parse_variable_reassignment(no_semi)
         local name = expect("identifier")
 
         if not variable_in_scope_get_value(name.value, "mutable") then
@@ -506,7 +506,9 @@ function parse(toks)
 
         expect("operator", "=")
         local expr = parse_expression()
-        expect("punctuation", ";")
+        if no_semi ~= true then
+            expect("punctuation", ";")
+        end
 
         return {
             type = "mutable_variable_reassignment",
@@ -755,6 +757,33 @@ function parse(toks)
         }
     end
 
+    function parse_for_statement()
+        local for_id = expect("identifier", "for")
+        expect("parenthesis", "(")
+        local var = parse_variable_assignment(true)
+        local cond = parse_expression()
+        expect("punctuation", ";")
+        local iter = parse_statement(true)
+
+        expect("parenthesis", ")")
+        expect("parenthesis", "{")
+        local body = parse_body()
+        table.insert(body, iter)
+
+        enter_scope()
+        expect("parenthesis", "}")
+        exit_scope()
+
+        return {
+            type = "for_statement",
+            var = var,
+            condition = cond,
+            body = body,
+            line = for_id.line,
+            file = for_id.file
+        }
+    end
+
     local function parse_fstring(t)
         i = i + 1
         local value = t.value:gsub("\\n", "\\0A"):gsub("%%", "%%%%")
@@ -952,7 +981,7 @@ function parse(toks)
         return expr
     end
 
-    function parse_statement()
+    function parse_statement(no_semi)
         local curr = current()
         local type = curr.type
         local value = curr.value
@@ -964,6 +993,8 @@ function parse(toks)
                 return parse_if_statement()
             elseif value == "while" then
                 return parse_while_statement()
+            elseif value == "for" then
+                return parse_for_statement()
             elseif value == "let" then
                 return parse_variable_assignment(true)
             elseif value == "const" then
@@ -971,7 +1002,7 @@ function parse(toks)
             elseif value == "return" then
                 return parse_function_return()
             elseif has_variable_in_scope(value) then
-                return parse_variable_reassignment()
+                return parse_variable_reassignment(no_semi)
             elseif has_function_in_scope(value) then
                 return parse_expression_as_statement()
             else
