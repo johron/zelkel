@@ -1,8 +1,10 @@
+require "stdlib/io";
+
 fn add(a: int, b: int): int {
     return a + b;
 }
 
 fn main(): void {
     const result: int = add(2, 3);
-    printf("%i\n", result);
+    println(f"{result}");
 }

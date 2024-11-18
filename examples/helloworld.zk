@@ -1,3 +1,5 @@
+require "stdlib/io";
+
 fn main(): void {
-    printf("Hello, world!\n");
+    println("Hello, world!");
 }
