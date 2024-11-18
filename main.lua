@@ -165,7 +165,10 @@ function preprocess(toks)
     local function preprocess_require()
         expect("identifier", "require")
 
-        local to_require = current().value .. ".zk"
+        local to_require = current().value
+        if not to_require:match("%.%w+$") then
+            to_require = to_require .. ".zk"
+        end
         if to_require == current().file then
             error("Cannot require itself")
         end
@@ -1064,7 +1067,6 @@ function generate_llvm(ast)
                 emit("%" .. assignment.name .. " = alloca " .. type)
             end
             if expr then
-                print(assignment.isarg)
                 if isarg then
                     emit("store " .. type .. " " .. expr .. ", " .. type .. "* %a." .. assignment.name)
                 else
@@ -1511,7 +1513,6 @@ function generate_llvm(ast)
                     table.insert(tab, "")
                 end
                 if comma_value:match("%%[a-zA-Z_]") then
-                    print("hier", comma_value)
                     local temp_var = new_var()
                     emit(string.format("%s = load %s, %s* %s", temp_var, comma_value:match("^(%S+)"), comma_value:match("^(%S+)"), comma_value:match("%s(%S+)$")))
                     table.insert(tab, comma_value:match("^(%S+)") .. " " .. temp_var)
