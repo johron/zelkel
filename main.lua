@@ -128,9 +128,9 @@ function lex(input, file, line)
     return toks
 end
 
-local required = {}
 function preprocess(toks)
     local newtoks = {}
+    local required = {}
     local i = 1
 
     local function current()
@@ -195,7 +195,7 @@ function preprocess(toks)
         end
     end
 
-    local function preprocess_assignment_and_operator()
+    local function preprocess_assignment_and_operator() -- +=, -=, *=, ...
         local name = expect("identifier").value
         local operator = expect("operator").value
         expect("operator", "=")
