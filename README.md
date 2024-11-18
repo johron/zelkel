@@ -2,6 +2,7 @@
 LLVM-IR targeted programming language for computers
 
 ## TODO
+- [ ] Maybe move fstrings to the preprocessor to be able to have `println(f"{}", func(a, b));` so it adds `%i`, `%s`, `%f`, ... automatically after the type which is a LOT easier in the preprocessor stange, i think? 
 - [ ] Standard functions like println and print need to be thought and done about
     - Remove hard coded standard functions
 - [ ] Convert strings to int, float
