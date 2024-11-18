@@ -91,9 +91,6 @@ function lex(input, file, line)
             elseif c == "=" and chars[i + 1] == "=" then
                 table.insert(toks, {type = "operator", value = c .. chars[i]})
                 i = i + 1
-            elseif is_in_table(c, {"+", "-", "*", "/", "%"}) and chars[i + 1] == "=" then
-                table.insert(toks, {type = "operator", value = c .. chars[i + 1]})
-                i = i + 2
             else
                 table.insert(toks, {type = "operator", value = c})
             end
@@ -197,7 +194,8 @@ function preprocess(toks)
 
     local function preprocess_assignment_and_operator()
         local name = expect("identifier").value
-        local operator = expect("operator").value:sub(1,1)
+        local operator = expect("operator").value
+        expect("operator", "=")
         table.insert(newtoks, {type = "identifier", value = name})
         table.insert(newtoks, {type = "operator", value = "="})
         table.insert(newtoks, {type = "identifier", value = name})
@@ -211,7 +209,7 @@ function preprocess(toks)
 
         if type == "identifier" and value == "require" then
             preprocess_require()
-        elseif type == "identifier" and toks[i + 1].value and string.match(toks[i + 1].value, "^[%+%-%*/%%]=") then
+        elseif type == "identifier" and toks[i + 1].value and toks[i + 2].value and string.match(toks[i + 1].value, "^[%+%-%*/%%]") and toks[i + 2].value == "=" then
             preprocess_assignment_and_operator()
         else
             table.insert(newtoks, toks[i])
