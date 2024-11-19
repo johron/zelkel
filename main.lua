@@ -1379,6 +1379,28 @@ function generate_llvm(ast)
         emit(end_label .. ":")
     end
 
+    local function generate_for_statement(statement)
+        line = statement.line
+        file = statement.file
+
+        local cond_label = new_label()
+        local body_label = new_label()
+        local end_label = new_label()
+
+        generate_statement(statement.var)
+        emit(string.format("br label %%%s", cond_label))
+
+        emit(cond_label .. ":")
+        local cond_var = generate_condition_check(statement.condition)
+        emit(string.format("br i1 %s, label %%%s, label %%%s", cond_var, body_label, end_label))
+
+        emit(body_label .. ":")
+        generate_body(statement.body)
+        emit(string.format("br label %%%s", cond_label))
+
+        emit(end_label .. ":")
+    end
+
     local function generate_function_call(expression)
         line = expression.line
         file = expression.file
@@ -1641,6 +1663,8 @@ function generate_llvm(ast)
             generate_if_statement(statement)
         elseif type == "while_statement" then
             generate_while_statement(statement)
+        elseif type == "for_statement" then
+            generate_for_statement(statement)
         elseif type == "revision" then
             generate_revision(statement)
         elseif type == "ignore" then
