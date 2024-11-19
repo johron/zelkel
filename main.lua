@@ -250,8 +250,8 @@ function preprocess(toks)
     return newtoks
 end
 
-function parse(toks)
-    local scope_stack = {}
+function parse(toks, scope_stack)
+    local scope_stack = scope_stack or {}
     local ast = {}
     local i = 1
 
@@ -815,7 +815,7 @@ function parse(toks)
         for _, part in ipairs(parts) do
             local value_type
             if part.type == "expression" then
-                if has_variable_in_scope(part.value) then
+                --[[if has_variable_in_scope(part.value) then
                     value_type = variable_in_scope_get_value(part.value, "value_type")
                     if value_type == "string" then
                         formatter = "%%s"
@@ -836,7 +836,11 @@ function parse(toks)
                     value_type = "float"
                 else
                     goto continue
-                end
+                end--]]
+                print(inspect(part))
+                local expr_toks = lex(part.value, t.file, t.line)
+                local expr = parse(expr_toks, scope_stack)
+                print(inspect(expr))
 
                 value = value:gsub("{" .. part.value:gsub("%%", "") .. "}", formatter)
                 if value_type == "string" then

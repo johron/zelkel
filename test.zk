@@ -1,8 +1,10 @@
 require "stdlib/io";
 
+fn add(x: int, y: int): int {
+    return x + y;
+}
+
 fn main(): int {
-    for (let i = 0; i < 10; i++) {
-        println(f"{i}");
-    }
+    println(f"{add(1, 2)}");
     return 0;
 }
