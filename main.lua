@@ -250,7 +250,7 @@ function preprocess(toks)
     return newtoks
 end
 
-function parse(toks, scope_stack)
+function parse(toks, scope_stack, expression)
     local scope_stack = scope_stack or {}
     local ast = {}
     local i = 1
@@ -351,7 +351,8 @@ function parse(toks, scope_stack)
         if i <= #toks then
             return toks[i]
         else
-            error("Attempt to access token out of bounds")
+            print(string.format("%s:%s: Attempt to access token out of bounds", toks[i - 1].file, toks[i - 1].line))
+            os.exit(1)
         end
     end
 
@@ -811,49 +812,28 @@ function parse(toks, scope_stack)
             end
         end
 
-        local comma_values = {}
+        local exprs = {}
         for _, part in ipairs(parts) do
-            local value_type
             if part.type == "expression" then
-                --[[if has_variable_in_scope(part.value) then
-                    value_type = variable_in_scope_get_value(part.value, "value_type")
-                    if value_type == "string" then
-                        formatter = "%%s"
-                    elseif value_type == "int" then
-                        formatter = "%%i"
-                    elseif value_type == "float" then
-                        formatter = "%%f"
-                    else
-                        error("Unexpected value type in format string parsing")
-                    end
-
-                    part.value = "%" .. part.value
-                elseif math.type(tonumber(part.value)) == "integer" then
-                    formatter = "%%i"
-                    value_type = "int"
-                elseif math.type(tonumber(part.value)) == "float" then
-                    formatter = "%%f"
-                    value_type = "float"
-                else
-                    goto continue
-                end--]]
-                print(inspect(part))
                 local expr_toks = lex(part.value, t.file, t.line)
-                local expr = parse(expr_toks, scope_stack)
-                print(inspect(expr))
+                local expr_prepro = preprocess(expr_toks)
+                local expr = parse(expr_prepro, scope_stack, true)
+                local formatter = ""
+                local value_type = expr.value_type
 
-                value = value:gsub("{" .. part.value:gsub("%%", "") .. "}", formatter)
-                if value_type == "string" then
-                    table.insert(comma_values, "i8* " .. part.value)
-                elseif value_type == "int" then
-                    table.insert(comma_values, "i32 " .. part.value)
+                if value_type == "int" then
+                    formatter = "%%i"
                 elseif value_type == "float" then
-                    table.insert(comma_values, "double " .. part.value)
+                    formatter = "%%i"
+                elseif value_type == "string" then
+                    formatter = "%%s"
                 else
-                    error("Unexpected value_type in format string parsing")
+                    error("Unrecognized type for fstring")
                 end
+
+                table.insert(exprs, expr)
+                value = value:gsub("{" .. part.value:gsub("%%", "") .. "}", formatter)
             end
-            ::continue::
         end
 
         local length = #value + 1
@@ -861,7 +841,7 @@ function parse(toks, scope_stack)
             length = length - 2
         end
 
-        return {type = "fstring", value = value, comma_values = comma_values, length = length, value_type = "string", line = t.line, file = t.file}
+        return {type = "fstring", value = value, expressions = exprs, length = length, value_type = "string", line = t.line, file = t.file}
     end
 
     function parse_expression()
@@ -1031,7 +1011,12 @@ function parse(toks, scope_stack)
     add_standard_functions()
 
     while i <= #toks do
-        local node = parse_statement()
+        local node
+        if expression == true then
+            node = parse_expression()
+        else
+            node = parse_statement()
+        end
         table.insert(ast, node)
     end
 
