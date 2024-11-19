@@ -286,6 +286,29 @@ function parse(toks, scope_stack, expression)
         return current_scope().currentfunc
     end
 
+    local function luaerror(msg)
+        error(msg)
+    end
+
+    function current()
+        if i <= #toks then
+            return toks[i]
+        else
+            luaerror("t")
+            print(string.format("%s:%s: Attempt to access token out of bounds", toks[i - 1].file, toks[i - 1].line))
+            os.exit(1)
+        end
+    end
+
+    local function error(msg)
+        if i <= #toks then
+            print(string.format("%s:%s: %s", toks[i].file, toks[i].line, msg))
+        else
+            print(string.format("%s:%s: %s", toks[i - 1].file, toks[i - 1].line, msg))
+        end
+        os.exit(1)
+    end
+
     local function has_variable_in_scope(name)
         for j = #scope_stack, 1, -1 do
             local scope = scope_stack[j]
@@ -345,20 +368,6 @@ function parse(toks, scope_stack, expression)
             end
         end
         return nil
-    end
-
-    function current()
-        if i <= #toks then
-            return toks[i]
-        else
-            print(string.format("%s:%s: Attempt to access token out of bounds", toks[i - 1].file, toks[i - 1].line))
-            os.exit(1)
-        end
-    end
-
-    function error(msg)
-        print(string.format("%s:%s: %s", current().file, current().line, msg))
-        os.exit(1)
     end
 
     local function expect(type, value)
@@ -817,7 +826,7 @@ function parse(toks, scope_stack, expression)
             if part.type == "expression" then
                 local expr_toks = lex(part.value, t.file, t.line)
                 local expr_prepro = preprocess(expr_toks)
-                local expr = parse(expr_prepro, scope_stack, true)
+                local expr = table.unpack(parse(expr_prepro, scope_stack, true))
                 local formatter = ""
                 local value_type = expr.value_type
 
@@ -828,7 +837,7 @@ function parse(toks, scope_stack, expression)
                 elseif value_type == "string" then
                     formatter = "%%s"
                 else
-                    error("Unrecognized type for fstring")
+                    error(string.format("Unrecognized type for fstring: %s", value_type))
                 end
 
                 table.insert(exprs, expr)
@@ -944,7 +953,7 @@ function parse(toks, scope_stack, expression)
         end
 
         local expr = parse_comparison()
-        while i <= #toks and current().type == "operator" and is_in_table(current().value, {"+", "-"}) and current().type ~= "punctuation" and current().value ~= ";" do
+        while i <= #toks and toks[i].type and toks[i].value and toks[i].type == "operator" and is_in_table(current().value, {"+", "-"}) and current().type ~= "punctuation" and current().value ~= ";" do
             local op = current().value
             i = i + 1
             local right = parse_comparison()
@@ -1011,13 +1020,12 @@ function parse(toks, scope_stack, expression)
     add_standard_functions()
 
     while i <= #toks do
-        local node
         if expression == true then
-            node = parse_expression()
+            table.insert(ast, parse_expression())
+            break
         else
-            node = parse_statement()
+            table.insert(ast, parse_statement())
         end
-        table.insert(ast, node)
     end
 
     exit_scope()
