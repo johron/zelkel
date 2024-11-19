@@ -1201,7 +1201,9 @@ function generate_llvm(ast)
             i = i + 1
         end
 
-        emit("br label %entry")
+        if #args > 0 then
+            emit("br label %entry")
+        end
         emit("entry:")
 
 
