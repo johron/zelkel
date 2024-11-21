@@ -291,6 +291,7 @@ function parse(toks, scope_stack, expression)
     end
 
     function current()
+        print(i, #toks)
         if i <= #toks then
             return toks[i]
         else
@@ -393,16 +394,21 @@ function parse(toks, scope_stack, expression)
 
         local args = {}
         local start = i
-        while i <= #toks and current().value ~= ")" do
-            if i ~= start then
-                expect("punctuation", ",")
-            end
 
+        while i <= #toks and current().value ~= ")" do
             if current().type == "ellipsis" then
                 expect("ellipsis", "...")
                 table.insert(args, {type = "ellipsis", name = "...", file = current().file, line = current().line})
             else
-                table.insert(args, parse_expression())
+                print("x1")
+                local expr = parse_expression()
+                table.insert(args, expr)
+                print(inspect(expr))
+                print("x2")
+            end
+
+            if i ~= start and current().value ~= ")" then
+                expect("punctuation", ",")
             end
         end
 
@@ -795,7 +801,6 @@ function parse(toks, scope_stack, expression)
     end
 
     local function parse_fstring(t)
-        i = i + 1
         local value = t.value:gsub("\\n", "\\0A"):gsub("%%", "%%%%")
 
         local parts = {}
@@ -863,16 +868,16 @@ function parse(toks, scope_stack, expression)
                     end
                     return parse_function_call()
                 elseif t.value == "true" then
-                    i = i + 1
+                    expect("identifier")
                     return {type = "bool", value = 1, value_type = "bool", line = t.line, file = t.file}
                 elseif t.value == "false" then
-                    i = i + 1
+                    expect("identifier")
                     return {type = "integer", value = 0, value_type = "bool", line = t.line, file = t.file}
                 else
                     if not has_variable_in_scope(t.value) then
                         error(string.format("Variable not defined in current scope: '%s'", t.value))
                     end
-                    i = i + 1
+                    expect("identifier")
 
                     local value_type = variable_in_scope_get_value(t.value, "value_type")
                     local isarg = variable_in_scope_get_value(t.value, "isarg")
@@ -881,13 +886,13 @@ function parse(toks, scope_stack, expression)
                     return {type = "variable", name = t.value, value_type = value_type, isarg = isarg, line = t.line, file = t.file, mutable = mutable}
                 end
             elseif t.type == "integer" then
-                i = i + 1
+                expect("integer")
                 return {type = "integer", value = t.value, value_type = "int", line = t.line, file = t.file}
             elseif t.type == "float" then
-                i = i + 1
+                expect("float")
                 return {type = "float", value = t.value, value_type = "float", line = t.line, file = t.file}
             elseif t.type == "string" then
-                i = i + 1
+                expect("string")
                 local value = t.value:gsub("\\n", "\\0A"):gsub("%%", "%%%%")
                 local length = #value + 1
                 for _ in string.gmatch(value, "\\0A") do
@@ -897,12 +902,12 @@ function parse(toks, scope_stack, expression)
             elseif t.type == "fstring" then
                 return parse_fstring(t)
             elseif t.type == "parenthesis" and t.value == "(" then
-                i = i + 1
+                expect("parenthesis")
                 local expr = parse_expression()
                 expect("parenthesis", ")")
                 return expr
             elseif t.type == "parenthesis" and t.value == "}" then
-                i = i + 1
+                expect("parenthesis")
                 error(string.format("Unexpected token in primary expression: '%s', could be missing ';' on line above", t.value))
             else
                 error(string.format("Unexpected token in primary expression: '%s'", t.value))
@@ -912,7 +917,7 @@ function parse(toks, scope_stack, expression)
         local function parse_unary()
             local t = current()
             if t.type == "operator" and (t.value == "-" or t.value == "+") then
-                i = i + 1
+                expect("operator")
                 local expr = parse_unary()
                 if expr.value_type ~= "int" and expr.value_type ~= "float" then
                     error(string.format("Unary operator '%s' cannot be applied to type '%s'", t.value, expr.value_type))
@@ -925,7 +930,7 @@ function parse(toks, scope_stack, expression)
 
         local function parse_term()
             local expr = parse_unary()
-            while i <= #toks and current().type == "operator" and (current().value == "*" or current().value == "/" or current().value == "%") and current().type ~= "punctuation" and current().value ~= ";" do
+            while i <= #toks and toks[i] and current().type == "operator" and (current().value == "*" or current().value == "/" or current().value == "%") and current().type ~= "punctuation" and current().value ~= ";" do
                 local op = expect("operator").value
                 local right = parse_unary()
                 if expr.value_type ~= right.value_type then
@@ -954,8 +959,7 @@ function parse(toks, scope_stack, expression)
 
         local expr = parse_comparison()
         while i <= #toks and toks[i].type and toks[i].value and toks[i].type == "operator" and is_in_table(current().value, {"+", "-"}) and current().type ~= "punctuation" and current().value ~= ";" do
-            local op = current().value
-            i = i + 1
+            local op = expect("operator")
             local right = parse_comparison()
             if expr.value_type ~= right.value_type then
                 error(string.format("Type mismatch in binary expression: '%s' and '%s'", expr.value_type, right.value_type))
@@ -1002,7 +1006,7 @@ function parse(toks, scope_stack, expression)
                 error(string.format("Attempt to reference undefined: '%s'", value))
             end
         elseif type == "revision" and value == "unreachable" then
-            i = i + 1
+            expect("revision")
             return {type = "revision", value = "unreachable", line = current().line}
         else
             error(string.format("Cannot parse '%s' as statement", value))

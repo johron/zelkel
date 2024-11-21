@@ -4,7 +4,6 @@ fn add(x: int, y: int): int {
     return x + y;
 }
 
-fn main(): int {
-    println(f"{1}");
-    return 0;
+fn main(): void {
+    println(f"{add(1, 2)}");
 }
