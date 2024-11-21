@@ -291,7 +291,6 @@ function parse(toks, scope_stack, expression)
     end
 
     function current()
-        print(i, #toks)
         if i <= #toks then
             return toks[i]
         else
@@ -930,7 +929,7 @@ function parse(toks, scope_stack, expression)
 
         local function parse_term()
             local expr = parse_unary()
-            while i <= #toks and toks[i] and current().type == "operator" and (current().value == "*" or current().value == "/" or current().value == "%") and current().type ~= "punctuation" and current().value ~= ";" do
+            while i <= #toks and current().type == "operator" and (current().value == "*" or current().value == "/" or current().value == "%") and current().type ~= "punctuation" and current().value ~= ";" do
                 local op = expect("operator").value
                 local right = parse_unary()
                 if expr.value_type ~= right.value_type then
