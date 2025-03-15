@@ -1,6 +1,8 @@
 use crate::lexer::{lex, TokenPos};
+use crate::parser::parse;
 
 mod lexer;
+mod parser;
 
 pub fn error(message: String, pos: TokenPos) -> String {
     format!("{} near {}:{}:{}", message, pos.path, pos.line, pos.col)
@@ -20,4 +22,11 @@ fn main() {
     });
 
     println!("{:#?}", tokens);
+
+    let ast = parse(tokens).unwrap_or_else(|err| {
+        eprintln!("Compile-time error: {}", err);
+        std::process::exit(1);
+    });
+
+    println!("{:#?}", ast);
 }
