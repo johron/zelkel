@@ -1,5 +1,0 @@
-fn println(a: string, ...): void {
-    vprintf(a, ...);
-    print("\n");
-    return;
-}

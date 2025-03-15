@@ -1,4 +1,2 @@
-testing/
-out/*
-!out/.gitinclude
-output.txt
+/target
+/.idea

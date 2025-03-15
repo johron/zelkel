@@ -1,5 +1,0 @@
-require "stdlib/io";
-
-fn main(): void {
-    println("Hello, world!");
-}

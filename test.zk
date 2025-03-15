@@ -1,9 +1,0 @@
-require "stdlib/io";
-
-fn add(x: int, y: int): int {
-    return x + y;
-}
-
-fn main(): void {
-    println(f"{add(1, 2)}");
-}
