@@ -1,4 +1,4 @@
-# Zelkel Compiler
+# Zelkel
 - Object-oriented programming language targeting custom virtual machine
 
 ## License
