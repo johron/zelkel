@@ -1,13 +1,41 @@
 use crate::{error};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenValue {
     Identifier(String),
     String(String),
     Integer(i32),
     Float(f32),
+    Bool(bool),
     Arithmetic(String),
     Punctuation(char),
+}
+
+impl TokenValue {
+    pub fn empty(tok: &str) -> Result<TokenValue, String> {
+        match tok {
+            "identifier" => Ok(TokenValue::Identifier("".to_owned())),
+            "string" => Ok(TokenValue::String("".to_owned())),
+            "integer" => Ok(TokenValue::Integer(0)),
+            "float" => Ok(TokenValue::Float(0.0)),
+            "bool" => Ok(TokenValue::Bool(false)),
+            "arithmetic" => Ok(TokenValue::Arithmetic("".to_owned())),
+            "punctuation" => Ok(TokenValue::Punctuation(' ')),
+            _ => Err(error(format!("Unknown token: {}", tok), TokenPos { path: "".to_string(), line: 0, col: 0 })),
+        }
+    }
+
+    pub fn as_string(&self) -> String {
+        match self {
+            TokenValue::Identifier(s) => s.clone(),
+            TokenValue::String(s) => s.clone(),
+            TokenValue::Integer(i) => i.to_string(),
+            TokenValue::Float(f) => f.to_string(),
+            TokenValue::Bool(b) => b.to_string(),
+            TokenValue::Arithmetic(s) => s.clone(),
+            TokenValue::Punctuation(c) => c.to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -17,10 +45,16 @@ pub struct TokenPos {
     pub col: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub value: TokenValue,
     pub pos: TokenPos,
+}
+
+impl Token {
+    pub fn empty() -> Token {
+        Token { value: TokenValue::Identifier("".to_owned()), pos: TokenPos { path: "".to_string(), line: 0, col: 0 } }
+    }
 }
 
 fn could_be(c: char, s: &str) -> bool {
