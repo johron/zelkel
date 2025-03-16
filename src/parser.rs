@@ -10,6 +10,8 @@ pub struct Statement {
 #[derive(Debug)]
 pub enum StatementKind {
     VariableDeclaration(VariableDeclaration),
+    FunctionDeclaration(FunctionDeclaration),
+    ExpressionStatement(ExpressionStatement),
 }
 
 #[derive(Debug)]
@@ -22,6 +24,19 @@ pub struct Expression {
 #[derive(Debug)]
 pub struct VariableDeclaration {
     name: String,
+    value: TokenValue,
+    expr: Expression,
+}
+
+#[derive(Debug)]
+pub struct FunctionDeclaration {
+    name: String,
+    value: TokenValue,
+    body: Vec<Statement>,
+}
+
+#[derive(Debug)]
+pub struct ExpressionStatement {
     value: TokenValue,
     expr: Expression,
 }
@@ -67,7 +82,32 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
 }
 
 fn parse_function_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
-    todo!()
+    let mut i = *i;
+    i += 1;
+    let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+    i += 1;
+    expect(&i, &toks, TokenValue::Punctuation("(".to_string()))?;
+    todo!("parse function arguments");
+    i += 1;
+    expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
+    i += 1;
+    expect(&i, &toks, TokenValue::Punctuation("->".to_string()))?;
+    i += 1;
+    let return_type = parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?)?)?;
+    i += 1;
+    expect(&i, &toks, TokenValue::Punctuation("{".to_string()))?;
+    i += 1;
+    todo!("parse function body");
+    expect(&i, &toks, TokenValue::Punctuation("}".to_string()))?;
+
+    Ok((Statement {
+        kind: StatementKind::FunctionDeclaration(FunctionDeclaration {
+            name,
+            value: return_type,
+            body: todo!("return function body"),
+        }),
+        pos: toks[i].pos.clone(),
+    }, i))
 }
 
 fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
@@ -75,15 +115,15 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
     i += 1;
     let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
     i += 1;
-    expect(&i, &toks, TokenValue::Punctuation(':'))?;
+    expect(&i, &toks, TokenValue::Punctuation(":".to_string()))?;
     i += 1;
     let value = parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?)?)?;
     i += 1;
-    expect(&i, &toks, TokenValue::Punctuation('='))?;
+    expect(&i, &toks, TokenValue::Punctuation("=".to_string()))?;
     i += 1;
     let (expr, j) = parse_expression(&i, toks)?;
     i = j;
-    expect(&i, &toks, TokenValue::Punctuation(';'))?;
+    expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
 
     Ok((Statement {
         kind: StatementKind::VariableDeclaration(VariableDeclaration {
@@ -96,7 +136,18 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
 }
 
 fn parse_expression_statement(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
-    todo!()
+    let mut i = *i;
+    let (expr, j) = parse_expression(&i, toks)?;
+    i = j;
+    expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
+
+    Ok((Statement {
+        kind: StatementKind::ExpressionStatement(ExpressionStatement {
+            value: todo!("need to auto infer type"),
+            expr,
+        }),
+        pos: toks[i].pos.clone(),
+    }, j))
 }
 
 fn parse_identifier(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {

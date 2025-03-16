@@ -8,7 +8,7 @@ pub enum TokenValue {
     Float(f32),
     Bool(bool),
     Arithmetic(String),
-    Punctuation(char),
+    Punctuation(String),
 }
 
 impl TokenValue {
@@ -20,7 +20,7 @@ impl TokenValue {
             "float" => Ok(TokenValue::Float(0.0)),
             "bool" => Ok(TokenValue::Bool(false)),
             "arithmetic" => Ok(TokenValue::Arithmetic("".to_owned())),
-            "punctuation" => Ok(TokenValue::Punctuation(' ')),
+            "punctuation" => Ok(TokenValue::Punctuation("".to_owned())),
             _ => Err(error(format!("Unknown token: {}", tok), TokenPos { path: "".to_string(), line: 0, col: 0 })),
         }
     }
@@ -105,10 +105,20 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
             i += 1;
             pos.col += 1;
             token.value = TokenValue::String(value);
-        } else if could_be(c, "+-*/%!") {
+        } else if could_be(c, "+*/%!") {
             token.value = TokenValue::Arithmetic(c.to_string());
             i += 1;
             pos.col += 1;
+        } else if c == '-' {
+            if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '>' {
+                token.value = TokenValue::Punctuation("->".to_owned());
+                i += 2;
+                pos.col += 2;
+            } else {
+                token.value = TokenValue::Arithmetic("-".to_string());
+                i += 1;
+                pos.col += 1;
+            }
         } else if c == '>' {
             if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '=' {
                 token.value = TokenValue::Arithmetic(">=".to_string());
@@ -151,12 +161,12 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
                 i += 2;
                 pos.col += 2;
             } else {
-                token.value = TokenValue::Punctuation('=');
+                token.value = TokenValue::Punctuation("=".to_string());
                 i += 1;
                 pos.col += 1;
             }
         } else if could_be(c, "(){}[],.;:") {
-            token.value = TokenValue::Punctuation(c);
+            token.value = TokenValue::Punctuation(c.to_string());
             i += 1;
             pos.col += 1;
         } else if c == '\n' {
