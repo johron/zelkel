@@ -31,11 +31,9 @@ fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue) -> Result<Token, Stri
         return Err(error("Unexpected end of file".to_string(), toks[*i].pos.clone()));
     }
 
-    if let TokenValue::Identifier(_) | TokenValue::String(_) | TokenValue::Arithmetic(_) | TokenValue::Punctuation(_) = value {
-        if toks[*i].value == value {
-            return Ok(toks[*i].clone());
-        }
-    } else if toks[*i].value == value {
+    if toks[*i].value == value {
+        return Ok(toks[*i].clone());
+    } else if let TokenValue::Identifier(_) | TokenValue::String(_) | TokenValue::Arithmetic(_) | TokenValue::Punctuation(_) = value {
         return Ok(toks[*i].clone());
     }
 
@@ -48,14 +46,24 @@ fn parse_type(tok: &Token) -> Result<TokenValue, String> {
             "int" => Ok(TokenValue::empty("integer")?),
             "str" => Ok(TokenValue::empty("string")?),
             "float" => Ok(TokenValue::empty("float")?),
-            _ => Err(error(format!("Unknown type: {}", s), tok.pos.clone())),
+            "bool" => Ok(TokenValue::empty("bool")?),
+            _ => Err(error(format!("Unknown type: '{}'", s), tok.pos.clone())),
         },
         _ => Err(error("Expected an identifier while parsing type".to_string(), tok.pos.clone())),
     }
 }
 
 fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize), String> {
-    todo!()
+    let mut i = *i;
+    let mut expr = Expression {
+        right: Vec::new(),
+        left: Vec::new(),
+        op: Token::empty(),
+    };
+
+
+
+    Ok((expr, i))
 }
 
 fn parse_function_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
@@ -71,7 +79,7 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
     i += 1;
     let value = parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?)?)?;
     i += 1;
-    expect(&i, &toks, TokenValue::Arithmetic("=".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation('='))?;
     i += 1;
     let (expr, j) = parse_expression(&i, toks)?;
     i = j;
@@ -100,7 +108,7 @@ fn parse_identifier(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), 
         TokenValue::Identifier(ref s) => match s.as_str() {
             "fn" => parse_function_declaration(&i, toks),
             "let" => parse_variable_declaration(&i, toks),
-            _ => Err(error(format!("Unknown identifier: {}", s), t.pos)),
+            _ => Err(error(format!("Unknown identifier: '{}'", s), t.pos)),
         },
         _ => Err(error("Expected an identifier while parsing identifier".to_string(), t.pos)),
     };

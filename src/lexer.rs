@@ -63,16 +63,16 @@ fn could_be(c: char, s: &str) -> bool {
 
 pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
     let mut toks: Vec<Token> = Vec::new();
-    let mut pos = TokenPos { path, line: 1, col: 0 };
+    let mut pos = TokenPos { path, line: 1, col: 1 };
     let mut i = 0;
 
     while i < input.len() {
         let c = input.chars().nth(i).unwrap();
         let mut token = Token { value: TokenValue::Identifier("".to_owned()), pos: pos.clone() };
 
-        if c.is_alphabetic() {
+        if c.is_alphabetic() || c == '_' {
             let mut value = String::new();
-            while i < input.len() && (input.chars().nth(i).unwrap().is_alphabetic() || input.chars().nth(i).unwrap() == '_') {
+            while i < input.len() && (input.chars().nth(i).unwrap().is_alphanumeric() || input.chars().nth(i).unwrap() == '_') {
                 value.push(input.chars().nth(i).unwrap());
                 i += 1;
                 pos.col += 1;
@@ -95,20 +95,73 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
                 i += 1;
                 pos.col += 1;
             }
+            if i < input.len() && input.chars().nth(i).unwrap() == '"' {
+                i += 1;
+                pos.col += 1;
+            } else {
+                return Err(error("Unterminated string".to_string(), pos));
+            }
+
             i += 1;
             pos.col += 1;
             token.value = TokenValue::String(value);
-        } else if could_be(c, "+-*/%=><!") {
+        } else if could_be(c, "+-*/%!") {
             token.value = TokenValue::Arithmetic(c.to_string());
             i += 1;
             pos.col += 1;
+        } else if c == '>' {
+            if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '=' {
+                token.value = TokenValue::Arithmetic(">=".to_string());
+                i += 2;
+                pos.col += 2;
+            } else {
+                token.value = TokenValue::Arithmetic(">".to_string());
+                i += 1;
+                pos.col += 1;
+            }
+        } else if c == '<' {
+            if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '=' {
+                token.value = TokenValue::Arithmetic("<=".to_string());
+                i += 2;
+                pos.col += 2;
+            } else {
+                token.value = TokenValue::Arithmetic("<".to_string());
+                i += 1;
+                pos.col += 1;
+            }
+        } else if c == '&' {
+            if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '&' {
+                token.value = TokenValue::Arithmetic("&&".to_string());
+                i += 2;
+                pos.col += 2;
+            } else {
+                return Err(error("Unexpected character '&'".to_string(), pos));
+            }
+        } else if c == '|' {
+            if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '|' {
+                token.value = TokenValue::Arithmetic("||".to_string());
+                i += 2;
+                pos.col += 2;
+            } else {
+                return Err(error("Unexpected character '|'".to_string(), pos));
+            }
+        } else if c == '=' {
+            if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '=' {
+                token.value = TokenValue::Arithmetic("==".to_string());
+                i += 2;
+                pos.col += 2;
+            } else {
+                token.value = TokenValue::Punctuation('=');
+                i += 1;
+                pos.col += 1;
+            }
         } else if could_be(c, "(){}[],.;:") {
             token.value = TokenValue::Punctuation(c);
             i += 1;
             pos.col += 1;
         } else if c == '\n' {
             pos.line += 1;
-            pos.col = 0;
+            pos.col = 1;
             i += 1;
             pos.col += 1;
             continue;
