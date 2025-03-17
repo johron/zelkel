@@ -14,10 +14,11 @@ pub enum StatementKind {
     ExpressionStatement(ExpressionStatement),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Expression {
-    right: Vec<Expression>,
-    left: Vec<Expression>,
+    right: Option<Expression>,
+    left: Option<Expression>,
+    value: TokenValue,
     op: Token,
 }
 
@@ -70,13 +71,30 @@ fn parse_type(tok: &Token) -> Result<TokenValue, String> {
 
 fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize), String> {
     let mut i = *i;
-    let mut expr = Expression {
-        right: Vec::new(),
-        left: Vec::new(),
-        op: Token::empty(),
-    };
 
+    fn parse_comparison_expression() -> Result<Expression, String> {
+        todo!()
+    }
 
+    let mut expr = parse_comparison_expression()?;
+    while
+        i < toks.len() &&
+            (toks[i].value == TokenValue::Arithmetic("+".to_string()) ||
+                toks[i].value == TokenValue::Arithmetic("-".to_string())) &&
+            toks[i + 1].value != TokenValue::Punctuation(";".to_string()) {
+        let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
+        i += 1;
+        let right = parse_comparison_expression()?;
+        if expr.value != right.value {
+            return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
+        }
+        expr = Expression {
+            right: Some(right),
+            left: Some(expr.clone()),
+            value: expr.value.clone(),
+            op,
+        };
+    }
 
     Ok((expr, i))
 }
