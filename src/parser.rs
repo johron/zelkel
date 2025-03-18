@@ -54,32 +54,35 @@ pub struct PrimaryExpression {
     value: TokenValue,
 }
 
+#[derive(Clone, Debug)]
 pub struct UnaryExpression {
-    right: Option<PrimaryExpression>,
     left: Option<PrimaryExpression>,
     value: TokenValue,
-    op: Token,
+    op: Option<Token>,
 }
 
+#[derive(Clone, Debug)]
 pub struct TermExpression {
     right: Option<UnaryExpression>,
     left: Option<UnaryExpression>,
     value: TokenValue,
-    op: Token,
+    op: Option<Token>,
 }
 
+#[derive(Clone, Debug)]
 pub struct ComparisonExpression {
     right: Option<TermExpression>,
     left: Option<TermExpression>,
     value: TokenValue,
-    op: Token,
+    op: Option<Token>,
 }
 
+#[derive(Clone, Debug)]
 pub struct BinaryExpression {
     right: Option<ComparisonExpression>,
     left: Option<ComparisonExpression>,
     value: TokenValue,
-    op: Token,
+    op: Option<Token>,
 }
 
 fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue) -> Result<Token, String> {
@@ -109,14 +112,107 @@ fn parse_type(tok: &Token) -> Result<TokenValue, String> {
     }
 }
 
-fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize), String> {
+fn parse_primary_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<PrimaryExpression>, String> {
     let mut i = *i;
+    let t = toks[i].clone();
+    match t.value {
+        TokenValue::String(_) | TokenValue::Integer(_) | TokenValue::Float(_) | TokenValue::Bool(_) => {
+            Ok(Some(PrimaryExpression {
+                value: t.value.clone(),
+            }))
+        },
+        TokenValue::Identifier(_) => {
+            todo!()
+        }
+        _ => Err(error("Unexpected token found while parsing primary expression".to_string(), t.pos)),
+    }
+}
 
-    fn parse_comparison_expression() -> Result<ComparisonExpression, String> {
-        todo!()
+fn parse_unary_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<UnaryExpression>, String> {
+    let mut i = *i;
+    let t = toks[i].clone();
+    if t.value == TokenValue::Arithmetic("-".to_string()) || t.value == TokenValue::Arithmetic("+".to_string()) {
+        i += 1;
+        let right = parse_unary_expression(&i, &toks)?.unwrap();
+
+        Ok(Some(UnaryExpression {
+            left: Some(PrimaryExpression {
+                value: right.clone().value.clone(),
+            }),
+            value: t.value.clone(),
+            op: Some(t.clone()),
+        }))
+    } else {
+        let left = parse_primary_expression(&i, &toks)?;
+        Ok(Some(UnaryExpression {
+            left: left.clone(),
+            value: left.unwrap().value,
+            op: None,
+        }))
+    }
+}
+
+fn parse_term_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<TermExpression>, String> {
+    let mut i = *i;
+    let mut expr: Option<TermExpression> = None;
+    let left = parse_unary_expression(&i, &toks)?.unwrap();
+    while
+        i < toks.len() &&
+            (toks[i].value == TokenValue::Arithmetic("*".to_string()) ||
+                toks[i].value == TokenValue::Arithmetic("/".to_string()) ||
+                toks[i].value == TokenValue::Arithmetic("%".to_string())) &&
+            toks[i + 1].value != TokenValue::Punctuation(";".to_string()) {
+        let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
+        i += 1;
+        let right = parse_unary_expression(&i, &toks)?.unwrap();
+        if left.value != right.value {
+            return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
+        }
+        expr = Some(TermExpression {
+            left: Some(left.clone()),
+            right: Some(right.clone()),
+            value: expr.clone().unwrap().value.clone(),
+            op: Some(op),
+        });
     }
 
-    let mut left = parse_comparison_expression()?;
+    Ok(expr)
+}
+
+fn parse_comparison_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<ComparisonExpression>, String> {
+    let mut i = *i;
+    let mut expr: Option<ComparisonExpression> = None;
+    let left = parse_term_expression(&i, &toks)?.unwrap();
+    while
+        i < toks.len() &&
+            (toks[i].value == TokenValue::Arithmetic("==".to_string()) ||
+                toks[i].value == TokenValue::Arithmetic("!=".to_string()) ||
+                toks[i].value == TokenValue::Arithmetic(">=".to_string()) ||
+                toks[i].value == TokenValue::Arithmetic("<=".to_string()) ||
+                toks[i].value == TokenValue::Arithmetic(">".to_string()) ||
+                toks[i].value == TokenValue::Arithmetic("<".to_string())) &&
+            toks[i + 1].value != TokenValue::Punctuation(";".to_string()) {
+        let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
+        i += 1;
+        let right = parse_term_expression(&i, &toks)?.unwrap();
+        if left.value != right.value {
+            return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
+        }
+        expr = Some(ComparisonExpression {
+            left: Some(left.clone()),
+            right: Some(right.clone()),
+            value: expr.clone().unwrap().value.clone(),
+            op: Some(op),
+        });
+    }
+
+    Ok(expr.clone())
+}
+
+fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize), String> {
+    let mut i = *i;
+    let mut expr: Option<Expression> = None;
+    let left = parse_comparison_expression(&i, &toks)?.unwrap();
     while
         i < toks.len() &&
             (toks[i].value == TokenValue::Arithmetic("+".to_string()) ||
@@ -124,22 +220,22 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
             toks[i + 1].value != TokenValue::Punctuation(";".to_string()) {
         let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
         i += 1;
-        let right = parse_comparison_expression()?;
-        if expr.value != right.value {
+        let right = parse_comparison_expression(&i, &toks)?.unwrap();
+        if left.value != right.value {
             return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
         }
-        expr = Expression {
+        expr = Some(Expression {
             kind: ExpressionKind::Binary(BinaryExpression {
-                left: Some(left),
-                right: Some(right),
-                value: expr.value.clone(),
-                op,
+                left: Some(left.clone()),
+                right: Some(right.clone()),
+                value: expr.clone().unwrap().value.clone(),
+                op: Some(op),
             }),
-            value: expr.value.clone(),
-        };
+            value: expr.unwrap().value.clone(),
+        });
     }
 
-    Ok((expr, i))
+    Ok((expr.unwrap(), i))
 }
 
 fn parse_function_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
