@@ -14,14 +14,6 @@ pub enum StatementKind {
     ExpressionStatement(ExpressionStatement),
 }
 
-#[derive(Debug, Clone)]
-pub struct Expression {
-    right: Option<Expression>,
-    left: Option<Expression>,
-    value: TokenValue,
-    op: Token,
-}
-
 #[derive(Debug)]
 pub struct VariableDeclaration {
     name: String,
@@ -40,6 +32,46 @@ pub struct FunctionDeclaration {
 pub struct ExpressionStatement {
     value: TokenValue,
     expr: Expression,
+}
+
+#[derive(Debug, Clone)]
+pub struct Expression {
+    kind: ExpressionKind,
+    value: TokenValue,
+}
+
+#[derive(Debug, Clone)]
+pub enum ExpressionKind {
+    Primary(PrimaryExpression),
+    Unary(UnaryExpression),
+    Term(TermExpression),
+    Comparison(ComparisonExpression),
+}
+
+#[derive(Debug, Clone)]
+pub struct PrimaryExpression {
+    value: TokenValue,
+}
+
+pub struct UnaryExpression {
+    right: Option<PrimaryExpression>,
+    left: Option<PrimaryExpression>,
+    value: TokenValue,
+    op: Token,
+}
+
+pub struct TermExpression {
+    right: Option<UnaryExpression>,
+    left: Option<UnaryExpression>,
+    value: TokenValue,
+    op: Token,
+}
+
+pub struct ComparisonExpression {
+    right: Option<TermExpression>,
+    left: Option<TermExpression>,
+    value: TokenValue,
+    op: Token,
 }
 
 fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue) -> Result<Token, String> {
@@ -89,10 +121,7 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
             return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
         }
         expr = Expression {
-            right: Some(right),
-            left: Some(expr.clone()),
             value: expr.value.clone(),
-            op,
         };
     }
 
