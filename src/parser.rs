@@ -176,6 +176,15 @@ fn parse_term_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<TermExpr
         });
     }
 
+    if expr.is_none() {
+        return Ok(Some(TermExpression {
+            left: Some(left.clone()),
+            right: None,
+            value: left.value.clone(),
+            op: None,
+        }));
+    }
+
     Ok(expr)
 }
 
@@ -206,7 +215,16 @@ fn parse_comparison_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<Co
         });
     }
 
-    Ok(expr.clone())
+    if expr.is_none() {
+        return Ok(Some(ComparisonExpression {
+            left: Some(left.clone()),
+            right: None,
+            value: left.value.clone(),
+            op: None,
+        }));
+    }
+
+    Ok(expr)
 }
 
 fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize), String> {
@@ -233,6 +251,13 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
             }),
             value: expr.unwrap().value.clone(),
         });
+    }
+
+    if expr.is_none() {
+        return Ok((Expression {
+            kind: ExpressionKind::Comparison(left.clone()),
+            value: left.clone().value.clone(),
+        }, i));
     }
 
     Ok((expr.unwrap(), i))
@@ -268,6 +293,7 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
 }
 
 fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
+    println!("parse variable declaration");
     let mut i = *i;
     i += 1;
     let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
@@ -279,6 +305,7 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
     expect(&i, &toks, TokenValue::Punctuation("=".to_string()))?;
     i += 1;
     let (expr, j) = parse_expression(&i, toks)?;
+    println!("{:?}", expr);
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
 
@@ -294,6 +321,7 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
 
 fn parse_expression_statement(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
     let mut i = *i;
+    println!("{:?}", toks[i]);
     let (expr, j) = parse_expression(&i, toks)?;
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
