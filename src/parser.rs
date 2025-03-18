@@ -46,6 +46,7 @@ pub enum ExpressionKind {
     Unary(UnaryExpression),
     Term(TermExpression),
     Comparison(ComparisonExpression),
+    Binary(BinaryExpression),
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +71,13 @@ pub struct TermExpression {
 pub struct ComparisonExpression {
     right: Option<TermExpression>,
     left: Option<TermExpression>,
+    value: TokenValue,
+    op: Token,
+}
+
+pub struct BinaryExpression {
+    right: Option<ComparisonExpression>,
+    left: Option<ComparisonExpression>,
     value: TokenValue,
     op: Token,
 }
@@ -104,11 +112,11 @@ fn parse_type(tok: &Token) -> Result<TokenValue, String> {
 fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize), String> {
     let mut i = *i;
 
-    fn parse_comparison_expression() -> Result<Expression, String> {
+    fn parse_comparison_expression() -> Result<ComparisonExpression, String> {
         todo!()
     }
 
-    let mut expr = parse_comparison_expression()?;
+    let mut left = parse_comparison_expression()?;
     while
         i < toks.len() &&
             (toks[i].value == TokenValue::Arithmetic("+".to_string()) ||
@@ -121,6 +129,12 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
             return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
         }
         expr = Expression {
+            kind: ExpressionKind::Binary(BinaryExpression {
+                left: Some(left),
+                right: Some(right),
+                value: expr.value.clone(),
+                op,
+            }),
             value: expr.value.clone(),
         };
     }
