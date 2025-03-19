@@ -1,1 +1,3 @@
-let x: str = "hi";
+fn main() -> void {
+
+}
