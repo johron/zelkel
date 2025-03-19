@@ -65,7 +65,7 @@ pub struct PrimaryExpression {
 
 #[derive(Clone, Debug)]
 pub struct UnaryExpression {
-    left: Option<PrimaryExpression>,
+    left: PrimaryExpression,
     typ: ValueType,
     op: Option<Token>,
 }
@@ -121,15 +121,34 @@ fn parse_type(tok: &Token) -> Result<ValueType, String> {
     }
 }
 
-fn parse_primary_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<PrimaryExpression>, String> {
+fn parse_primary_expression(i: &usize, toks: &Vec<Token>) -> Result<(PrimaryExpression, usize), String> {
     let mut i = *i;
     let t = toks[i].clone();
+    i += 1;
     match t.value {
-        TokenValue::String(_) | TokenValue::Integer(_) | TokenValue::Float(_) | TokenValue::Bool(_) => {
-            Ok(Some(PrimaryExpression {
+        TokenValue::String(_) => {
+            Ok((PrimaryExpression {
+                value: t.value.clone(),
+                typ: ValueType::String,
+            }, i))
+        },
+        TokenValue::Integer(_) => {
+            Ok((PrimaryExpression {
                 value: t.value.clone(),
                 typ: ValueType::Integer,
-            }))
+            }, i))
+        },
+        TokenValue::Float(_) => {
+            Ok((PrimaryExpression {
+                value: t.value.clone(),
+                typ: ValueType::Float,
+            }, i))
+        },
+        TokenValue::Bool(_) => {
+            Ok((PrimaryExpression {
+                value: t.value.clone(),
+                typ: ValueType::Bool,
+            }, i))
         },
         TokenValue::Identifier(_) => {
             todo!()
@@ -138,35 +157,36 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<Prima
     }
 }
 
-fn parse_unary_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<UnaryExpression>, String> {
+fn parse_unary_expression(i: &usize, toks: &Vec<Token>) -> Result<(UnaryExpression, usize), String> {
     let mut i = *i;
     let t = toks[i].clone();
     if t.value == TokenValue::Arithmetic("-".to_string()) || t.value == TokenValue::Arithmetic("+".to_string()) {
         i += 1;
-        let right = parse_unary_expression(&i, &toks)?.unwrap();
+        let (right, j) = parse_unary_expression(&i, &toks)?;
 
-        Ok(Some(UnaryExpression {
-            left: Some(PrimaryExpression {
-                value: right.clone().left.unwrap().value,
-                typ: right.clone().left.unwrap().typ,
-            }),
+        Ok((UnaryExpression {
+            left: PrimaryExpression {
+                value: right.clone().left.value,
+                typ: right.clone().left.typ,
+            },
             typ: right.typ.clone(),
             op: Some(t.clone()),
-        }))
+        }, j))
     } else {
-        let left = parse_primary_expression(&i, &toks)?;
-        Ok(Some(UnaryExpression {
+        let (left, ni) = parse_primary_expression(&i, &toks)?;
+        Ok((UnaryExpression {
             left: left.clone(),
-            typ: left.unwrap().typ,
+            typ: left.typ,
             op: None,
-        }))
+        }, i))
     }
 }
 
-fn parse_term_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<TermExpression>, String> {
+fn parse_term_expression(i: &usize, toks: &Vec<Token>) -> Result<(Option<TermExpression>, usize), String> {
     let mut i = *i;
     let mut expr: Option<TermExpression> = None;
-    let left = parse_unary_expression(&i, &toks)?.unwrap();
+    let (left, j) = parse_unary_expression(&i, &toks)?;
+    i = j;
     while
         i < toks.len() &&
             (toks[i].value == TokenValue::Arithmetic("*".to_string()) ||
@@ -175,7 +195,8 @@ fn parse_term_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<TermExpr
             toks[i + 1].value != TokenValue::Punctuation(";".to_string()) {
         let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
         i += 1;
-        let right = parse_unary_expression(&i, &toks)?.unwrap();
+        let (right, k) = parse_unary_expression(&i, &toks)?;
+        i = k;
         if left.typ != right.typ {
             return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
         }
@@ -188,21 +209,22 @@ fn parse_term_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<TermExpr
     }
 
     if expr.is_none() {
-        return Ok(Some(TermExpression {
+        return Ok((Some(TermExpression {
             left: Some(left.clone()),
             right: None,
             typ: left.typ.clone(),
             op: None,
-        }));
+        }), i));
     }
 
-    Ok(expr)
+    Ok((expr, i))
 }
 
-fn parse_comparison_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<ComparisonExpression>, String> {
+fn parse_comparison_expression(i: &usize, toks: &Vec<Token>) -> Result<(Option<ComparisonExpression>, usize), String> {
     let mut i = *i;
     let mut expr: Option<ComparisonExpression> = None;
-    let left = parse_term_expression(&i, &toks)?.unwrap();
+    let (left, j) = parse_term_expression(&i, &toks)?;
+    i = j;
     while
         i < toks.len() &&
             (toks[i].value == TokenValue::Arithmetic("==".to_string()) ||
@@ -214,34 +236,36 @@ fn parse_comparison_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<Co
             toks[i + 1].value != TokenValue::Punctuation(";".to_string()) {
         let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
         i += 1;
-        let right = parse_term_expression(&i, &toks)?.unwrap();
-        if left.typ != right.typ {
+        let (right, k) = parse_term_expression(&i, &toks)?;
+        i = k;
+        if left.clone().unwrap().typ != right.clone().unwrap().typ {
             return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
         }
         expr = Some(ComparisonExpression {
-            left: Some(left.clone()),
-            right: Some(right.clone()),
+            left: left.clone(),
+            right: right.clone(),
             typ: expr.clone().unwrap().typ.clone(),
             op: Some(op),
         });
     }
 
     if expr.is_none() {
-        return Ok(Some(ComparisonExpression {
-            left: Some(left.clone()),
+        return Ok((Some(ComparisonExpression {
+            left: left.clone(),
             right: None,
-            typ: left.typ.clone(),
+            typ: left.clone().unwrap().typ,
             op: None,
-        }));
+        }), i));
     }
 
-    Ok(expr)
+    Ok((expr, i))
 }
 
 fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize), String> {
     let mut i = *i;
     let mut expr: Option<Expression> = None;
-    let left = parse_comparison_expression(&i, &toks)?.unwrap();
+    let (left, j) = parse_comparison_expression(&i, &toks)?;
+    i = j;
     while
         i < toks.len() &&
             (toks[i].value == TokenValue::Arithmetic("+".to_string()) ||
@@ -249,14 +273,15 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
             toks[i + 1].value != TokenValue::Punctuation(";".to_string()) {
         let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
         i += 1;
-        let right = parse_comparison_expression(&i, &toks)?.unwrap();
-        if left.typ != right.typ {
+        let (right, k) = parse_comparison_expression(&i, &toks)?;
+        i = k;
+        if left.clone().unwrap().typ != right.clone().unwrap().typ {
             return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
         }
         expr = Some(Expression {
             kind: ExpressionKind::Binary(BinaryExpression {
-                left: Some(left.clone()),
-                right: Some(right.clone()),
+                left: Some(left.clone().unwrap()),
+                right: Some(right.clone().unwrap()),
                 typ: expr.clone().unwrap().typ.clone(),
                 op: Some(op),
             }),
@@ -266,8 +291,8 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
 
     if expr.is_none() {
         return Ok((Expression {
-            kind: ExpressionKind::Comparison(left.clone()),
-            typ: left.clone().typ.clone(),
+            kind: ExpressionKind::Comparison(left.clone().unwrap()),
+            typ: left.clone().unwrap().typ,
         }, i));
     }
 
@@ -304,19 +329,22 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
 }
 
 fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
-    println!("parse variable declaration");
     let mut i = *i;
     i += 1;
     let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
     i += 1;
     expect(&i, &toks, TokenValue::Punctuation(":".to_string()))?;
     i += 1;
-    let typ = parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?)?)?;
+    let type_ident = expect(&i, &toks, TokenValue::empty("identifier")?)?;
+    let typ = parse_type(&type_ident)?;
     i += 1;
     expect(&i, &toks, TokenValue::Punctuation("=".to_string()))?;
     i += 1;
     let (expr, j) = parse_expression(&i, toks)?;
-    println!("{:?}", expr);
+    if typ != expr.typ {
+        return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
+    }
+
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
 
@@ -327,12 +355,11 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
             expr,
         }),
         pos: toks[i].pos.clone(),
-    }, j))
+    }, i + 1))
 }
 
 fn parse_expression_statement(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
     let mut i = *i;
-    println!("{:?}", toks[i]);
     let (expr, j) = parse_expression(&i, toks)?;
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;

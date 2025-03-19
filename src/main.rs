@@ -21,8 +21,6 @@ fn main() {
         std::process::exit(1);
     });
 
-    println!("{:#?}", tokens);
-
     let ast = parse(tokens).unwrap_or_else(|err| {
         eprintln!("Compilation error: {}", err);
         std::process::exit(1);
