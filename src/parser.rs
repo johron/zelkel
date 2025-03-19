@@ -7,6 +7,14 @@ pub struct Statement {
     pos: TokenPos,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValueType {
+    Integer,
+    Float,
+    String,
+    Bool,
+}
+
 #[derive(Debug)]
 pub enum StatementKind {
     VariableDeclaration(VariableDeclaration),
@@ -17,27 +25,27 @@ pub enum StatementKind {
 #[derive(Debug)]
 pub struct VariableDeclaration {
     name: String,
-    value: TokenValue,
+    typ: ValueType,
     expr: Expression,
 }
 
 #[derive(Debug)]
 pub struct FunctionDeclaration {
     name: String,
-    value: TokenValue,
+    typ: ValueType,
     body: Vec<Statement>,
 }
 
 #[derive(Debug)]
 pub struct ExpressionStatement {
-    value: TokenValue,
+    typ: ValueType,
     expr: Expression,
 }
 
 #[derive(Debug, Clone)]
 pub struct Expression {
     kind: ExpressionKind,
-    value: TokenValue,
+    typ: ValueType
 }
 
 #[derive(Debug, Clone)]
@@ -52,12 +60,13 @@ pub enum ExpressionKind {
 #[derive(Debug, Clone)]
 pub struct PrimaryExpression {
     value: TokenValue,
+    typ: ValueType,
 }
 
 #[derive(Clone, Debug)]
 pub struct UnaryExpression {
     left: Option<PrimaryExpression>,
-    value: TokenValue,
+    typ: ValueType,
     op: Option<Token>,
 }
 
@@ -65,7 +74,7 @@ pub struct UnaryExpression {
 pub struct TermExpression {
     right: Option<UnaryExpression>,
     left: Option<UnaryExpression>,
-    value: TokenValue,
+    typ: ValueType,
     op: Option<Token>,
 }
 
@@ -73,7 +82,7 @@ pub struct TermExpression {
 pub struct ComparisonExpression {
     right: Option<TermExpression>,
     left: Option<TermExpression>,
-    value: TokenValue,
+    typ: ValueType,
     op: Option<Token>,
 }
 
@@ -81,7 +90,7 @@ pub struct ComparisonExpression {
 pub struct BinaryExpression {
     right: Option<ComparisonExpression>,
     left: Option<ComparisonExpression>,
-    value: TokenValue,
+    typ: ValueType,
     op: Option<Token>,
 }
 
@@ -99,13 +108,13 @@ fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue) -> Result<Token, Stri
     Err(error(format!("Expected {:?} but got {:?}", value, toks[*i].value), toks[*i].pos.clone()))
 }
 
-fn parse_type(tok: &Token) -> Result<TokenValue, String> {
+fn parse_type(tok: &Token) -> Result<ValueType, String> {
     match tok.value {
         TokenValue::Identifier(ref s) => match s.as_str() {
-            "int" => Ok(TokenValue::empty("integer")?),
-            "str" => Ok(TokenValue::empty("string")?),
-            "float" => Ok(TokenValue::empty("float")?),
-            "bool" => Ok(TokenValue::empty("bool")?),
+            "int" => Ok(ValueType::Integer),
+            "str" => Ok(ValueType::String),
+            "float" => Ok(ValueType::Float),
+            "bool" => Ok(ValueType::Bool),
             _ => Err(error(format!("Unknown type: '{}'", s), tok.pos.clone())),
         },
         _ => Err(error("Expected an identifier while parsing type".to_string(), tok.pos.clone())),
@@ -119,6 +128,7 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<Prima
         TokenValue::String(_) | TokenValue::Integer(_) | TokenValue::Float(_) | TokenValue::Bool(_) => {
             Ok(Some(PrimaryExpression {
                 value: t.value.clone(),
+                typ: ValueType::Integer,
             }))
         },
         TokenValue::Identifier(_) => {
@@ -137,16 +147,17 @@ fn parse_unary_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<UnaryEx
 
         Ok(Some(UnaryExpression {
             left: Some(PrimaryExpression {
-                value: right.clone().value.clone(),
+                value: right.clone().left.unwrap().value,
+                typ: right.clone().left.unwrap().typ,
             }),
-            value: t.value.clone(),
+            typ: right.typ.clone(),
             op: Some(t.clone()),
         }))
     } else {
         let left = parse_primary_expression(&i, &toks)?;
         Ok(Some(UnaryExpression {
             left: left.clone(),
-            value: left.unwrap().value,
+            typ: left.unwrap().typ,
             op: None,
         }))
     }
@@ -165,13 +176,13 @@ fn parse_term_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<TermExpr
         let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
         i += 1;
         let right = parse_unary_expression(&i, &toks)?.unwrap();
-        if left.value != right.value {
+        if left.typ != right.typ {
             return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
         }
         expr = Some(TermExpression {
             left: Some(left.clone()),
             right: Some(right.clone()),
-            value: expr.clone().unwrap().value.clone(),
+            typ: expr.clone().unwrap().typ.clone(),
             op: Some(op),
         });
     }
@@ -180,7 +191,7 @@ fn parse_term_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<TermExpr
         return Ok(Some(TermExpression {
             left: Some(left.clone()),
             right: None,
-            value: left.value.clone(),
+            typ: left.typ.clone(),
             op: None,
         }));
     }
@@ -204,13 +215,13 @@ fn parse_comparison_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<Co
         let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
         i += 1;
         let right = parse_term_expression(&i, &toks)?.unwrap();
-        if left.value != right.value {
+        if left.typ != right.typ {
             return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
         }
         expr = Some(ComparisonExpression {
             left: Some(left.clone()),
             right: Some(right.clone()),
-            value: expr.clone().unwrap().value.clone(),
+            typ: expr.clone().unwrap().typ.clone(),
             op: Some(op),
         });
     }
@@ -219,7 +230,7 @@ fn parse_comparison_expression(i: &usize, toks: &Vec<Token>) -> Result<Option<Co
         return Ok(Some(ComparisonExpression {
             left: Some(left.clone()),
             right: None,
-            value: left.value.clone(),
+            typ: left.typ.clone(),
             op: None,
         }));
     }
@@ -239,24 +250,24 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
         let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
         i += 1;
         let right = parse_comparison_expression(&i, &toks)?.unwrap();
-        if left.value != right.value {
+        if left.typ != right.typ {
             return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
         }
         expr = Some(Expression {
             kind: ExpressionKind::Binary(BinaryExpression {
                 left: Some(left.clone()),
                 right: Some(right.clone()),
-                value: expr.clone().unwrap().value.clone(),
+                typ: expr.clone().unwrap().typ.clone(),
                 op: Some(op),
             }),
-            value: expr.unwrap().value.clone(),
+            typ: expr.unwrap().typ.clone(),
         });
     }
 
     if expr.is_none() {
         return Ok((Expression {
             kind: ExpressionKind::Comparison(left.clone()),
-            value: left.clone().value.clone(),
+            typ: left.clone().typ.clone(),
         }, i));
     }
 
@@ -285,7 +296,7 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
     Ok((Statement {
         kind: StatementKind::FunctionDeclaration(FunctionDeclaration {
             name,
-            value: return_type,
+            typ: return_type,
             body: todo!("return function body"),
         }),
         pos: toks[i].pos.clone(),
@@ -300,7 +311,7 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
     i += 1;
     expect(&i, &toks, TokenValue::Punctuation(":".to_string()))?;
     i += 1;
-    let value = parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?)?)?;
+    let typ = parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?)?)?;
     i += 1;
     expect(&i, &toks, TokenValue::Punctuation("=".to_string()))?;
     i += 1;
@@ -312,7 +323,7 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
     Ok((Statement {
         kind: StatementKind::VariableDeclaration(VariableDeclaration {
             name,
-            value,
+            typ,
             expr,
         }),
         pos: toks[i].pos.clone(),
@@ -328,7 +339,7 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>) -> Result<(Statement
 
     Ok((Statement {
         kind: StatementKind::ExpressionStatement(ExpressionStatement {
-            value: todo!("need to auto infer type"),
+            typ: expr.clone().typ,
             expr,
         }),
         pos: toks[i].pos.clone(),
