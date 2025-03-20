@@ -350,6 +350,20 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
 
     Ok((expr.unwrap(), i))
 }
+
+fn parse_class_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
+    let mut i = *i;
+    i += 1;
+    let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+    i += 1;
+    expect(&i, &toks, TokenValue::Punctuation("{".to_string()))?;
+    i += 1;
+    todo!("parse class body, should only be function declarations");
+    expect(&i, &toks, TokenValue::Punctuation("}".to_string()))?;
+    i += 1;
+    todo!("do rest");
+}
+
 fn parse_function_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
     i += 1;
