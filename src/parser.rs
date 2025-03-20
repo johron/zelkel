@@ -33,6 +33,7 @@ pub struct VariableDeclaration {
 pub struct FunctionDeclaration {
     name: String,
     typ: ValueType,
+    args: Vec<VariableDeclaration>,
     body: Vec<Statement>,
 }
 
@@ -92,6 +93,12 @@ pub struct BinaryExpression {
     left: Option<ComparisonExpression>,
     typ: ValueType,
     op: Option<Token>,
+}
+
+pub struct Scope {
+    parent: Option<Box<Scope>>,
+    variables: Vec<VariableDeclaration>,
+    functions: Vec<FunctionDeclaration>,
 }
 
 fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue) -> Result<Token, String> {
@@ -299,7 +306,7 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
     Ok((expr.unwrap(), i))
 }
 
-fn parse_function_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
+fn parse_function_declaration(i: &usize, toks: &Vec<Token>, mut scope: &Scope) -> Result<(Statement, usize), String> {
     let mut i = *i;
     i += 1;
     let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
@@ -321,6 +328,7 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
     Ok((Statement {
         kind: StatementKind::FunctionDeclaration(FunctionDeclaration {
             name,
+            args: todo!("function arguments"),
             typ: return_type,
             body: todo!("return function body"),
         }),
@@ -328,10 +336,15 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
     }, i))
 }
 
-fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
+fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, mut scope: &Scope) -> Result<(Statement, usize), String> {
     let mut i = *i;
     i += 1;
     let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+
+    if scope.variables.iter().any(|v| v.name == name) {
+        return Err(error(format!("Variable '{}' already declared", name), toks[i].pos.clone()));
+    }
+
     i += 1;
     expect(&i, &toks, TokenValue::Punctuation(":".to_string()))?;
     i += 1;
@@ -348,12 +361,16 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>) -> Result<(Statement
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
 
+    let var_decl = VariableDeclaration {
+        name,
+        typ,
+        expr,
+    };
+
+    scope.variables.push(var_decl);
+
     Ok((Statement {
-        kind: StatementKind::VariableDeclaration(VariableDeclaration {
-            name,
-            typ,
-            expr,
-        }),
+        kind: var_decl,
         pos: toks[i].pos.clone(),
     }, i + 1))
 }
@@ -373,15 +390,15 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>) -> Result<(Statement
     }, j))
 }
 
-fn parse_identifier(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
+fn parse_identifier(i: &usize, toks: &Vec<Token>, scope: &Scope) -> Result<(Statement, usize), String> {
     let mut i = *i;
     let t = toks[i].clone();
     let val = t.value;
 
     let stmt: Result<(Statement, usize), String> = match val {
         TokenValue::Identifier(ref s) => match s.as_str() {
-            "fn" => parse_function_declaration(&i, toks),
-            "let" => parse_variable_declaration(&i, toks),
+            "fn" => parse_function_declaration(&i, toks, scope),
+            "let" => parse_variable_declaration(&i, toks, scope),
             _ => Err(error(format!("Unknown identifier: '{}'", s), t.pos)),
         },
         _ => Err(error("Expected an identifier while parsing identifier".to_string(), t.pos)),
@@ -394,10 +411,16 @@ fn parse_statement(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), S
     let mut i = *i;
     let pos = toks[i].pos.clone();
 
+    let scope = Scope {
+        parent: None,
+        variables: Vec::new(),
+        functions: Vec::new(),
+    };
+
     while i < toks.len() {
         return match toks[i].value {
-            TokenValue::Identifier(_) => Ok(parse_identifier(&i, toks)?),
-            _ => Ok(parse_expression_statement(&i, toks)?),
+            TokenValue::Identifier(_) => Ok(parse_identifier(&i, &toks, &scope)?),
+            _ => Ok(parse_expression_statement(&i, &toks)?),
         }
     }
 
