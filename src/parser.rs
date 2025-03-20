@@ -243,7 +243,7 @@ fn parse_term_expression(i: &usize, toks: &Vec<Token>) -> Result<(Option<TermExp
         let (right, k) = parse_unary_expression(&i, &toks)?;
         i = k;
         if left.typ != right.typ {
-            return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
+            return Err(error(format!("Type mismatch: found both {:?} and {:?}", left.typ, right.typ), toks[i].pos.clone()));
         }
         expr = Some(TermExpression {
             left: Some(left.clone()),
@@ -284,7 +284,7 @@ fn parse_comparison_expression(i: &usize, toks: &Vec<Token>) -> Result<(Option<C
         let (right, k) = parse_term_expression(&i, &toks)?;
         i = k;
         if left.clone().unwrap().typ != right.clone().unwrap().typ {
-            return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
+            return Err(error(format!("Type mismatch: found both {:?} and {:?}", left.unwrap().typ, right.unwrap().typ), toks[i].pos.clone()));
         }
         expr = Some(ComparisonExpression {
             left: left.clone(),
@@ -325,7 +325,7 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
             let (right, k) = parse_comparison_expression(&i, &toks)?;
             i = k;
             if left.clone().unwrap().typ != right.clone().unwrap().typ {
-                return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
+                return Err(error(format!("Type mismatch: found both {:?} and {:?}", left.unwrap().typ, right.unwrap().typ), toks[i].pos.clone()));
             }
             expr = Some(Expression {
                 kind: ExpressionKind::Binary(BinaryExpression {
