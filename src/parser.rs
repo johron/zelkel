@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use crate::error;
 use crate::lexer::{Token, TokenPos, TokenValue};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Statement {
     kind: StatementKind,
     pos: TokenPos,
@@ -15,21 +16,21 @@ pub enum ValueType {
     Bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum StatementKind {
     VariableDeclaration(VariableDeclaration),
     FunctionDeclaration(FunctionDeclaration),
     ExpressionStatement(ExpressionStatement),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VariableDeclaration {
     name: String,
     typ: ValueType,
     expr: Expression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
     name: String,
     typ: ValueType,
@@ -37,7 +38,7 @@ pub struct FunctionDeclaration {
     body: Vec<Statement>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExpressionStatement {
     typ: ValueType,
     expr: Expression,
@@ -95,10 +96,16 @@ pub struct BinaryExpression {
     op: Option<Token>,
 }
 
+#[derive(Debug, Clone)]
+pub struct VariableOptions {
+    pub mutable: bool,
+    pub typ: ValueType,
+}
+
+#[derive(Clone, Debug)]
 pub struct Scope {
-    parent: Option<Box<Scope>>,
-    variables: Vec<VariableDeclaration>,
-    functions: Vec<FunctionDeclaration>,
+    variables: HashMap<String, VariableOptions>,
+    functions: Vec<String>,
 }
 
 fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue) -> Result<Token, String> {
@@ -306,7 +313,7 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
     Ok((expr.unwrap(), i))
 }
 
-fn parse_function_declaration(i: &usize, toks: &Vec<Token>, mut scope: &Scope) -> Result<(Statement, usize), String> {
+fn parse_function_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
     i += 1;
     let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
@@ -333,15 +340,16 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, mut scope: &Scope) -
             body: todo!("return function body"),
         }),
         pos: toks[i].pos.clone(),
-    }, i))
+    }, i, todo!("return scope")))
 }
 
-fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, mut scope: &Scope) -> Result<(Statement, usize), String> {
+fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
+    let mut global_scope = global_scope.clone();
     i += 1;
     let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
 
-    if scope.variables.iter().any(|v| v.name == name) {
+    if global_scope.last().unwrap().variables.iter().any(|v| v.0 == &name) {
         return Err(error(format!("Variable '{}' already declared", name), toks[i].pos.clone()));
     }
 
@@ -355,28 +363,30 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, mut scope: &Scope) -
     i += 1;
     let (expr, j) = parse_expression(&i, toks)?;
     if typ != expr.typ {
-        return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
+        return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", typ, expr.typ), toks[i].pos.clone()));
     }
 
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
 
-    let var_decl = VariableDeclaration {
-        name,
-        typ,
-        expr,
-    };
-
-    scope.variables.push(var_decl);
+    global_scope.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
+        mutable: false,
+        typ: typ.clone(),
+    });
 
     Ok((Statement {
-        kind: var_decl,
+        kind: StatementKind::VariableDeclaration(VariableDeclaration {
+            name,
+            typ,
+            expr,
+        }),
         pos: toks[i].pos.clone(),
-    }, i + 1))
+    }, i + 1, global_scope))
 }
 
-fn parse_expression_statement(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
+fn parse_expression_statement(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
+    let mut global_scope = global_scope.clone();
     let (expr, j) = parse_expression(&i, toks)?;
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
@@ -387,18 +397,18 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>) -> Result<(Statement
             expr,
         }),
         pos: toks[i].pos.clone(),
-    }, j))
+    }, j, global_scope))
 }
 
-fn parse_identifier(i: &usize, toks: &Vec<Token>, scope: &Scope) -> Result<(Statement, usize), String> {
+fn parse_identifier(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
     let t = toks[i].clone();
     let val = t.value;
 
-    let stmt: Result<(Statement, usize), String> = match val {
+    let stmt: Result<(Statement, usize, Vec<Scope>), String> = match val {
         TokenValue::Identifier(ref s) => match s.as_str() {
-            "fn" => parse_function_declaration(&i, toks, scope),
-            "let" => parse_variable_declaration(&i, toks, scope),
+            "fn" => parse_function_declaration(&i, toks, global_scope),
+            "let" => parse_variable_declaration(&i, toks, global_scope),
             _ => Err(error(format!("Unknown identifier: '{}'", s), t.pos)),
         },
         _ => Err(error("Expected an identifier while parsing identifier".to_string(), t.pos)),
@@ -407,20 +417,14 @@ fn parse_identifier(i: &usize, toks: &Vec<Token>, scope: &Scope) -> Result<(Stat
     stmt
 }
 
-fn parse_statement(i: &usize, toks: &Vec<Token>) -> Result<(Statement, usize), String> {
+fn parse_statement(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
     let pos = toks[i].pos.clone();
 
-    let scope = Scope {
-        parent: None,
-        variables: Vec::new(),
-        functions: Vec::new(),
-    };
-
     while i < toks.len() {
         return match toks[i].value {
-            TokenValue::Identifier(_) => Ok(parse_identifier(&i, &toks, &scope)?),
-            _ => Ok(parse_expression_statement(&i, &toks)?),
+            TokenValue::Identifier(_) => Ok(parse_identifier(&i, &toks, global_scope)?),
+            _ => Ok(parse_expression_statement(&i, &toks, global_scope)?),
         }
     }
 
@@ -431,8 +435,12 @@ pub fn parse(toks: Vec<Token>) -> Result<Vec<Statement>, String> {
     let mut ast: Vec<Statement> = Vec::new();
     let mut i = 0;
 
+    let mut global_scope: Vec<Scope> = Vec::new();
+    global_scope.push(Scope { variables: HashMap::new(), functions: Vec::new() });
+
     while i < toks.len() {
-        let (stmt, j) = parse_statement(&i, &toks)?;
+        let (stmt, j, scope) = parse_statement(&i, &toks, &mut global_scope)?;
+        global_scope = scope;
         ast.push(stmt);
         i = j;
     }

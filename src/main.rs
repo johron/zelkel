@@ -5,7 +5,7 @@ mod lexer;
 mod parser;
 
 pub fn error(message: String, pos: TokenPos) -> String {
-    format!("{} near {}:{}:{}", message, pos.path, pos.line, pos.col)
+    format!("{}, occurred near {}:{}:{}", message, pos.path, pos.line, pos.col)
 }
 
 fn main() {

@@ -1,1 +1,1 @@
-let x: str = "test";
+let a: int = "test";
