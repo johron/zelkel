@@ -9,6 +9,7 @@ pub enum TokenValue {
     Bool(bool),
     Arithmetic(String),
     Punctuation(String),
+    Nested,
 }
 
 impl TokenValue {
@@ -34,6 +35,7 @@ impl TokenValue {
             TokenValue::Bool(b) => b.to_string(),
             TokenValue::Arithmetic(s) => s.clone(),
             TokenValue::Punctuation(c) => c.to_string(),
+            TokenValue::Nested => "nested".to_string(),
         }
     }
 }
@@ -80,12 +82,20 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
             token.value = TokenValue::Identifier(value);
         } else if c.is_digit(10) {
             let mut value = String::new();
-            while i < input.len() && input.chars().nth(i).unwrap().is_digit(10) {
+            let mut is_float = false;
+            while i < input.len() && (input.chars().nth(i).unwrap().is_digit(10) || input.chars().nth(i).unwrap() == '.') {
+                if input.chars().nth(i).unwrap() == '.' {
+                    is_float = true;
+                }
                 value.push(input.chars().nth(i).unwrap());
                 i += 1;
                 pos.col += 1;
             }
-            token.value = TokenValue::Integer(value.parse().unwrap());
+            token.value = if is_float {
+                TokenValue::Float(value.parse().unwrap())
+            } else {
+                TokenValue::Integer(value.parse().unwrap())
+            };
         } else if c == '"' {
             let mut value = String::new();
             i += 1;

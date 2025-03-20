@@ -63,6 +63,7 @@ pub enum ExpressionKind {
 pub struct PrimaryExpression {
     value: TokenValue,
     typ: ValueType,
+    nested: Option<Box<Expression>>,
 }
 
 #[derive(Clone, Debug)]
@@ -122,6 +123,20 @@ fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue) -> Result<Token, Stri
     Err(error(format!("Expected {:?} but got {:?}", value, toks[*i].value), toks[*i].pos.clone()))
 }
 
+fn enter_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
+    let parent_scope = scope.last().cloned().unwrap_or(Scope {
+        variables: HashMap::new(),
+        functions: Vec::new(),
+    });
+    scope.push(parent_scope);
+    scope.clone()
+}
+
+fn exit_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
+    scope.pop();
+    scope.clone()
+}
+
 fn parse_type(tok: &Token) -> Result<ValueType, String> {
     match tok.value {
         TokenValue::Identifier(ref s) => match s.as_str() {
@@ -144,24 +159,39 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>) -> Result<(PrimaryExpr
             Ok((PrimaryExpression {
                 value: t.value.clone(),
                 typ: ValueType::String,
+                nested: None,
             }, i))
         },
         TokenValue::Integer(_) => {
             Ok((PrimaryExpression {
                 value: t.value.clone(),
                 typ: ValueType::Integer,
+                nested: None,
             }, i))
         },
         TokenValue::Float(_) => {
             Ok((PrimaryExpression {
                 value: t.value.clone(),
                 typ: ValueType::Float,
+                nested: None,
             }, i))
         },
         TokenValue::Bool(_) => {
             Ok((PrimaryExpression {
                 value: t.value.clone(),
                 typ: ValueType::Bool,
+                nested: None,
+            }, i))
+        },
+        TokenValue::Punctuation(ref p) if p == "(" => {
+            let (expr, j) = parse_expression(&i, &toks)?;
+            i = j;
+            expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
+            i += 1;
+            Ok((PrimaryExpression {
+                value: TokenValue::Nested,
+                typ: expr.clone().typ,
+                nested: Some(Box::new(expr)),
             }, i))
         },
         TokenValue::Identifier(_) => {
@@ -182,17 +212,18 @@ fn parse_unary_expression(i: &usize, toks: &Vec<Token>) -> Result<(UnaryExpressi
             left: PrimaryExpression {
                 value: right.clone().left.value,
                 typ: right.clone().left.typ,
+                nested: right.clone().left.nested,
             },
             typ: right.typ.clone(),
             op: Some(t.clone()),
         }, j))
     } else {
-        let (left, ni) = parse_primary_expression(&i, &toks)?;
+        let (left, j) = parse_primary_expression(&i, &toks)?;
         Ok((UnaryExpression {
             left: left.clone(),
             typ: left.typ,
             op: None,
-        }, i))
+        }, j))
     }
 }
 
@@ -280,27 +311,34 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
     let mut expr: Option<Expression> = None;
     let (left, j) = parse_comparison_expression(&i, &toks)?;
     i = j;
-    while
-        i < toks.len() &&
-            (toks[i].value == TokenValue::Arithmetic("+".to_string()) ||
-                toks[i].value == TokenValue::Arithmetic("-".to_string())) &&
-            toks[i + 1].value != TokenValue::Punctuation(";".to_string()) {
-        let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
-        i += 1;
-        let (right, k) = parse_comparison_expression(&i, &toks)?;
-        i = k;
-        if left.clone().unwrap().typ != right.clone().unwrap().typ {
-            return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
+    while i < toks.len() {
+        if toks[i].value == TokenValue::Punctuation("(".to_string()) {
+            i += 1;
+            let (nested_expr, k) = parse_expression(&i, &toks)?;
+            i = k;
+            expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
+            i += 1;
+            expr = Some(nested_expr);
+        } else if toks[i].value == TokenValue::Arithmetic("+".to_string()) || toks[i].value == TokenValue::Arithmetic("-".to_string()) {
+            let op = expect(&i, &toks, TokenValue::Arithmetic("".to_string()))?;
+            i += 1;
+            let (right, k) = parse_comparison_expression(&i, &toks)?;
+            i = k;
+            if left.clone().unwrap().typ != right.clone().unwrap().typ {
+                return Err(error("Type mismatch".to_string(), toks[i].pos.clone()));
+            }
+            expr = Some(Expression {
+                kind: ExpressionKind::Binary(BinaryExpression {
+                    left: Some(left.clone().unwrap()),
+                    right: Some(right.clone().unwrap()),
+                    typ: left.clone().unwrap().typ.clone(),
+                    op: Some(op),
+                }),
+                typ: left.clone().unwrap().typ.clone(),
+            });
+        } else {
+            break;
         }
-        expr = Some(Expression {
-            kind: ExpressionKind::Binary(BinaryExpression {
-                left: Some(left.clone().unwrap()),
-                right: Some(right.clone().unwrap()),
-                typ: expr.clone().unwrap().typ.clone(),
-                op: Some(op),
-            }),
-            typ: expr.unwrap().typ.clone(),
-        });
     }
 
     if expr.is_none() {
@@ -312,7 +350,6 @@ fn parse_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression, usize),
 
     Ok((expr.unwrap(), i))
 }
-
 fn parse_function_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
     i += 1;
