@@ -2,7 +2,7 @@
 - Object-oriented programming language targeting custom virtual machine
 
 ## Todo:
-- [ ] Fix error when multiplying, should probably check other expressions too
+- [x] Fix error when multiplying, should probably check other expressions too
 - [ ] Parse function arguments, bodies
 - [ ] Parse classes
 
