@@ -128,15 +128,19 @@ pub struct Scope {
     classes: HashMap<String, ClassOptions>,
 }
 
-fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue) -> Result<Token, String> {
+fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue, strict: bool) -> Result<Token, String> {
     let i = *i;
     if i >= toks.len() {
         return Err(error("Unexpected end of file".to_string(), toks[i].pos.clone()));
     }
 
-    if toks[i].value == value {
+    if toks[i].value == value && strict {
+        println!("1");
         return Ok(toks[i].clone());
-    } else if let TokenValue::Identifier(_) | TokenValue::String(_) | TokenValue::Arithmetic(_) | TokenValue::Punctuation(_) = value {
+    }
+
+    if std::mem::discriminant(&toks[i].value) == std::mem::discriminant(&value) && !strict {
+        println!("2");
         return Ok(toks[i].clone());
     }
 
@@ -204,7 +208,7 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>) -> Result<(Expression,
                 i += 1;
                 let (expr, j) = parse_expression(&i, toks)?;
                 i = j;
-                expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
+                expect(&i, &toks, TokenValue::Punctuation(")".to_string()), true)?;
                 expr
             } else {
                 return Err(error("Expected a primary expression".to_string(), tok.pos.clone()));
@@ -380,29 +384,26 @@ fn parse_class_body(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>)
 }
 fn parse_class_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
+    let begin = i;
     let mut global_scope = global_scope.clone();
     i += 1;
-    let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+    let name = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
     i += 1;
     let extends: Option<String>;
-    if let Ok(a) = expect(&i, &toks, TokenValue::Punctuation(":".to_string())) {
-        if a.value != TokenValue::Punctuation(":".to_string()) {
-            extends = None
-        } else {
-            i += 1;
-            extends = Some(expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string());
-            i += 1;
-        }
+    if let Ok(a) = expect(&i, &toks, TokenValue::Punctuation(":".to_string()), true) {
+        i += 1;
+        extends = Some(expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string());
+        i += 1;
     } else {
         extends = None;
     }
-    expect(&i, &toks, TokenValue::Punctuation("{".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation("{".to_string()), true)?;
     i += 1;
     global_scope = enter_scope(&mut global_scope);
     let (body, j, mut scope) = parse_class_body(&i, &toks, &mut global_scope)?;
     i = j;
     global_scope = exit_scope(&mut scope);
-    expect(&i, &toks, TokenValue::Punctuation("}".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation("}".to_string()), true)?;
     i += 1;
     Ok((Statement {
         kind: StatementKind::ClassDeclaration(ClassDeclaration {
@@ -413,7 +414,7 @@ fn parse_class_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<
                 _ => unreachable!(),
             }).collect(),
         }),
-        pos: toks[i - 1].pos.clone(),
+        pos: toks[begin].pos.clone(),
     }, i, global_scope))
 }
 
@@ -424,21 +425,17 @@ fn parse_declaration_arguments(i: &usize, toks: &Vec<Token>) -> Result<(Vec<Vari
         let tok = &toks[i];
         if let TokenValue::Identifier(_) = &tok.value {
             i += 1;
-            expect(&i, &toks, TokenValue::Punctuation(":".to_string()))?;
+            expect(&i, &toks, TokenValue::Punctuation(":".to_string()), true)?;
             i += 1;
-            let type_ident = expect(&i, &toks, TokenValue::empty("identifier")?)?;
+            let type_ident = expect(&i, &toks, TokenValue::empty("identifier")?, false)?;
             let typ = parse_type(&type_ident)?;
             i += 1;
             args.push(VariableOptions {
                 mutable: false,
                 typ,
             });
-            if let TokenValue::Punctuation(p) = &toks[i].value {
-                if p == "," {
-                    i += 1;
-                } else {
-                    break;
-                }
+            if let Ok(a) = expect(&i, &toks, TokenValue::Punctuation(",".to_string()), true) {
+                i += 1;
             } else {
                 break;
             }
@@ -451,34 +448,31 @@ fn parse_declaration_arguments(i: &usize, toks: &Vec<Token>) -> Result<(Vec<Vari
 
 fn parse_function_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
+    let begin = i;
     let mut global_scope = global_scope.clone();
     i += 1;
-    let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+    let name = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
     i += 1;
-    expect(&i, &toks, TokenValue::Punctuation("(".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation("(".to_string()), true)?;
     i += 1;
     let (args, j) = parse_declaration_arguments(&i, &toks)?;
     i = j;
-    expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation(")".to_string()), true)?;
     i += 1;
     let typ: Option<ValueType>;
-    if let Ok(a) = expect(&i, &toks, TokenValue::Punctuation("->".to_string())) {
-        if a.value != TokenValue::Punctuation("->".to_string()) {
-            typ = None
-        } else {
-            i += 1;
-            typ = Some(parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?)?)?);
-            i += 1;
-        }
+    if let Ok(a) = expect(&i, &toks, TokenValue::Punctuation("->".to_string()), true) {
+        i += 1;
+        typ = Some(parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?, false)?)?);
+        i += 1;
     } else {
         typ = None;
     }
-    expect(&i, &toks, TokenValue::Punctuation("{".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation("{".to_string()), true)?;
     global_scope = enter_scope(&mut global_scope);
     i += 1;
     let (body, j, mut scope) = parse_function_body(&i, &toks, &mut global_scope)?;
     i = j;
-    expect(&i, &toks, TokenValue::Punctuation("}".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation("}".to_string()), true)?;
     i += 1;
     global_scope = exit_scope(&mut scope);
 
@@ -493,38 +487,35 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut V
             typ,
             body,
         }),
-        pos: toks[i - 1].pos.clone(),
+        pos: toks[begin].pos.clone(),
     }, i, global_scope.clone()))
 }
 
 fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
+    let begin = i;
     let mut global_scope = global_scope.clone();
     i += 1;
 
-    let mutable = if let Ok(a) = expect(&i, &toks, TokenValue::Identifier("mut".to_string())) {
-        if a.value != TokenValue::Identifier("mut".to_string()) {
-            false
-        } else {
-            i += 1;
-            true
-        }
+    let mutable = if let Ok(a) = expect(&i, &toks, TokenValue::Identifier("mut".to_string()), true) {
+        i += 1;
+        true
     } else {
         false
     };
 
-    let name = expect(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+    let name = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
     if global_scope.last().unwrap().variables.iter().any(|v| v.0 == &name) {
         return Err(error(format!("Variable '{}' already declared", name), toks[i].pos.clone()));
     }
 
     i += 1;
-    expect(&i, &toks, TokenValue::Punctuation(":".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation(":".to_string()), true)?;
     i += 1;
-    let type_ident = expect(&i, &toks, TokenValue::empty("identifier")?)?;
+    let type_ident = expect(&i, &toks, TokenValue::empty("identifier")?, false)?;
     let typ = parse_type(&type_ident)?;
     i += 1;
-    expect(&i, &toks, TokenValue::Punctuation("=".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation("=".to_string()), true)?;
     i += 1;
     let (expr, j) = parse_expression(&i, toks)?;
     if typ != expr.typ {
@@ -532,7 +523,7 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut V
     }
 
     i = j;
-    expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
 
     global_scope.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
         mutable,
@@ -545,23 +536,24 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, global_scope: &mut V
             typ,
             expr,
         }),
-        pos: toks[i].pos.clone(),
+        pos: toks[begin].pos.clone(),
     }, i + 1, global_scope))
 }
 
 fn parse_expression_statement(i: &usize, toks: &Vec<Token>, global_scope: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
+    let begin = i;
     let global_scope = global_scope.clone();
     let (expr, j) = parse_expression(&i, toks)?;
     i = j;
-    expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
+    expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
 
     Ok((Statement {
         kind: StatementKind::ExpressionStatement(ExpressionStatement {
             typ: expr.clone().typ,
             expr,
         }),
-        pos: toks[i].pos.clone(),
+        pos: toks[begin].pos.clone(),
     }, j, global_scope))
 }
 
