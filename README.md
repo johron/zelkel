@@ -1,5 +1,5 @@
 # Zelkel
-- Object-oriented programming language targeting custom virtual machine
+- Object-oriented programming language targeting a [custom virtual machine](https://github.com/johron/zelkel-vm)
 
 ## Todo:
 - [x] Fix the expect function since it does not check for the actual value in the check
