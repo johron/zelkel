@@ -1,5 +1,5 @@
-fn main() -> int {
-    let x: int = 5;
-    let x: int = 5;
+class str : type {
+    fn str() {
+        let mut x: int = 5;
+    }
 }
-

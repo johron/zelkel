@@ -2,9 +2,10 @@
 - Object-oriented programming language targeting custom virtual machine
 
 ## Todo:
-- [x] Fix error when multiplying, should probably check other expressions too
-- [ ] Parse function arguments, bodies
-- [ ] Parse classes
+- [ ] Fix the expect function since it does not check for the actual value in the check
+- [ ] In the parser `parse()` function only parse for class definitions and require statements
+- [ ] Add `pub` identifier after class and function definitions to make them public
+  - Example: `class pub test_clas {}`, `fn pub test_func() {}`
 
 ## License
 Licensed under the MIT License; please see the [license file](LICENSE.md) for terms.
