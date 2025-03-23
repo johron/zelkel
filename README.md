@@ -8,4 +8,4 @@
   - Example: `class pub test_clas {}`, `fn pub test_func() {}`
 
 ## License
-Licensed under the MIT License; please see the [license file](LICENSE.md) for terms.
+Licensed under the MIT License; please see the [license file](LICENSE) for terms.
