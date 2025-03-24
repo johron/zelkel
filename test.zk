@@ -1,2 +1,5 @@
-let x: int = 5;
-let y: int = x - 1;
+fn test() -> int {
+    let x: int = 1 + 1;
+}
+
+let y: int = test();

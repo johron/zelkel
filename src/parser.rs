@@ -17,6 +17,31 @@ pub enum ValueType {
 }
 
 #[derive(Debug, Clone)]
+pub enum Value {
+    Integer(i32),
+    Float(f32),
+    String(String),
+    Bool(bool),
+    Variable(String),
+    Function(String),
+    Class(String),
+    Arithmetic(String),
+}
+
+impl From<TokenValue> for Value {
+    fn from(token_value: TokenValue) -> Self {
+        match token_value {
+            TokenValue::Integer(i) => Value::Integer(i),
+            TokenValue::Float(f) => Value::Float(f),
+            TokenValue::String(s) => Value::String(s),
+            TokenValue::Bool(b) => Value::Bool(b),
+            TokenValue::Arithmetic(s) => Value::Arithmetic(s),
+            _ => unimplemented!("Conversion for this TokenValue variant is not implemented"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum StatementKind {
     VariableDeclaration(VariableDeclaration),
     FunctionDeclaration(FunctionDeclaration),
@@ -69,7 +94,7 @@ pub struct Expression {
 
 #[derive(Debug, Clone)]
 pub struct PrimaryExpression {
-    value: TokenValue,
+    value: Value,
     typ: ValueType,
 }
 
@@ -77,7 +102,7 @@ pub struct PrimaryExpression {
 pub struct UnaryExpression {
     left: ExpressionKind,
     typ: ValueType,
-    op: TokenValue,
+    op: Value,
 }
 
 #[derive(Debug, Clone)]
@@ -85,7 +110,7 @@ pub struct TermExpression {
     left: ExpressionKind,
     right: ExpressionKind,
     typ: ValueType,
-    op: TokenValue,
+    op: Value,
 }
 
 #[derive(Debug, Clone)]
@@ -93,7 +118,7 @@ pub struct BinaryExpression {
     left: ExpressionKind,
     right: ExpressionKind,
     typ: ValueType,
-    op: TokenValue,
+    op: Value,
 }
 
 #[derive(Debug, Clone)]
@@ -101,7 +126,7 @@ pub struct ComparisonExpression {
     left: ExpressionKind,
     right: ExpressionKind,
     typ: ValueType,
-    op: TokenValue,
+    op: Value,
 }
 
 #[derive(Debug, Clone)]
@@ -182,7 +207,7 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
         TokenValue::Integer(_) | TokenValue::Float(_) | TokenValue::String(_) | TokenValue::Bool(_) => {
             Expression {
                 kind: ExpressionKind::Primary(PrimaryExpression {
-                    value: tok.value.clone(),
+                    value: tok.value.clone().into(),
                     typ: match &tok.value {
                         TokenValue::Integer(_) => ValueType::Integer,
                         TokenValue::Float(_) => ValueType::Float,
@@ -201,8 +226,8 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
             }
         }
         TokenValue::Identifier(s) => {
+            println!("{:?}, {:?}", toks[i], toks[i + 1]);
             if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation("(".to_string()), true) {
-                todo!("implement function calls, this code is bad, need to differentiate between variable and functions for the codegen, also borrow error here");
                 if let Some(f) = scope_stack.last().unwrap().functions.get(s) {
                     let mut args: Vec<Expression> = Vec::new();
                     while i < toks.len() {
@@ -212,7 +237,8 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
                                 break;
                             }
                         }
-                        let (expr, j) = parse_expression(&i, toks, scope_stack)?;
+                        let mut scope = scope_stack.clone();
+                        let (expr, j) = parse_expression(&i, toks, &mut scope)?;
                         i = j;
                         args.push(expr);
                         if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation(",".to_string()), true) {
@@ -223,7 +249,7 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
                     i += 1;
                     Expression {
                         kind: ExpressionKind::Primary(PrimaryExpression {
-                            value: tok.value.clone(),
+                            value: Value::Function(tok.value.as_string()),
                             typ: f.clone().typ.unwrap(),
                         }),
                         typ: f.clone().typ.unwrap(),
@@ -235,7 +261,7 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
                 if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
                     Expression {
                         kind: ExpressionKind::Primary(PrimaryExpression {
-                            value: tok.value.clone(),
+                            value: Value::Variable(tok.value.as_string()),
                             typ: v.typ.clone(),
                         }),
                         typ: v.typ.clone(),
@@ -272,7 +298,7 @@ fn parse_unary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sc
             kind: ExpressionKind::Unary(Box::from(UnaryExpression {
                 left: expr.kind,
                 typ: expr.typ.clone(),
-                op: tok.clone().value,
+                op: tok.clone().value.into(),
             })),
             typ: expr.typ,
         }, j));
@@ -296,7 +322,7 @@ fn parse_term_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sco
                         left: expr.kind,
                         right: right.kind,
                         typ: expr.typ.clone(),
-                        op: tok.clone().value,
+                        op: tok.clone().value.into(),
                     })),
                     typ: expr.typ,
                 };
@@ -321,12 +347,13 @@ fn parse_binary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<S
                 i += 1;
                 let (right, h) = parse_term_expression(&mut i, toks, scope_stack)?;
                 i = h;
+                println!("{:?}", tok.value);
                 expr = Expression {
                     kind: ExpressionKind::Binary(Box::from(BinaryExpression {
                         left: expr.kind,
                         right: right.kind,
                         typ: expr.typ.clone(),
-                        op: tok.clone().value,
+                        op: tok.clone().value.into(),
                     })),
                     typ: expr.typ,
                 };
@@ -356,7 +383,7 @@ fn parse_comparison_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut V
                         left: expr.kind,
                         right: right.kind,
                         typ: expr.typ.clone(),
-                        op: tok.clone().value,
+                        op: tok.clone().value.into(),
                     })),
                     typ: expr.typ,
                 };
