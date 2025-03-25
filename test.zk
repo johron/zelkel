@@ -1,5 +1,5 @@
 fn test() -> int {
-    let x: int = 1 + 1;
+    val x: int = 1 + 1;
 }
 
-let y: int = test();
+val y: int = test();
