@@ -2,10 +2,9 @@
 - Object-oriented programming language targeting a [custom virtual machine](https://github.com/johron/zelkel-vm)
 
 ## Todo:
-- [x] Fix the expect function since it does not check for the actual value in the check
 - [ ] In the parser `parse()` function only parse for class definitions and require statements
-- [x] Add `pub` identifier after class and function definitions to make them public
-  - Example: `class pub test_clas {}`, `fn pub test_func() {}`
+- [ ] Implement everything for what is in the test file
+  - `self` should not need a type in the function declaration: `fn _(self, ...)` not `fn _(self: Class, ...)`
 
 ## License
 Licensed under the MIT License; please see the [license file](LICENSE) for terms.

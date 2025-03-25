@@ -115,7 +115,7 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
             i += 1;
             pos.col += 1;
             token.value = TokenValue::String(value);
-        } else if could_be(c, "+*/%") {
+        } else if could_be(c, "+*%") {
             token.value = TokenValue::Arithmetic(c.to_string());
             i += 1;
             pos.col += 1;
@@ -187,6 +187,17 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
             token.value = TokenValue::Punctuation(c.to_string());
             i += 1;
             pos.col += 1;
+        } else if c == '/' {
+            if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '/' {
+                while i < input.len() && input.chars().nth(i).unwrap() != '\n' {
+                    i += 1;
+                    pos.col += 1;
+                }
+            } else {
+                token.value = TokenValue::Arithmetic(c.to_string());
+                i += 1;
+                pos.col += 1;
+            }
         } else if c == '\n' {
             pos.line += 1;
             pos.col = 1;

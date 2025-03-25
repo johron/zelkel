@@ -347,7 +347,6 @@ fn parse_binary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<S
                 i += 1;
                 let (right, h) = parse_term_expression(&mut i, toks, scope_stack)?;
                 i = h;
-                println!("{:?}", tok.value);
                 expr = Expression {
                     kind: ExpressionKind::Binary(Box::from(BinaryExpression {
                         left: expr.kind,

@@ -1,5 +1,11 @@
-fn test() -> int {
-    val x: int = 1 + 1;
+class Car {
+    fn _(self, year: int) {
+        self.year = year;
+    }
 }
 
-val y: int = test();
+class Test {
+    fn main() {
+        val car: Car = new Car(2019);
+    }
+}
