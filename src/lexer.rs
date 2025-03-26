@@ -112,8 +112,6 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
                 return Err(error("Unterminated string".to_string(), pos));
             }
 
-            i += 1;
-            pos.col += 1;
             token.value = TokenValue::String(value);
         } else if could_be(c, "+*%") {
             token.value = TokenValue::Arithmetic(c.to_string());

@@ -158,7 +158,7 @@ pub struct Scope {
 fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue, strict: bool) -> Result<Token, String> {
     let i = *i;
     if i >= toks.len() {
-        return Err(error("Unexpected end of file".to_string(), toks[i].pos.clone()));
+        return Err(error("Unexpected end of file".to_string(), toks.last().unwrap().pos.clone()));
     }
 
     if toks[i].value == value && strict {
@@ -294,14 +294,19 @@ fn parse_unary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sc
     if let TokenValue::Arithmetic(_) = &tok.value {
         i += 1;
         let (expr, j) = parse_primary_expression(&mut i, toks, scope_stack)?;
-        return Ok((Expression {
-            kind: ExpressionKind::Unary(Box::from(UnaryExpression {
-                left: expr.kind,
-                typ: expr.typ.clone(),
-                op: tok.clone().value.into(),
-            })),
-            typ: expr.typ,
-        }, j));
+
+        if expr.typ == ValueType::Integer || expr.typ == ValueType::Float {
+            return Ok((Expression {
+                kind: ExpressionKind::Unary(Box::from(UnaryExpression {
+                    left: expr.kind,
+                    typ: expr.typ.clone(),
+                    op: tok.clone().value.into(),
+                })),
+                typ: expr.typ,
+            }, j));
+        }
+
+        return Err(error(format!("Type mismatch: expected {:?} or {:?}, but found {:?}", ValueType::Integer, ValueType::Float, expr.typ), toks[i].pos.clone()));
     }
     parse_primary_expression(&mut i, toks, scope_stack)
 }
@@ -317,6 +322,11 @@ fn parse_term_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sco
                 i += 1;
                 let (right, h) = parse_unary_expression(&mut i, toks, scope_stack)?;
                 i = h;
+
+                if expr.typ != right.typ {
+                    return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", expr.typ, right.typ), toks[i].pos.clone()));
+                }
+
                 expr = Expression {
                     kind: ExpressionKind::Term(Box::from(TermExpression {
                         left: expr.kind,
@@ -347,6 +357,11 @@ fn parse_binary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<S
                 i += 1;
                 let (right, h) = parse_term_expression(&mut i, toks, scope_stack)?;
                 i = h;
+
+                if expr.typ != right.typ {
+                    return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", expr.typ, right.typ), toks[i].pos.clone()));
+                }
+
                 expr = Expression {
                     kind: ExpressionKind::Binary(Box::from(BinaryExpression {
                         left: expr.kind,
@@ -377,6 +392,11 @@ fn parse_comparison_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut V
                 i += 1;
                 let (right, h) = parse_binary_expression(&mut i, toks, scope_stack)?;
                 i = h;
+
+                if expr.typ != right.typ {
+                    return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", expr.typ, right.typ), toks[i].pos.clone()));
+                }
+
                 expr = Expression {
                     kind: ExpressionKind::Comparison(Box::from(ComparisonExpression {
                         left: expr.kind,

@@ -1,11 +1,2 @@
-class Car {
-    fn _(Self, year: int) {
-        Self.year = year;
-    }
-}
-
-class Test {
-    fn main() {
-        val car: Car = new Car(2019);
-    }
-}
+// val x: String = new String("hi");
+val x: String = "hi";
