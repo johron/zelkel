@@ -3,8 +3,9 @@
 
 ## Todo:
 - [ ] In the parser `parse()` function only parse for class definitions and require statements
-- [ ] Implement everything for what is in the test file
-  - `self` should not need a type in the function declaration: `fn _(self, ...)` not `fn _(self: Class, ...)`
+- [ ] Constructors
+  - [ ] Implement classes as types.
+  - [ ] Implement the `new` statement for instantiating classes, should automatically add the `Self` parameter
 
 ## License
 Licensed under the MIT License; please see the [license file](LICENSE) for terms.

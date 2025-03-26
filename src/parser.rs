@@ -481,6 +481,7 @@ fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<S
     expect(&i, &toks, TokenValue::Punctuation("{".to_string()), true)?;
     i += 1;
     scope_stack = enter_scope(&mut scope_stack);
+
     let (body, j, mut scope) = parse_class_body(&i, &toks, &mut scope_stack)?;
     i = j;
     scope_stack = exit_scope(&mut scope);
@@ -508,10 +509,26 @@ fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<S
     }, i, scope_stack))
 }
 
-fn parse_declaration_arguments(i: &usize, toks: &Vec<Token>) -> Result<(Vec<VariableOptions>, usize), String> {
+fn parse_declaration_arguments(i: &usize, toks: &Vec<Token>, constructor: bool) -> Result<(Vec<VariableOptions>, usize), String> {
     let mut i = *i;
     let mut args: Vec<VariableOptions> = Vec::new();
+    let mut first = true;
     while i < toks.len() {
+        if first && constructor {
+            first = false;
+            expect(&i, toks, TokenValue::Identifier("Self".to_string()), true)?;
+            i += 1;
+            args.push(VariableOptions {
+                mutable: false,
+                typ: todo!("Get the class name and use it as the type"),
+            });
+            if let Ok(a) = expect(&i, &toks, TokenValue::Punctuation(",".to_string()), true) {
+                i += 1;
+                continue;
+            } else {
+                break;
+            }
+        }
         let tok = &toks[i];
         if let TokenValue::Identifier(_) = &tok.value {
             i += 1;
@@ -557,7 +574,8 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     i += 1;
     expect(&i, &toks, TokenValue::Punctuation("(".to_string()), true)?;
     i += 1;
-    let (args, j) = parse_declaration_arguments(&i, &toks)?;
+    let constructor = if name == "_" { true } else { false };
+    let (args, j) = parse_declaration_arguments(&i, &toks, constructor)?;
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(")".to_string()), true)?;
     i += 1;

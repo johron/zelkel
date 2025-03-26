@@ -1,11 +1,11 @@
-/*class Car {
-    fn _(self, year: int) {
-        self.year = year;
+class Car {
+    fn _(Self, year: int) {
+        Self.year = year;
     }
-}*/
+}
 
 class Test {
     fn main() {
-        //val car: Car = new Car(2019);
+        val car: Car = new Car(2019);
     }
 }
