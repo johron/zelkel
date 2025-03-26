@@ -220,6 +220,17 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
             token.value = TokenValue::Punctuation(c.to_string());
             i += 1;
             pos.col += 1;
+        } else if c == '/' {
+            if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '/' {
+                while i < input.len() && input.chars().nth(i).unwrap() != '\n' {
+                    i += 1;
+                    pos.col += 1;
+                }
+            } else {
+                token.value = TokenValue::Arithmetic(c.to_string());
+                i += 1;
+                pos.col += 1;
+            }
         } else if c == '\n' {
             i += 1;
             pos.line += 1;

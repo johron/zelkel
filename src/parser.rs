@@ -226,8 +226,9 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
             }
         }
         TokenValue::Identifier(s) => {
-            println!("{:?}, {:?}", toks[i], toks[i + 1]);
+            i += 1;
             if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation("(".to_string()), true) {
+                i += 1;
                 if let Some(f) = scope_stack.last().unwrap().functions.get(s) {
                     let mut args: Vec<Expression> = Vec::new();
                     while i < toks.len() {
@@ -246,7 +247,6 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
                         }
                     }
                     expect(&i, &toks, TokenValue::Punctuation(")".to_string()), true)?;
-                    i += 1;
                     Expression {
                         kind: ExpressionKind::Primary(PrimaryExpression {
                             value: Value::Function(tok.value.as_string()),
@@ -347,7 +347,6 @@ fn parse_binary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<S
                 i += 1;
                 let (right, h) = parse_term_expression(&mut i, toks, scope_stack)?;
                 i = h;
-                println!("{:?}", tok.value);
                 expr = Expression {
                     kind: ExpressionKind::Binary(Box::from(BinaryExpression {
                         left: expr.kind,
@@ -572,8 +571,8 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
         typ = None;
     }
     expect(&i, &toks, TokenValue::Punctuation("{".to_string()), true)?;
-    scope_stack = enter_scope(&mut scope_stack);
     i += 1;
+    scope_stack = enter_scope(&mut scope_stack);
     let (body, j, mut scope) = parse_function_body(&i, &toks, &mut scope_stack)?;
     i = j;
     expect(&i, &toks, TokenValue::Punctuation("}".to_string()), true)?;
@@ -629,6 +628,7 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
 
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
+    i += 1;
 
     scope_stack.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
         mutable,
@@ -642,7 +642,7 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
             expr,
         }),
         pos: toks[begin].pos.clone(),
-    }, i + 1, scope_stack))
+    }, i, scope_stack))
 }
 
 fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
@@ -670,7 +670,7 @@ fn parse_identifier(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) 
         TokenValue::Identifier(ref s) => match s.as_str() {
             "class" => parse_class_declaration(&i, toks, scope_stack),
             "fn" => parse_function_declaration(&i, toks, scope_stack),
-            "let" => parse_variable_declaration(&i, toks, scope_stack),
+            "val" => parse_variable_declaration(&i, toks, scope_stack),
             _ => Err(error(format!("Unknown identifier: '{}'", s), t.pos)),
         },
         _ => Err(error("Expected an identifier while parsing identifier".to_string(), t.pos)),

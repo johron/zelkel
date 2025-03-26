@@ -1,5 +1,11 @@
-/* test
+class Car {
+    fn _(self, year: int) {
+        self.year = year;
+    }
+}
 
-
-*/
-let x: /* hi */ int = 5; // hi
+class Test {
+    fn main() {
+        val car: Car = new Car(2019);
+    }
+}
