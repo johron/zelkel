@@ -121,7 +121,6 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
             pos.col += 1;
         } else if c == '/' {
             if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '/' {
-                println!("1");
                 i += 2;
                 while i < input.len() && input.chars().nth(i).unwrap() != '\n' {
                     i += 1;
@@ -132,7 +131,6 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
                 pos.line += 1;
                 continue;
             } else if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '*' {
-                println!("2");
                 i += 2;
                 while i + 1 < input.len() && input.chars().nth(i).unwrap() != '*' && input.chars().nth(i + 1).unwrap() != '/' {
                     i += 1;
@@ -147,7 +145,6 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
                 pos.col += 2;
                 continue;
             } else {
-                println!("3");
                 token.value = TokenValue::Arithmetic(c.to_string());
                 i += 1;
                 pos.col += 1;
