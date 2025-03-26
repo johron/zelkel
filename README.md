@@ -8,7 +8,7 @@
   - [ ] Implement the `new` statement for instantiating classes, should automatically add the `Self` parameter
 
 ## How I want some stuff to work:
-### Making strings or any other type/valu
+### Making strings or any other type/value
 - Comment is what it basically does
 ```
 class String {
