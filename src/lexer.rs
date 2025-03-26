@@ -115,10 +115,43 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
             i += 1;
             pos.col += 1;
             token.value = TokenValue::String(value);
-        } else if could_be(c, "+*/%") {
+        } else if could_be(c, "+*%") {
             token.value = TokenValue::Arithmetic(c.to_string());
             i += 1;
             pos.col += 1;
+        } else if c == '/' {
+            if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '/' {
+                println!("1");
+                i += 2;
+                while i < input.len() && input.chars().nth(i).unwrap() != '\n' {
+                    i += 1;
+                    pos.col += 1;
+                }
+                i += 1;
+                pos.col += 1;
+                pos.line += 1;
+                continue;
+            } else if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '*' {
+                println!("2");
+                i += 2;
+                while i + 1 < input.len() && input.chars().nth(i).unwrap() != '*' && input.chars().nth(i + 1).unwrap() != '/' {
+                    i += 1;
+                    pos.col += 1;
+                    if input.chars().nth(i).unwrap() == '\n' {
+                        i += 1;
+                        pos.col = 1;
+                        pos.line += 1;
+                    }
+                }
+                i += 2;
+                pos.col += 2;
+                continue;
+            } else {
+                println!("3");
+                token.value = TokenValue::Arithmetic(c.to_string());
+                i += 1;
+                pos.col += 1;
+            }
         } else if c == '-' {
             if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '>' {
                 token.value = TokenValue::Punctuation("->".to_owned());
@@ -188,10 +221,9 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
             i += 1;
             pos.col += 1;
         } else if c == '\n' {
+            i += 1;
             pos.line += 1;
             pos.col = 1;
-            i += 1;
-            pos.col += 1;
             continue;
         } else if c.is_whitespace() {
             i += 1;

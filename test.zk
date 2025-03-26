@@ -1,5 +1,5 @@
-fn test() -> int {
-    let x: int = 1 + 1;
-}
+/* test
 
-let y: int = test();
+
+*/
+let x: /* hi */ int = 5; // hi
