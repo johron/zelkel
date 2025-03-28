@@ -46,6 +46,7 @@ impl From<TokenValue> for Value {
 #[derive(Debug, Clone)]
 pub enum StatementKind {
     VariableDeclaration(VariableDeclaration),
+    VariableReassignment(VariableReassignment),
     FunctionDeclaration(FunctionDeclaration),
     ClassDeclaration(ClassDeclaration),
     ExpressionStatement(ExpressionStatement),
@@ -54,6 +55,13 @@ pub enum StatementKind {
 
 #[derive(Debug, Clone)]
 pub struct VariableDeclaration {
+    name: String,
+    typ: ValueType,
+    expr: Expression,
+}
+
+#[derive(Debug, Clone)]
+pub struct VariableReassignment {
     name: String,
     typ: ValueType,
     expr: Expression,
@@ -717,6 +725,47 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     }, j, scope_stack.clone()))
 }
 
+fn parse_variable_reassignment(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
+    let mut i = *i;
+    let begin = i;
+
+    let var_name = if let TokenValue::Identifier(name) = &toks[i].value {
+        name.clone()
+    } else {
+        return Err(error("Expected an identifier for variable assignment".to_string(), toks[i].pos.clone()));
+    };
+    i += 1;
+
+    expect(&i, &toks, TokenValue::Punctuation("=".to_string()), true)?;
+    i += 1;
+
+    let (expr, j) = parse_expression(&i, toks, scope_stack)?;
+    i = j;
+
+    if let Some(var) = scope_stack.last_mut().unwrap().variables.get_mut(&var_name) {
+        if !var.mutable {
+            return Err(error(format!("Variable '{}' is not mutable", var_name), toks[begin].pos.clone()));
+        }
+        if var.typ != expr.typ {
+            return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", var.typ, expr.typ), toks[begin].pos.clone()));
+        }
+    } else {
+        return Err(error(format!("Variable '{}' not declared", var_name), toks[begin].pos.clone()));
+    }
+
+    expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
+    i += 1;
+
+    Ok((Statement {
+        kind: StatementKind::VariableReassignment(VariableReassignment {
+            name: var_name,
+            typ: expr.typ.clone(),
+            expr,
+        }),
+        pos: toks[begin].pos.clone(),
+    }, i, scope_stack.clone()))
+}
+
 fn parse_identifier(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let i = *i;
     let t = toks[i].clone();
@@ -727,7 +776,17 @@ fn parse_identifier(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) 
             "class" => parse_class_declaration(&i, toks, scope_stack),
             "fn" => parse_function_declaration(&i, toks, scope_stack, "from_global_scope_not_used!!".to_string()),
             "val" => parse_variable_declaration(&i, toks, scope_stack, "from_global_scope_not_used!!".to_string()),
-            _ => Err(error(format!("Unknown identifier: '{}'", s), t.pos)),
+            _ => {
+                if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
+                    let (stmt, j, scope) = parse_variable_reassignment(&i, toks, scope_stack)?;
+                    return Ok((stmt, j, scope));
+                } else if let Some(f) = scope_stack.last().unwrap().functions.get(s) {
+                    let (stmt, j, scope) = parse_expression_statement(&i, toks, scope_stack)?;
+                    return Ok((stmt, j, scope));
+                } else {
+                    return Err(error(format!("Unknown identifier: '{}', maybe undeclared variable or function", s), t.pos.clone()));
+                }
+            },
         },
         _ => Err(error("Expected an identifier while parsing identifier".to_string(), t.pos)),
     };

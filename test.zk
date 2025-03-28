@@ -1,7 +1,2 @@
-class String {
-    fn _(Self, value: str) -> Self {
-        Self.value = value;
-    }
-}
-
-val x: String = "test";
+val x: int = 1;
+x = 5;
