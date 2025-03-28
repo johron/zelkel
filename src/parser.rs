@@ -773,6 +773,18 @@ fn parse_variable_reassignment(i: &usize, toks: &Vec<Token>, scope_stack: &mut V
     }, i, scope_stack.clone()))
 }
 
+fn parse_class_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
+    let mut i = *i;
+    let begin = i;
+
+    // Needs:
+    // 1. Assign values that the class object has example: `Class.x = x;`
+    // 2. Reference the class, and call its functions and variables
+    // 3. May have to do some stuff for constructors with `Self` keyword, idk
+
+    todo!("Implement class expression parsing");
+}
+
 fn parse_identifier(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let i = *i;
     let t = toks[i].clone();
@@ -789,6 +801,9 @@ fn parse_identifier(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) 
                     return Ok((stmt, j, scope));
                 } else if let Some(f) = scope_stack.last().unwrap().functions.get(s) {
                     let (stmt, j, scope) = parse_expression_statement(&i, toks, scope_stack)?;
+                    return Ok((stmt, j, scope));
+                } else if let Some(c) = scope_stack.last().unwrap().classes.get(s) {
+                    let (stmt, j, scope) = parse_class_expression(&i, toks, scope_stack)?;
                     return Ok((stmt, j, scope));
                 } else {
                     return Err(error(format!("Unknown identifier: '{}', maybe undeclared variable or function", s), t.pos.clone()));
