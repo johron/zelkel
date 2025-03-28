@@ -4,7 +4,8 @@
 ## Todo:
 - [ ] In the parser `parse()` function only parse for class definitions and require statements
 - [ ] Constructors
-  - [ ] Implement classes as types.
+  - [ ] Need to implement mutable variables so it can do `Self.value = value;`, etc.
+  - [x] Implement classes as types.
   - [ ] Implement the `new` statement for instantiating classes, should automatically add the `Self` parameter
 
 ## How I want some stuff to work:
