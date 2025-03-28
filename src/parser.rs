@@ -9,13 +9,15 @@ pub struct Statement {
     pos: TokenPos,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum ValueType {
+    #[default]
     Integer,
     Float,
     String,
     Bool,
     Class(String),
+    None,
 }
 
 #[derive(Debug, Clone)]
@@ -70,7 +72,7 @@ pub struct VariableReassignment {
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
     name: String,
-    typ: Option<ValueType>,
+    typ: ValueType,
     body: Vec<Statement>,
 }
 
@@ -148,7 +150,7 @@ pub struct VariableOptions {
 #[derive(Debug, Clone)]
 pub struct FunctionOptions {
     pub args: Vec<VariableOptions>,
-    pub typ: Option<ValueType>,
+    pub typ: ValueType,
     pub public: bool,
 }
 
@@ -163,6 +165,10 @@ pub struct Scope {
     variables: HashMap<String, VariableOptions>,
     functions: HashMap<String, FunctionOptions>,
     classes: HashMap<String, ClassOptions>,
+}
+
+pub fn error_2(message: String, pos: TokenPos) {
+    panic!("{}, occurred near {}:{}:{}", message, pos.path, pos.line, pos.col);
 }
 
 fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue, strict: bool) -> Result<Token, String> {
@@ -214,7 +220,7 @@ fn parse_type(tok: &Token, scope_stack: &Vec<Scope>, class_name: Option<String>)
                         Err(error("Self can only be used inside a class".to_string(), tok.pos.clone()))
                     }
                 } else if let Some(f) = scope_stack.last().unwrap().functions.get(s) {
-                    Ok(f.typ.clone().unwrap())
+                    Ok(f.typ.clone())
                 } else if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
                     Ok(v.typ.clone())
                 } else {
@@ -276,9 +282,9 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
                     Expression {
                         kind: ExpressionKind::Primary(PrimaryExpression {
                             value: Value::Function(tok.value.as_string()),
-                            typ: f.clone().typ.unwrap(),
+                            typ: f.clone().typ,
                         }),
-                        typ: f.clone().typ.unwrap(),
+                        typ: f.clone().typ,
                     }
                 } else {
                     return Err(error(format!("Tried to call an undeclared function '{}'", s), tok.pos.clone()));
@@ -626,13 +632,13 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation(")".to_string()), true)?;
     i += 1;
 
-    let typ: Option<ValueType>;
+    let typ: ValueType;
     if let Ok(a) = expect(&i, &toks, TokenValue::Punctuation("->".to_string()), true) {
         i += 1;
-        typ = Some(parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?, false)?, &scope_stack, Some(class_name.clone()))?);
+        typ = parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?, false)?, &scope_stack, Some(class_name.clone()))?;
         i += 1;
     } else {
-        typ = None;
+        typ = ValueType::None;
     }
     expect(&i, &toks, TokenValue::Punctuation("{".to_string()), true)?;
     i += 1;
@@ -715,6 +721,7 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     let (expr, j) = parse_expression(&i, toks, scope_stack)?;
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
+    i += 1;
 
     Ok((Statement {
         kind: StatementKind::ExpressionStatement(ExpressionStatement {
@@ -722,7 +729,7 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
             expr,
         }),
         pos: toks[begin].pos.clone(),
-    }, j, scope_stack.clone()))
+    }, i, scope_stack.clone()))
 }
 
 fn parse_variable_reassignment(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {

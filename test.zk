@@ -1,2 +1,5 @@
-val x: int = 1;
-x = 5;
+fn loop() -> int {
+
+}
+
+val x: int = loop();
