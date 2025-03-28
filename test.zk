@@ -1,5 +1,5 @@
-fn loop() -> int {
+fn loop() -> __prim_int {
 
 }
 
-val x: int = loop();
+val x: __prim_int = loop();

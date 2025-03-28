@@ -12,10 +12,10 @@ pub struct Statement {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum ValueType {
     #[default]
-    Integer,
-    Float,
-    String,
-    Bool,
+    PrimitiveInteger,
+    PrimitiveFloat,
+    PrimitiveString,
+    PrimitiveBool,
     Class(String),
     None,
 }
@@ -206,10 +206,10 @@ fn exit_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
 fn parse_type(tok: &Token, scope_stack: &Vec<Scope>, class_name: Option<String>) -> Result<ValueType, String> {
     match tok.value {
         TokenValue::Identifier(ref s) => match s.as_str() {
-            "int" => Ok(ValueType::Integer),
-            "str" => Ok(ValueType::String),
-            "float" => Ok(ValueType::Float),
-            "bool" => Ok(ValueType::Bool),
+            "__prim_int" => Ok(ValueType::PrimitiveInteger),
+            "__prim_str" => Ok(ValueType::PrimitiveString),
+            "__prim_float" => Ok(ValueType::PrimitiveFloat),
+            "__prim_bool" => Ok(ValueType::PrimitiveBool),
             _ => {
                 if let Some(_) = scope_stack.last().unwrap().classes.get(s) {
                     Ok(ValueType::Class(s.clone()))
@@ -241,18 +241,18 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
                 kind: ExpressionKind::Primary(PrimaryExpression {
                     value: tok.value.clone().into(),
                     typ: match &tok.value {
-                        TokenValue::Integer(_) => ValueType::Integer,
-                        TokenValue::Float(_) => ValueType::Float,
-                        TokenValue::String(_) => ValueType::String,
-                        TokenValue::Bool(_) => ValueType::Bool,
+                        TokenValue::Integer(_) => ValueType::PrimitiveInteger,
+                        TokenValue::Float(_) => ValueType::PrimitiveFloat,
+                        TokenValue::String(_) => ValueType::PrimitiveString,
+                        TokenValue::Bool(_) => ValueType::PrimitiveBool,
                         _ => unreachable!(),
                     },
                 }),
                 typ: match &tok.value {
-                    TokenValue::Integer(_) => ValueType::Integer,
-                    TokenValue::Float(_) => ValueType::Float,
-                    TokenValue::String(_) => ValueType::String,
-                    TokenValue::Bool(_) => ValueType::Bool,
+                    TokenValue::Integer(_) => ValueType::PrimitiveInteger,
+                    TokenValue::Float(_) => ValueType::PrimitiveFloat,
+                    TokenValue::String(_) => ValueType::PrimitiveString,
+                    TokenValue::Bool(_) => ValueType::PrimitiveBool,
                     _ => unreachable!(),
                 },
             }
@@ -327,7 +327,7 @@ fn parse_unary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sc
         i += 1;
         let (expr, j) = parse_primary_expression(&mut i, toks, scope_stack)?;
 
-        if expr.typ == ValueType::Integer || expr.typ == ValueType::Float {
+        if expr.typ == ValueType::PrimitiveInteger || expr.typ == ValueType::PrimitiveFloat {
             return Ok((Expression {
                 kind: ExpressionKind::Unary(Box::from(UnaryExpression {
                     left: expr.kind,
@@ -338,7 +338,7 @@ fn parse_unary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sc
             }, j));
         }
 
-        return Err(error(format!("Type mismatch: expected {:?} or {:?}, but found {:?}", ValueType::Integer, ValueType::Float, expr.typ), toks[i].pos.clone()));
+        return Err(error(format!("Type mismatch: expected {:?} or {:?}, but found {:?}", ValueType::PrimitiveInteger, ValueType::PrimitiveFloat, expr.typ), toks[i].pos.clone()));
     }
     parse_primary_expression(&mut i, toks, scope_stack)
 }
