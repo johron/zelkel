@@ -5,6 +5,7 @@
 - [ ] In the parser `parse()` function only parse for class definitions and require statements
 - [ ] Constructors
   - [ ] Need to implement mutable variables so it can do `Self.value = value;`, etc.
+    - [x] Added mutable variables, but not rest
   - [x] Implement classes as types.
   - [ ] Implement the `new` statement for instantiating classes, should automatically add the `Self` parameter
 
