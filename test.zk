@@ -1,6 +1,6 @@
 class String {
-    fn _(Self) -> Self {
-
+    fn _(Self, value: str) -> Self {
+        Self.value = value;
     }
 }
 

@@ -199,6 +199,16 @@ fn parse_type(tok: &Token, scope_stack: &Vec<Scope>, class_name: Option<String>)
             _ => {
                 if let Some(_) = scope_stack.last().unwrap().classes.get(s) {
                     Ok(ValueType::Class(s.clone()))
+                } else if s == "Self" {
+                    if let Some(class_name) = class_name {
+                        Ok(ValueType::Class(class_name))
+                    } else {
+                        Err(error("Self can only be used inside a class".to_string(), tok.pos.clone()))
+                    }
+                } else if let Some(f) = scope_stack.last().unwrap().functions.get(s) {
+                    Ok(f.typ.clone().unwrap())
+                } else if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
+                    Ok(v.typ.clone())
                 } else {
                     Err(error(format!("Unknown type: '{}'", s), tok.pos.clone()))
                 }
@@ -563,7 +573,7 @@ fn parse_declaration_arguments(i: &usize, toks: &Vec<Token>, scope_stack: &Vec<S
             expect(&i, &toks, TokenValue::Punctuation(":".to_string()), true)?;
             i += 1;
             let type_ident = expect(&i, &toks, TokenValue::empty("identifier")?, false)?;
-            let typ = parse_type(&type_ident, &scope_stack)?;
+            let typ = parse_type(&type_ident, &scope_stack, Some(class_name.clone()))?;
             i += 1;
             args.push(VariableOptions {
                 mutable: false,
@@ -603,7 +613,7 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation("(".to_string()), true)?;
     i += 1;
     let constructor = if name == "_" { true } else { false };
-    let (args, j) = parse_declaration_arguments(&i, &toks, &scope_stack, class_name, constructor)?;
+    let (args, j) = parse_declaration_arguments(&i, &toks, &scope_stack, class_name.clone(), constructor)?;
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(")".to_string()), true)?;
     i += 1;
@@ -611,7 +621,7 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     let typ: Option<ValueType>;
     if let Ok(a) = expect(&i, &toks, TokenValue::Punctuation("->".to_string()), true) {
         i += 1;
-        typ = Some(parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?, false)?, &scope_stack)?);
+        typ = Some(parse_type(&expect(&i, &toks, TokenValue::empty("identifier")?, false)?, &scope_stack, Some(class_name.clone()))?);
         i += 1;
     } else {
         typ = None;
@@ -641,7 +651,7 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     }, i, scope_stack.clone()))
 }
 
-fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
+fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, class_name: String) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
     let begin = i;
     let mut scope_stack = scope_stack.clone();
@@ -663,7 +673,7 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation(":".to_string()), true)?;
     i += 1;
     let type_ident = expect(&i, &toks, TokenValue::empty("identifier")?, false)?;
-    let typ = parse_type(&type_ident, &scope_stack)?;
+    let typ = parse_type(&type_ident, &scope_stack, Some(class_name))?;
     i += 1;
     expect(&i, &toks, TokenValue::Punctuation("=".to_string()), true)?;
     i += 1;
@@ -716,7 +726,7 @@ fn parse_identifier(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) 
         TokenValue::Identifier(ref s) => match s.as_str() {
             "class" => parse_class_declaration(&i, toks, scope_stack),
             "fn" => parse_function_declaration(&i, toks, scope_stack, "from_global_scope_not_used!!".to_string()),
-            "val" => parse_variable_declaration(&i, toks, scope_stack),
+            "val" => parse_variable_declaration(&i, toks, scope_stack, "from_global_scope_not_used!!".to_string()),
             _ => Err(error(format!("Unknown identifier: '{}'", s), t.pos)),
         },
         _ => Err(error("Expected an identifier while parsing identifier".to_string(), t.pos)),
