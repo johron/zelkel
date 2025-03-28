@@ -10,6 +10,7 @@
   - [ ] Implement the `new` statement for instantiating classes, should automatically add the `Self` parameter
   - [ ] Need to implement the ability to have variables in classes so that you have to define value before you can do `Self.value = value;`,
         variables in classes can only be accessed with `Self` to not confuse them with local variables
+  - [ ] VariableOptions and FunctionOptions should only be used in ClassOptions, they should not be added to the scope outside of classes, I have kind of made a lot of the language without thinking of classes
 - [x] Change instances of `str`, `int`, `bool`, etc. to `__prim_str`, `__prim_int`, `__prim_bool`, etc. primitive types
 
 ## How I want some stuff to work:

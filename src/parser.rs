@@ -157,6 +157,7 @@ pub struct FunctionOptions {
 #[derive(Debug, Clone)]
 pub struct ClassOptions {
     pub functions: Vec<String>,
+    pub variables: Vec<String>,
     pub public: bool,
 }
 
@@ -215,6 +216,7 @@ fn parse_type(tok: &Token, scope_stack: &Vec<Scope>, class_name: Option<String>)
                     Ok(ValueType::Class(s.clone()))
                 } else if s == "Self" {
                     if let Some(class_name) = class_name {
+                        todo!("I have to do some more here with the functions and variables inside the current class, see readme");
                         Ok(ValueType::Class(class_name))
                     } else {
                         Err(error("Self can only be used inside a class".to_string(), tok.pos.clone()))
@@ -781,6 +783,10 @@ fn parse_class_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sc
     // 1. Assign values that the class object has example: `Class.x = x;`
     // 2. Reference the class, and call its functions and variables
     // 3. May have to do some stuff for constructors with `Self` keyword, idk
+
+    let class_name = toks[i].clone().value;
+    let class = scope_stack.last_mut().unwrap().classes.get_mut(&class_name.as_string()).unwrap().clone();
+
 
     todo!("Implement class expression parsing");
 }
