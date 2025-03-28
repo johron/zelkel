@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::thread::scope;
+use log::error;
 use crate::error;
 use crate::lexer::{Token, TokenPos, TokenValue};
 
@@ -156,15 +157,14 @@ pub struct FunctionOptions {
 
 #[derive(Debug, Clone)]
 pub struct ClassOptions {
-    pub functions: Vec<String>,
-    pub variables: Vec<String>,
+    pub functions: Vec<FunctionOptions>,
+    pub variables: Vec<VariableOptions>,
     pub public: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct Scope {
-    variables: HashMap<String, VariableOptions>,
-    functions: HashMap<String, FunctionOptions>,
+    variables: HashMap<String, VariableOptions>, // Function-nested variables
     classes: HashMap<String, ClassOptions>,
 }
 
@@ -192,7 +192,6 @@ fn expect(i: &usize, toks: &Vec<Token>, value: TokenValue, strict: bool) -> Resu
 fn enter_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
     let parent_scope = scope.last().cloned().unwrap_or(Scope {
         variables: HashMap::new(),
-        functions: HashMap::new(),
         classes: HashMap::new(),
     });
     scope.push(parent_scope);
@@ -221,7 +220,7 @@ fn parse_type(tok: &Token, scope_stack: &Vec<Scope>, class_name: Option<String>)
                     } else {
                         Err(error("Self can only be used inside a class".to_string(), tok.pos.clone()))
                     }
-                } else if let Some(f) = scope_stack.last().unwrap().functions.get(s) {
+                } else if let Some(f) = scope_stack.last().unwrap().classes.get(&class_name).unwrap().functions.get(s) {
                     Ok(f.typ.clone())
                 } else if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
                     Ok(v.typ.clone())
@@ -476,9 +475,27 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
                 continue;
             }
         }
-        let (stmt, j, scope) = parse_statement(&i, &toks, &mut scope_stack)?;
-        scope_stack = scope;
-        i = j;
+
+        let stmt: Result<(Statement, usize, Vec<Scope>), String> = match &tok.value {
+            TokenValue::Identifier(ref s) => match s.as_str() {
+                "val" => parse_variable_declaration(&i, toks, &mut scope_stack, "from_global_scope_not_used!!".to_string()),
+                _ => {
+                    if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
+                        let (st, j, scope) = parse_variable_reassignment(&i, toks, &mut scope_stack)?;
+                        Ok((st, j, scope))
+                    } else if let Some(f) = scope_stack.last().unwrap().functions.get(s) {
+                        let (st, j, scope) = parse_expression_statement(&i, toks, &mut scope_stack)?;
+                        Ok((st, j, scope))
+                    } else if let Some(c) = scope_stack.last().unwrap().classes.get(s) {
+                        let (st, j, scope) = parse_class_expression(&i, toks, &mut scope_stack)?;
+                        Ok((st, j, scope))
+                    } else {
+                        return Err(error(format!("Unknown identifier: '{}', maybe undeclared variable or function", s), t.pos.clone()));
+                    }
+                },
+            },
+            _ => Err(error("Expected an identifier while parsing identifier".to_string(), &toks[i].pos)),
+        };
         body.push(stmt);
     }
     Ok((body, i, scope_stack))
@@ -496,10 +513,23 @@ fn parse_class_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, 
                 break;
             }
         }
-        let (stmt, j, scope) = parse_function_declaration(&i, &toks, &mut scope_stack, class_name.clone())?;
-        scope_stack = scope;
-        i = j;
-        body.push(stmt);
+
+        let stmt: Result<(Statement, usize, Vec<Scope>), String> = match &tok.value {
+            TokenValue::Identifier(ref s) => match s.as_str() {
+                "fn" => parse_function_declaration(&i, toks, &mut scope_stack, class_name.clone()),
+                "val" => parse_variable_declaration(&i, toks, &mut scope_stack, class_name.clone()),
+                _ => return Err(error(format!("Unknown identifier: '{}', maybe undeclared variable or function", s), toks[i].clone().pos.clone())),
+            },
+            _ => return Err(error("Expected an identifier while parsing identifier".to_string(), toks[i].clone().pos)),
+        };
+
+        if let Ok((stmt, j, scope)) = stmt {
+            i = j;
+            scope_stack = scope;
+            body.push(stmt);
+        } else {
+            return Err(error(format!("Error parsing statement: {:?}", stmt), toks[i].pos.clone()));
+        }
     }
 
     Ok((body, i, scope_stack))
@@ -542,11 +572,13 @@ fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<S
     expect(&i, &toks, TokenValue::Punctuation("}".to_string()), true)?;
     i += 1;
 
+    todo!("fix");
     scope_stack.last_mut().unwrap().classes.insert(name.clone(), ClassOptions {
         functions: body.iter().map(|stmt| match &stmt.kind {
             StatementKind::FunctionDeclaration(f) => f.name.clone(),
             _ => unreachable!(),
         }).collect(),
+        variables: vec![],
         public,
     });
 
@@ -791,51 +823,6 @@ fn parse_class_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sc
     todo!("Implement class expression parsing");
 }
 
-fn parse_identifier(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
-    let i = *i;
-    let t = toks[i].clone();
-    let val = t.value;
-
-    let stmt: Result<(Statement, usize, Vec<Scope>), String> = match val {
-        TokenValue::Identifier(ref s) => match s.as_str() {
-            "class" => parse_class_declaration(&i, toks, scope_stack),
-            "fn" => parse_function_declaration(&i, toks, scope_stack, "from_global_scope_not_used!!".to_string()),
-            "val" => parse_variable_declaration(&i, toks, scope_stack, "from_global_scope_not_used!!".to_string()),
-            _ => {
-                if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
-                    let (stmt, j, scope) = parse_variable_reassignment(&i, toks, scope_stack)?;
-                    return Ok((stmt, j, scope));
-                } else if let Some(f) = scope_stack.last().unwrap().functions.get(s) {
-                    let (stmt, j, scope) = parse_expression_statement(&i, toks, scope_stack)?;
-                    return Ok((stmt, j, scope));
-                } else if let Some(c) = scope_stack.last().unwrap().classes.get(s) {
-                    let (stmt, j, scope) = parse_class_expression(&i, toks, scope_stack)?;
-                    return Ok((stmt, j, scope));
-                } else {
-                    return Err(error(format!("Unknown identifier: '{}', maybe undeclared variable or function", s), t.pos.clone()));
-                }
-            },
-        },
-        _ => Err(error("Expected an identifier while parsing identifier".to_string(), t.pos)),
-    };
-
-    stmt
-}
-
-fn parse_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
-    let i = *i;
-    let pos = toks[i].pos.clone();
-
-    while i < toks.len() {
-        return match &toks[i].value {
-            TokenValue::Identifier(_) => Ok(parse_identifier(&i, &toks, scope_stack)?),
-            _ => Ok(parse_expression_statement(&i, &toks, scope_stack)?),
-        }
-    }
-
-    Err(error("Unexpected end of file".to_string(), pos))
-}
-
 pub fn parse(toks: Vec<Token>) -> Result<Vec<Statement>, String> {
     let mut ast: Vec<Statement> = Vec::new();
     let mut i = 0;
@@ -844,7 +831,10 @@ pub fn parse(toks: Vec<Token>) -> Result<Vec<Statement>, String> {
     scope_stack.push(Scope { variables: HashMap::new(), functions: HashMap::new(), classes: HashMap::new() });
 
     while i < toks.len() {
-        let (stmt, j, scope) = parse_statement(&i, &toks, &mut scope_stack)?;
+        if toks[i].value != TokenValue::Identifier("class".to_string()) {
+            Err(error("Expected a class declaration".to_string(), toks[i].pos.clone()))?;
+        }
+        let (stmt, j, scope) = parse_class_declaration(&i, &toks, &mut scope_stack)?;
         scope_stack = scope;
         ast.push(stmt);
         i = j;

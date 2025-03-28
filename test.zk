@@ -1,5 +1,3 @@
-fn loop() -> __prim_int {
+class Test {
 
 }
-
-val x: __prim_int = loop();
