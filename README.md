@@ -9,7 +9,7 @@
   - [ ] Implement the `new` statement for instantiating classes, should automatically add the `Self` parameter, if the constructor only has one other argument you can construct it without new and stuff
   - [ ] Need to implement the ability to have variables in classes so that you have to define value before you can do `Self.value = value;`,
         variables in classes can only be accessed with `Self` to not confuse them with local variables
-  - [] Super keyword
+  - [ ] Super keyword
 - [ ] Make it possible to call and reference functions and classes that are defined after.
 
 ## How I want some stuff to work:
