@@ -1,3 +1,10 @@
+class String {
+}
+
 class Test {
     val mut value: __prim_int = 5;
+
+    fn _(Self) -> Self {
+        Self.value = 5;
+    }
 }

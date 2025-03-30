@@ -211,7 +211,7 @@ fn parse_type(tok: &Token, scope_stack: &Vec<Scope>) -> Result<ValueType, String
                 if let Some(_) = scope_stack.last().unwrap().classes.get(s) {
                     Ok(ValueType::Class(s.clone()))
                 } else if s == "Self" {
-                    todo!("I have to do some more here with the functions and variables inside the current class, see readme");
+                    Ok(ValueType::Class(current_class.clone()))
                 } else if let Some(f) = scope_stack.last().unwrap().classes.get(current_class.as_str()).unwrap().functions.get(s.as_str()) {
                     Ok(f.typ.clone())
                 } else if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
@@ -470,34 +470,28 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
             }
         }
 
-        let stmt: Result<(Statement, usize, Vec<Scope>), String> = match &tok.value {
+        let (stmt, j, scope) = match &tok.value {
             TokenValue::Identifier(s) => match s.as_str() {
                 "val" => parse_variable_declaration(&i, toks, &mut scope_stack),
+                "Self" => parse_class_expression(&i, toks, &mut scope_stack),
                 _ => {
                     if let Some(_) = scope_stack.last().unwrap().variables.get(s) {
-                        let (st, j, scope) = parse_variable_reassignment(&i, toks, &mut scope_stack)?;
-                        Ok((st, j, scope))
+                        parse_variable_reassignment(&i, toks, &mut scope_stack)
                     } else if let Some(_) = scope_stack.last().unwrap().classes.get(current_class.as_str()).unwrap().functions.get(s) {
-                        let (st, j, scope) = parse_expression_statement(&i, toks, &mut scope_stack)?;
-                        Ok((st, j, scope))
+                        parse_expression_statement(&i, toks, &mut scope_stack)
                     } else if let Some(_) = scope_stack.last().unwrap().classes.get(s) {
-                        let (st, j, scope) = parse_class_expression(&i, toks, &mut scope_stack)?;
-                        Ok((st, j, scope))
+                        parse_class_expression(&i, toks, &mut scope_stack)
                     } else {
-                        return Err(error(format!("Unknown identifier: '{}', maybe undeclared variable or function", s), toks[i].clone().pos));
+                        Err(error(format!("Unknown identifier: '{}', maybe undeclared variable or function", s), toks[i].clone().pos))
                     }
                 },
             },
             _ => Err(error("Expected an identifier while parsing identifier".to_string(), toks[i].clone().pos)),
-        };
+        }?;
 
-        if let Ok((stmt, j, scope)) = stmt {
-            i = j;
-            body.push(stmt);
-            scope_stack = scope;
-        } else {
-            return Err(error(format!("Error parsing statement: {:?}", stmt), toks[i].pos.clone()));
-        }
+        i = j;
+        body.push(stmt);
+        scope_stack = scope;
     }
     Ok((body, i, scope_stack))
 }
@@ -515,22 +509,22 @@ fn parse_class_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) 
             }
         }
 
-        let stmt: Result<(Statement, usize, Vec<Scope>), String> = match &tok.value {
+        let (stmt, j, scope) = match &tok.value {
             TokenValue::Identifier(s) => match s.as_str() {
-                "fn" => parse_function_declaration(&i, toks, &mut scope_stack),
-                "val" => parse_variable_declaration(&i, toks, &mut scope_stack),
+                "fn" => {
+                    parse_function_declaration(&i, toks, &mut scope_stack)
+                },
+                "val" => {
+                    parse_class_variable_declaration(&i, toks, &mut scope_stack)
+                },
                 _ => return Err(error(format!("Unknown identifier: '{}', maybe undeclared variable or function", s), toks[i].clone().pos.clone())),
             },
             _ => return Err(error("Expected an identifier while parsing identifier".to_string(), toks[i].clone().pos)),
-        };
+        }?;
 
-        if let Ok((stmt, j, scope)) = stmt {
-            i = j;
-            scope_stack = scope;
-            body.push(stmt);
-        } else {
-            return Err(error(format!("Error parsing statement: {:?}", stmt), toks[i].pos.clone()));
-        }
+        i = j;
+        body.push(stmt);
+        scope_stack = scope;
     }
 
     Ok((body, i, scope_stack))
@@ -551,6 +545,10 @@ fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<S
     let name = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
     if scope_stack.last().unwrap().classes.iter().any(|c| c.0 == &name) {
         return Err(error(format!("Class '{}' already declared", name), toks[i].pos.clone()));
+    }
+
+    if name == "Self" {
+        return Err(error("Class name cannot be 'Self'".to_string(), toks[i].pos.clone()));
     }
 
     i += 1;
@@ -752,6 +750,56 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     }, i, scope_stack))
 }
 
+fn parse_class_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
+    let mut i = *i;
+    let begin = i;
+    let mut scope_stack = scope_stack.clone();
+    i += 1;
+
+    let mutable = if let Ok(_) = expect(&i, &toks, TokenValue::Identifier("mut".to_string()), true) {
+        i += 1;
+        true
+    } else {
+        false
+    };
+
+    let name = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
+    if scope_stack.last().unwrap().variables.iter().any(|v| v.0 == &name) {
+        return Err(error(format!("Variable '{}' already declared", name), toks[i].pos.clone()));
+    }
+
+    i += 1;
+    expect(&i, &toks, TokenValue::Punctuation(":".to_string()), true)?;
+    i += 1;
+    let type_ident = expect(&i, &toks, TokenValue::empty("identifier")?, false)?;
+    let typ = parse_type(&type_ident, &scope_stack)?;
+    i += 1;
+    expect(&i, &toks, TokenValue::Punctuation("=".to_string()), true)?;
+    i += 1;
+    let (expr, j) = parse_expression(&i, toks, &mut scope_stack)?;
+    if typ != expr.typ {
+        return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", typ, expr.typ), toks[i].pos.clone()));
+    }
+
+    i = j;
+    expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
+    i += 1;
+
+    scope_stack.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
+        mutable,
+        typ: typ.clone(),
+    });
+
+    Ok((Statement {
+        kind: StatementKind::VariableDeclaration(VariableDeclaration {
+            name,
+            typ,
+            expr,
+        }),
+        pos: toks[begin].pos.clone(),
+    }, i, scope_stack))
+}
+
 fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
     let begin = i;
@@ -819,11 +867,26 @@ fn parse_class_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sc
     // 2. Reference the class, and call its functions and variables
     // 3. May have to do some stuff for constructors with `Self` keyword, idk
 
-    let class_name = toks[i].clone().value.as_string();
-    scope_stack.last_mut().unwrap().current_class = Some(class_name.clone());
+    let ident = expect(&i, &toks, TokenValue::Identifier("".to_string()), false)?.value.as_string();
+    i += 1;
 
-    let class = scope_stack.last_mut().unwrap().classes.get_mut(&class_name).unwrap().clone();
+    let class_name = if ident == "Self" {
+        scope_stack.last().unwrap().current_class.clone().unwrap()
+    } else {
+        ident.clone()
+    };
 
+    if ident == scope_stack.last().unwrap().current_class.clone().unwrap() {
+        return Err(error("Cannot reference the class itself in a class expression".to_string(), toks[begin].pos.clone()));
+    }
+
+    let class = if let Some(class) = scope_stack.last().unwrap().classes.get(&class_name) {
+        class
+    } else {
+        return Err(error(format!("Class '{}' not declared", class_name), toks[begin].pos.clone()));
+    };
+
+    println!("{} ({}), {:?}", class_name, ident, class);
 
     todo!("Implement class expression parsing");
 }
