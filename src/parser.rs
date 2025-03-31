@@ -472,7 +472,7 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
 
         let (stmt, j, scope) = match &tok.value {
             TokenValue::Identifier(s) => match s.as_str() {
-                "val" => parse_variable_declaration(&i, toks, &mut scope_stack),
+                "val" => parse_variable_declaration(&i, toks, &mut scope_stack, false),
                 "Self" => parse_class_expression(&i, toks, &mut scope_stack),
                 _ => {
                     if let Some(_) = scope_stack.last().unwrap().variables.get(s) {
@@ -515,7 +515,7 @@ fn parse_class_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) 
                     parse_function_declaration(&i, toks, &mut scope_stack)
                 },
                 "val" => {
-                    parse_class_variable_declaration(&i, toks, &mut scope_stack)
+                    parse_variable_declaration(&i, toks, &mut scope_stack, true)
                 },
                 _ => return Err(error(format!("Unknown identifier: '{}', maybe undeclared variable or function", s), toks[i].clone().pos.clone())),
             },
@@ -700,10 +700,11 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     }, i, scope_stack.clone()))
 }
 
-fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
+fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, class: bool) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
     let begin = i;
     let mut scope_stack = scope_stack.clone();
+    let current_class = scope_stack.last().unwrap().current_class.clone().unwrap();
     i += 1;
 
     let mutable = if let Ok(_) = expect(&i, &toks, TokenValue::Identifier("mut".to_string()), true) {
@@ -735,60 +736,17 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
     i += 1;
 
-    scope_stack.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
-        mutable,
-        typ: typ.clone(),
-    });
-
-    Ok((Statement {
-        kind: StatementKind::VariableDeclaration(VariableDeclaration {
-            name,
-            typ,
-            expr,
-        }),
-        pos: toks[begin].pos.clone(),
-    }, i, scope_stack))
-}
-
-fn parse_class_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
-    let mut i = *i;
-    let begin = i;
-    let mut scope_stack = scope_stack.clone();
-    i += 1;
-
-    let mutable = if let Ok(_) = expect(&i, &toks, TokenValue::Identifier("mut".to_string()), true) {
-        i += 1;
-        true
+    if class {
+        scope_stack.last_mut().unwrap().classes.get_mut(current_class.as_str()).unwrap().variables.insert(name.clone(), VariableOptions {
+            mutable,
+            typ: typ.clone(),
+        });
     } else {
-        false
-    };
-
-    let name = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
-    if scope_stack.last().unwrap().variables.iter().any(|v| v.0 == &name) {
-        return Err(error(format!("Variable '{}' already declared", name), toks[i].pos.clone()));
+        scope_stack.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
+            mutable,
+            typ: typ.clone(),
+        });
     }
-
-    i += 1;
-    expect(&i, &toks, TokenValue::Punctuation(":".to_string()), true)?;
-    i += 1;
-    let type_ident = expect(&i, &toks, TokenValue::empty("identifier")?, false)?;
-    let typ = parse_type(&type_ident, &scope_stack)?;
-    i += 1;
-    expect(&i, &toks, TokenValue::Punctuation("=".to_string()), true)?;
-    i += 1;
-    let (expr, j) = parse_expression(&i, toks, &mut scope_stack)?;
-    if typ != expr.typ {
-        return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", typ, expr.typ), toks[i].pos.clone()));
-    }
-
-    i = j;
-    expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
-    i += 1;
-
-    scope_stack.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
-        mutable,
-        typ: typ.clone(),
-    });
 
     Ok((Statement {
         kind: StatementKind::VariableDeclaration(VariableDeclaration {
