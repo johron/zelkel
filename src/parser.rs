@@ -25,10 +25,11 @@ pub enum Value {
     Float(f32),
     String(String),
     Bool(bool),
-    Variable(String),
+    Variable(String, bool),
     Function(String),
     Class(String),
     Arithmetic(String),
+    None,
 }
 
 impl From<TokenValue> for Value {
@@ -59,6 +60,8 @@ pub struct VariableDeclaration {
     name: String,
     typ: ValueType,
     expr: Expression,
+    class: bool,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +69,8 @@ pub struct VariableReassignment {
     name: String,
     typ: ValueType,
     expr: Expression,
+    class: bool,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +78,7 @@ pub struct FunctionDeclaration {
     name: String,
     typ: ValueType,
     body: Vec<Statement>,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
@@ -80,12 +86,14 @@ pub struct ClassDeclaration {
     name: String,
     extends: Option<String>,
     body: Vec<Statement>,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
 pub struct ExpressionStatement {
     typ: ValueType,
     expr: Expression,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
@@ -100,13 +108,15 @@ pub enum ExpressionKind {
 #[derive(Debug, Clone)]
 pub struct Expression {
     kind: ExpressionKind,
-    typ: ValueType
+    typ: ValueType,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
 pub struct PrimaryExpression {
     value: Value,
     typ: ValueType,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
@@ -114,6 +124,7 @@ pub struct UnaryExpression {
     left: ExpressionKind,
     typ: ValueType,
     op: Value,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
@@ -122,6 +133,7 @@ pub struct TermExpression {
     right: ExpressionKind,
     typ: ValueType,
     op: Value,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +142,7 @@ pub struct BinaryExpression {
     right: ExpressionKind,
     typ: ValueType,
     op: Value,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
@@ -138,6 +151,7 @@ pub struct ComparisonExpression {
     right: ExpressionKind,
     typ: ValueType,
     op: Value,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
@@ -195,7 +209,11 @@ fn enter_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
 }
 
 fn exit_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
-    scope.pop();
+    scope.pop().unwrap_or_else(|| Scope {
+        variables: HashMap::new(),
+        classes: HashMap::new(),
+        current_class: None,
+    });
     scope.clone()
 }
 
@@ -240,6 +258,7 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
                         TokenValue::Bool(_) => ValueType::PrimitiveBool,
                         _ => unreachable!(),
                     },
+                    pos: tok.pos.clone(),
                 }),
                 typ: match &tok.value {
                     TokenValue::Integer(_) => ValueType::PrimitiveInteger,
@@ -248,11 +267,73 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
                     TokenValue::Bool(_) => ValueType::PrimitiveBool,
                     _ => unreachable!(),
                 },
+                pos: tok.pos.clone(),
             }
         }
         TokenValue::Identifier(s) => {
             i += 1;
-            if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation("(".to_string()), true) {
+            if s == "Self" {
+                expect(&i, &toks, TokenValue::Punctuation(".".to_string()), true)?;
+                i += 1;
+                let current_class = scope_stack.last().unwrap().current_class.clone().unwrap();
+                let class = scope_stack.last().unwrap().classes.get(current_class.as_str()).unwrap();
+                let name = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
+
+                if class.functions.get(name.as_str()).is_some() {
+                    i += 1;
+                    expect(&i, &toks, TokenValue::Punctuation("(".to_string()), true)?;
+                    i += 1;
+                    let mut args: Vec<Expression> = Vec::new();
+                    while i < toks.len() {
+                        let tok = &toks[i];
+                        if let TokenValue::Punctuation(p) = &tok.value {
+                            if p == ")" {
+                                break;
+                            }
+                        }
+                        let mut scope = scope_stack.clone();
+                        let (expr, j) = parse_expression(&i, toks, &mut scope)?;
+                        i = j;
+                        args.push(expr);
+                        if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation(",".to_string()), true) {
+                            i += 1;
+                        }
+                    }
+                    expect(&i, &toks, TokenValue::Punctuation(")".to_string()), true)?;
+                    Expression {
+                        kind: ExpressionKind::Primary(PrimaryExpression {
+                            value: Value::Function(tok.value.as_string()),
+                            typ: class.functions.get(name.clone().as_str()).unwrap().typ.clone(),
+                            pos: tok.pos.clone(),
+                        }),
+                        typ: class.functions.get(name.as_str()).unwrap().typ.clone(),
+                        pos: tok.pos.clone(),
+                    }
+                } else if class.variables.get(name.as_str()).is_some() {
+                    Expression {
+                        kind: ExpressionKind::Primary(PrimaryExpression {
+                            value: Value::Variable(name.clone(), true),
+                            typ: class.variables.get(name.clone().as_str()).unwrap().typ.clone(),
+                            pos: tok.pos.clone(),
+                        }),
+                        typ: class.variables.get(name.as_str()).unwrap().typ.clone(),
+                        pos: tok.pos.clone(),
+                    }
+                } else {
+                    return Err(error(format!("Tried to reference an undeclared variable or function '{}'", name), tok.pos.clone()));
+                }
+            } else if s == "None" {
+                i -= 1;
+                Expression {
+                    kind: ExpressionKind::Primary(PrimaryExpression {
+                        value: Value::None,
+                        typ: ValueType::None,
+                        pos: tok.pos.clone(),
+                    }),
+                    typ: ValueType::None,
+                    pos: tok.pos.clone(),
+                }
+            } else if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation("(".to_string()), true) {
                 i += 1;
                 if let Some(f) = scope_stack.last().unwrap().classes.get(scope_stack.last().unwrap().current_class.as_ref().unwrap()).unwrap().functions.get(s) {
                     let mut args: Vec<Expression> = Vec::new();
@@ -276,20 +357,25 @@ fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<
                         kind: ExpressionKind::Primary(PrimaryExpression {
                             value: Value::Function(tok.value.as_string()),
                             typ: f.clone().typ,
+                            pos: tok.pos.clone(),
                         }),
                         typ: f.clone().typ,
+                        pos: tok.pos.clone(),
                     }
                 } else {
                     return Err(error(format!("Tried to call an undeclared function '{}'", s), tok.pos.clone()));
                 }
             } else {
+                i -= 1;
                 if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
                     Expression {
                         kind: ExpressionKind::Primary(PrimaryExpression {
-                            value: Value::Variable(tok.value.as_string()),
+                            value: Value::Variable(tok.value.as_string(), false),
                             typ: v.typ.clone(),
+                            pos: tok.pos.clone(),
                         }),
                         typ: v.typ.clone(),
+                        pos: tok.pos.clone(),
                     }
                 } else {
                     return Err(error(format!("Tried to reference an undeclared variable '{}'", s), tok.pos.clone()));
@@ -326,8 +412,10 @@ fn parse_unary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sc
                     left: expr.kind,
                     typ: expr.typ.clone(),
                     op: tok.clone().value.into(),
+                    pos: tok.pos.clone(),
                 })),
                 typ: expr.typ,
+                pos: tok.pos.clone(),
             }, j));
         }
 
@@ -358,8 +446,10 @@ fn parse_term_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sco
                         right: right.kind,
                         typ: expr.typ.clone(),
                         op: tok.clone().value.into(),
+                        pos: tok.pos.clone(),
                     })),
                     typ: expr.typ,
+                    pos: tok.pos.clone(),
                 };
             } else {
                 break;
@@ -393,8 +483,10 @@ fn parse_binary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<S
                         right: right.kind,
                         typ: expr.typ.clone(),
                         op: tok.clone().value.into(),
+                        pos: tok.pos.clone(),
                     })),
                     typ: expr.typ,
+                    pos: tok.pos.clone(),
                 };
             } else {
                 break;
@@ -428,8 +520,10 @@ fn parse_comparison_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut V
                         right: right.kind,
                         typ: expr.typ.clone(),
                         op: tok.clone().value.into(),
+                        pos: tok.pos.clone(),
                     })),
                     typ: expr.typ,
+                    pos: tok.pos.clone(),
                 };
             } else {
                 break;
@@ -473,14 +567,14 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
         let (stmt, j, scope) = match &tok.value {
             TokenValue::Identifier(s) => match s.as_str() {
                 "val" => parse_variable_declaration(&i, toks, &mut scope_stack, false),
-                "Self" => parse_class_expression(&i, toks, &mut scope_stack),
+                "Self" => parse_class_statement(&i, toks, &mut scope_stack),
                 _ => {
                     if let Some(_) = scope_stack.last().unwrap().variables.get(s) {
                         parse_variable_reassignment(&i, toks, &mut scope_stack)
                     } else if let Some(_) = scope_stack.last().unwrap().classes.get(current_class.as_str()).unwrap().functions.get(s) {
                         parse_expression_statement(&i, toks, &mut scope_stack)
                     } else if let Some(_) = scope_stack.last().unwrap().classes.get(s) {
-                        parse_class_expression(&i, toks, &mut scope_stack)
+                        parse_class_statement(&i, toks, &mut scope_stack)
                     } else {
                         Err(error(format!("Unknown identifier: '{}', maybe undeclared variable or function", s), toks[i].clone().pos))
                     }
@@ -588,15 +682,17 @@ fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<S
             name,
             extends,
             body,
+            pos: toks[begin].pos.clone(),
         }),
         pos: toks[begin].pos.clone(),
     }, i, scope_stack))
 }
 
-fn parse_declaration_arguments(i: &usize, toks: &Vec<Token>, scope_stack: &Vec<Scope>, constructor: bool) -> Result<(Vec<VariableOptions>, usize), String> {
+fn parse_declaration_arguments(i: &usize, toks: &Vec<Token>, scope_stack: &Vec<Scope>, constructor: bool) -> Result<(Vec<VariableOptions>, usize, Vec<Scope>), String> {
     let mut i = *i;
     let mut args: Vec<VariableOptions> = Vec::new();
     let mut first = true;
+    let mut scope_stack = scope_stack.clone();
     let current_class = scope_stack.last().unwrap().current_class.clone();
 
     while i < toks.len() {
@@ -625,7 +721,11 @@ fn parse_declaration_arguments(i: &usize, toks: &Vec<Token>, scope_stack: &Vec<S
             i += 1;
             args.push(VariableOptions {
                 mutable: false,
-                typ,
+                typ: typ.clone(),
+            });
+            scope_stack.last_mut().unwrap().variables.insert(tok.value.as_string(), VariableOptions {
+                mutable: false,
+                typ: typ.clone(),
             });
             if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation(",".to_string()), true) {
                 i += 1;
@@ -636,7 +736,7 @@ fn parse_declaration_arguments(i: &usize, toks: &Vec<Token>, scope_stack: &Vec<S
             break;
         }
     }
-    Ok((args, i))
+    Ok((args, i, scope_stack))
 }
 
 fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
@@ -662,7 +762,8 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation("(".to_string()), true)?;
     i += 1;
     let constructor = if name == "_" { true } else { false };
-    let (args, j) = parse_declaration_arguments(&i, &toks, &scope_stack, constructor)?;
+    let (args, j, scope) = parse_declaration_arguments(&i, &toks, &scope_stack, constructor)?;
+    scope_stack = scope;
     i = j;
     expect(&i, &toks, TokenValue::Punctuation(")".to_string()), true)?;
     i += 1;
@@ -695,6 +796,7 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
             name,
             typ,
             body,
+            pos: toks[begin].pos.clone(),
         }),
         pos: toks[begin].pos.clone(),
     }, i, scope_stack.clone()))
@@ -725,10 +827,14 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     let type_ident = expect(&i, &toks, TokenValue::empty("identifier")?, false)?;
     let typ = parse_type(&type_ident, &scope_stack)?;
     i += 1;
+    if typ == ValueType::None {
+        return Err(error("Type cannot be None".to_string(), toks[i].pos.clone()));
+    }
+
     expect(&i, &toks, TokenValue::Punctuation("=".to_string()), true)?;
     i += 1;
     let (expr, j) = parse_expression(&i, toks, &mut scope_stack)?;
-    if typ != expr.typ {
+    if typ != expr.typ && expr.typ != ValueType::None {
         return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", typ, expr.typ), toks[i].pos.clone()));
     }
 
@@ -753,9 +859,11 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
             name,
             typ,
             expr,
+            class,
+            pos: toks[begin].pos.clone(),
         }),
         pos: toks[begin].pos.clone(),
-    }, i, scope_stack))
+    }, i, scope_stack.clone()))
 }
 
 fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
@@ -770,6 +878,7 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
         kind: StatementKind::ExpressionStatement(ExpressionStatement {
             typ: expr.clone().typ,
             expr,
+            pos: toks[begin].pos.clone(),
         }),
         pos: toks[begin].pos.clone(),
     }, i, scope_stack.clone()))
@@ -811,19 +920,16 @@ fn parse_variable_reassignment(i: &usize, toks: &Vec<Token>, scope_stack: &mut V
             name: var_name,
             typ: expr.typ.clone(),
             expr,
+            class: false,
+            pos: toks[begin].pos.clone(),
         }),
         pos: toks[begin].pos.clone(),
     }, i, scope_stack.clone()))
 }
 
-fn parse_class_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
+fn parse_class_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
     let begin = i;
-
-    // Needs:
-    // 1. Assign values that the class object has example: `Class.x = x;`
-    // 2. Reference the class, and call its functions and variables
-    // 3. May have to do some stuff for constructors with `Self` keyword, idk
 
     let ident = expect(&i, &toks, TokenValue::Identifier("".to_string()), false)?.value.as_string();
     i += 1;
@@ -844,50 +950,38 @@ fn parse_class_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sc
         return Err(error(format!("Class '{}' not declared", class_name), toks[begin].pos.clone()));
     };
 
-    println!("{} ({}), {:?}", class_name, ident, class);
-    if expect(&i, &toks, TokenValue::Punctuation(".".to_string()), true) {
-        i += 1;
-        let var = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
-        i += 1;
-        if let Some(v) = class.variables.get(&var) {
-            if v.mutable && expect(&i, &toks, TokenValue::Punctuation("=".to_string()), true).is_ok() { // It is reassignment
-                i += 1;
-                let (expr, j) = parse_expression(&i, toks, scope_stack)?;
-                i = j;
-                if v.typ != expr.typ {
-                    return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", v.typ, expr.typ), toks[begin].pos.clone()));
-                }
-                expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
-                i += 1;
-                return Ok((Statement { // TODO: samme greie her fordi vet ikke hvordan name kommer til å være definert i codegen siden det er forskjell på classvariabel og functionvariabel
-                    kind: StatementKind::VariableReassignment(VariableReassignment {
-                        name: var.clone(),
-                        typ: v.typ.clone(),
-                        expr,
-                    }),
-                    pos: toks[begin].pos.clone(),
-                }, i, scope_stack.clone()));
-            } else { // it is reference
-                return Ok((Statement { // TODO: usikker på om dette er rette greie å gjøre her
-                    kind: StatementKind::ExpressionStatement(ExpressionStatement {
-                        typ: v.typ.clone(),
-                        expr: Expression {
-                            kind: ExpressionKind::Primary(PrimaryExpression {
-                                value: Value::Variable(var.clone()),
-                                typ: v.typ.clone(),
-                            }),
-                            typ: v.typ.clone(),
-                        },
-                    }),
-                    pos: toks[begin].pos.clone(),
-                }, i, scope_stack.clone()));
-            }
-        } else {
-            return Err(error(format!("Variable '{}' not declared in class '{}'", var, class_name), toks[begin].pos.clone()));
-        }
+    expect(&i, &toks, TokenValue::Punctuation(".".to_string()), true)?;
+    i += 1;
+
+    let var = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
+    i += 1;
+    let v = class.variables.get(&var).ok_or_else(|| error("Tried to reassign undeclared class variable".to_string(), toks[begin].pos.clone()))?;
+    expect(&i, &toks, TokenValue::Punctuation("=".to_string()), true)?;
+    i += 1;
+
+    if !v.mutable {
+        return Err(error(format!("Variable '{}' is not mutable", var), toks[begin].pos.clone()));
     }
 
-    // trenger functionscalls ++
+    let (expr, j) = parse_expression(&i, &toks, &mut scope_stack.clone())?;
+    i = j;
+    if v.typ != expr.typ {
+        return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", v.typ, expr.typ), toks[begin].pos.clone()));
+    }
+
+    expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
+    i += 1;
+
+    Ok((Statement {
+        kind: StatementKind::VariableReassignment(VariableReassignment {
+            name: var.clone(),
+            typ: v.typ.clone(),
+            expr,
+            class: true,
+            pos: toks[begin].pos.clone(),
+        }),
+        pos: toks[begin].pos.clone(),
+    }, i, scope_stack.clone()))
 }
 
 pub fn parse(toks: Vec<Token>) -> Result<Vec<Statement>, String> {

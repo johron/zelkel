@@ -2,12 +2,12 @@
 - Object-oriented programming language targeting a [custom virtual machine](https://github.com/johron/zelkel-vm)
 
 ## Todo:
-- [ ] In the parser `parse()` function only parse for class definitions and require statements
+- [x] In the parser `parse()` function only parse for class definitions and require statements
 - [ ] Classes
-  - [ ] Need to implement mutable variables so it can do `Self.value = value;`, etc.
+  - [x] Need to implement mutable variables so it can do `Self.value = value;`, etc.
     - [x] Added mutable variables, but not rest
   - [ ] Implement the `new` statement for instantiating classes, should automatically add the `Self` parameter, if the constructor only has one other argument you can construct it without new and stuff
-  - [ ] Need to implement the ability to have variables in classes so that you have to define value before you can do `Self.value = value;`,
+  - [x] Need to implement the ability to have variables in classes so that you have to define value before you can do `Self.value = value;`,
         variables in classes can only be accessed with `Self` to not confuse them with local variables
   - [ ] Super keyword
 - [ ] Make it possible to call and reference functions and classes that are defined after.

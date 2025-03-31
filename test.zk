@@ -1,7 +1,7 @@
-class Test {
-    val mut value: __prim_int = 5;
+class Car {
+    val mut make: __prim_str = None;
 
-    fn _(Self) -> Self {
-        Self.value = 2;
+    fn _(Self, make: __prim_str) -> Self {
+        Self.make = make;
     }
 }
