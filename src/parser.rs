@@ -845,8 +845,49 @@ fn parse_class_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sc
     };
 
     println!("{} ({}), {:?}", class_name, ident, class);
+    if expect(&i, &toks, TokenValue::Punctuation(".".to_string()), true) {
+        i += 1;
+        let var = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
+        i += 1;
+        if let Some(v) = class.variables.get(&var) {
+            if v.mutable && expect(&i, &toks, TokenValue::Punctuation("=".to_string()), true).is_ok() { // It is reassignment
+                i += 1;
+                let (expr, j) = parse_expression(&i, toks, scope_stack)?;
+                i = j;
+                if v.typ != expr.typ {
+                    return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", v.typ, expr.typ), toks[begin].pos.clone()));
+                }
+                expect(&i, &toks, TokenValue::Punctuation(";".to_string()), true)?;
+                i += 1;
+                return Ok((Statement { // TODO: samme greie her fordi vet ikke hvordan name kommer til å være definert i codegen siden det er forskjell på classvariabel og functionvariabel
+                    kind: StatementKind::VariableReassignment(VariableReassignment {
+                        name: var.clone(),
+                        typ: v.typ.clone(),
+                        expr,
+                    }),
+                    pos: toks[begin].pos.clone(),
+                }, i, scope_stack.clone()));
+            } else { // it is reference
+                return Ok((Statement { // TODO: usikker på om dette er rette greie å gjøre her
+                    kind: StatementKind::ExpressionStatement(ExpressionStatement {
+                        typ: v.typ.clone(),
+                        expr: Expression {
+                            kind: ExpressionKind::Primary(PrimaryExpression {
+                                value: Value::Variable(var.clone()),
+                                typ: v.typ.clone(),
+                            }),
+                            typ: v.typ.clone(),
+                        },
+                    }),
+                    pos: toks[begin].pos.clone(),
+                }, i, scope_stack.clone()));
+            }
+        } else {
+            return Err(error(format!("Variable '{}' not declared in class '{}'", var, class_name), toks[begin].pos.clone()));
+        }
+    }
 
-    todo!("Implement class expression parsing");
+    // trenger functionscalls ++
 }
 
 pub fn parse(toks: Vec<Token>) -> Result<Vec<Statement>, String> {
