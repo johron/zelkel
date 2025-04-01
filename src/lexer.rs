@@ -79,7 +79,13 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
                 i += 1;
                 pos.col += 1;
             }
-            token.value = TokenValue::Identifier(value);
+            token.value = TokenValue::Identifier(value.clone());
+
+            if value == "true" {
+                token.value = TokenValue::Bool(true);
+            } else if value == "false" {
+                token.value = TokenValue::Bool(false);
+            }
         } else if c.is_digit(10) {
             let mut value = String::new();
             let mut is_float = false;

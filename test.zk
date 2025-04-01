@@ -1,7 +1,13 @@
-class Car {
-    val mut make: __prim_str = None;
+class Test {
+    val mut x: __prim_bool = None;
 
-    fn _(Self, make: __prim_str) -> Self {
-        Self.make = make;
+    fn pub main() {
+        if 1 == 1 {
+            Self.x = true;
+        } else if 2 == 1 {
+            Self.x = false;
+        } else {
+            Self.x = None;
+        }
     }
 }

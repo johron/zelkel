@@ -51,6 +51,7 @@ pub enum StatementKind {
     VariableReassignment(VariableReassignment),
     FunctionDeclaration(FunctionDeclaration),
     ClassDeclaration(ClassDeclaration),
+    ConditionalStatement(ConditionalStatement),
     ExpressionStatement(ExpressionStatement),
     Block(Vec<Statement>),
 }
@@ -86,6 +87,14 @@ pub struct ClassDeclaration {
     name: String,
     extends: Option<String>,
     body: Vec<Statement>,
+    pos: TokenPos,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConditionalStatement {
+    condition: Expression,
+    body: Vec<Statement>,
+    else_body: Option<Vec<Statement>>,
     pos: TokenPos,
 }
 
@@ -539,7 +548,59 @@ fn parse_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) 
     parse_comparison_expression(i, toks, scope_stack)
 }
 
-fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Vec<Statement>, usize, Vec<Scope>), String> {
+fn parse_if_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> { // Conditional Statement
+    let mut i = *i;
+    let begin = i;
+    let mut scope_stack = scope_stack.clone();
+    i += 1;
+
+    let (condition, j) = parse_expression(&i, &toks, &mut scope_stack)?;
+    i = j;
+
+    expect(&i, &toks, TokenValue::Punctuation("{".to_string()), true)?;
+    i += 1;
+    scope_stack = enter_scope(&mut scope_stack);
+    let (body, j, mut scope) = parse_body(&i, &toks, &mut scope_stack)?;
+    i = j;
+    expect(&i, &toks, TokenValue::Punctuation("}".to_string()), true)?;
+    i += 1;
+    scope_stack = exit_scope(&mut scope);
+
+    let else_body: Option<Vec<Statement>>;
+    if let Ok(_) = expect(&i, &toks, TokenValue::Identifier("else".to_string()), true) {
+        i += 1;
+        if let Ok(_) = expect(&i, &toks, TokenValue::Identifier("if".to_string()), true) {
+            let (else_if_stmt, j, scope) = parse_if_statement(&i, &toks, &mut scope_stack)?;
+            scope_stack = scope;
+            i = j;
+            else_body = Some(vec![else_if_stmt]);
+        } else {
+            expect(&i, &toks, TokenValue::Punctuation("{".to_string()), true)?;
+            i += 1;
+            scope_stack = enter_scope(&mut scope_stack);
+            let (else_body_inner, j, mut scope) = parse_body(&i, &toks, &mut scope_stack)?;
+            i = j;
+            expect(&i, &toks, TokenValue::Punctuation("}".to_string()), true)?;
+            i += 1;
+            scope_stack = exit_scope(&mut scope);
+            else_body = Some(else_body_inner);
+        }
+    } else {
+        else_body = None;
+    }
+
+    Ok((Statement {
+        kind: StatementKind::ConditionalStatement(ConditionalStatement {
+            condition,
+            body,
+            else_body,
+            pos: toks[begin].pos.clone(),
+        }),
+        pos: toks[begin].pos.clone(),
+    }, i, scope_stack))
+}
+
+fn parse_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Vec<Statement>, usize, Vec<Scope>), String> {
     let mut i = *i;
     let mut scope_stack = scope_stack.clone();
     let mut body: Vec<Statement> = Vec::new();
@@ -553,7 +614,7 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
             } else if p == "{" {
                 i += 1;
                 scope_stack = enter_scope(&mut scope_stack);
-                let (nested_body, j, mut scope) = parse_function_body(&i, toks, &mut scope_stack)?;
+                let (nested_body, j, mut scope) = parse_body(&i, toks, &mut scope_stack)?;
                 i = j;
                 scope_stack = exit_scope(&mut scope);
                 body.push(Statement {
@@ -567,6 +628,7 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
         let (stmt, j, scope) = match &tok.value {
             TokenValue::Identifier(s) => match s.as_str() {
                 "val" => parse_variable_declaration(&i, toks, &mut scope_stack, false),
+                "if" => parse_if_statement(&i, &toks, &mut scope_stack),
                 "Self" => parse_class_statement(&i, toks, &mut scope_stack),
                 _ => {
                     if let Some(_) = scope_stack.last().unwrap().variables.get(s) {
@@ -779,7 +841,7 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation("{".to_string()), true)?;
     i += 1;
     scope_stack = enter_scope(&mut scope_stack);
-    let (body, j, mut scope) = parse_function_body(&i, &toks, &mut scope_stack)?;
+    let (body, j, mut scope) = parse_body(&i, &toks, &mut scope_stack)?;
     i = j;
     expect(&i, &toks, TokenValue::Punctuation("}".to_string()), true)?;
     i += 1;
@@ -965,7 +1027,7 @@ fn parse_class_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Sco
 
     let (expr, j) = parse_expression(&i, &toks, &mut scope_stack.clone())?;
     i = j;
-    if v.typ != expr.typ {
+    if v.typ != expr.typ && expr.typ != ValueType::None {
         return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", v.typ, expr.typ), toks[begin].pos.clone()));
     }
 
@@ -995,6 +1057,7 @@ pub fn parse(toks: Vec<Token>) -> Result<Vec<Statement>, String> {
         if toks[i].value != TokenValue::Identifier("class".to_string()) {
             Err(error("Expected a class declaration".to_string(), toks[i].pos.clone()))?;
         }
+
         let (stmt, j, scope) = parse_class_declaration(&i, &toks, &mut scope_stack)?;
         scope_stack = scope;
         ast.push(stmt);
