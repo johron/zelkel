@@ -1,13 +1,15 @@
 class Test {
-    val mut x: __prim_bool = None;
+    val x: __prim_int = None;
+    val y: __prim_int = None;
 
+    fn pub _(Self) {
+        val x: __prim_int = 0;
+        val y: __prim_int = 0;
+    }
+}
+
+class Main {
     fn pub main() {
-        if 1 == 1 {
-            Self.x = true;
-        } else if 2 == 1 {
-            Self.x = false;
-        } else {
-            Self.x = None;
-        }
+        val instance: Test = new Test();
     }
 }
