@@ -1,6 +1,6 @@
 use crate::error;
 use crate::lexer::{Token, TokenValue};
-use crate::parser::{expect, BinaryExpression, ComparisonExpression, Expression, ExpressionKind, PrimaryExpression, Scope, TermExpression, UnaryExpression, Value, ValueType};
+use crate::parser::{expect, BinaryExpression, ComparisonExpression, Expression, ExpressionKind, InstantiationExpression, PrimaryExpression, Scope, TermExpression, UnaryExpression, Value, ValueType};
 
 pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
     let mut i = *i;
@@ -124,9 +124,51 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                 } else {
                     return Err(error(format!("Tried to call an undeclared function '{}'", s), tok.pos.clone()));
                 }
-            } else {
-                i -= 1;
-                if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
+            } else if s == "new" {
+                // check if the next token is a class name that is declared
+                let current_class = scope_stack.last().unwrap().current_class.clone().unwrap();
+                let class_name = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
+                i += 1;
+                if scope_stack.last().unwrap().classes.get(class_name.as_str()).is_some() && current_class != class_name {
+                    expect(&i, &toks, TokenValue::Punctuation("(".to_string()), true)?;
+                    i += 1;
+                    let mut args: Vec<Expression> = Vec::new();
+                    while i < toks.len() {
+                        let tok = &toks[i];
+                        if let TokenValue::Punctuation(p) = &tok.value {
+                            if p == ")" {
+                                break;
+                            }
+                        }
+                        let mut scope = scope_stack.clone();
+                        let (expr, j) = parse_expression(&i, toks, &mut scope)?;
+                        i = j;
+                        args.push(expr);
+                        if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation(",".to_string()), true) {
+                            i += 1;
+                        }
+                    }
+                    expect(&i, &toks, TokenValue::Punctuation(")".to_string()), true)?;
+                    Expression {
+                        kind: ExpressionKind::Instantiation(InstantiationExpression {
+                            class: class_name.clone(),
+                            args,
+                            pos: tok.pos.clone(),
+                        }),
+                        typ: ValueType::Class(class_name.clone()),
+                        pos: tok.pos.clone(),
+                    }
+                } else {
+                    return Err(error(format!("Tried to instantiate an undeclared class '{}'", class_name), tok.pos.clone()));
+                }
+            } else if let Some(v) = scope_stack.last().unwrap().variables.get(s) {
+                let res = if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation(".".to_string()), true) {
+                    i += 1;
+                    let sub = expect(&i, &toks, TokenValue::empty("identifier")?, false)?.value.as_string();
+                    i += 1;
+                    todo!("implement member access, very hard, help, help, help");
+                } else {
+                    i -= 1;
                     Expression {
                         kind: ExpressionKind::Primary(PrimaryExpression {
                             value: Value::Variable(tok.value.as_string(), false),
@@ -136,9 +178,10 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                         typ: v.typ.clone(),
                         pos: tok.pos.clone(),
                     }
-                } else {
-                    return Err(error(format!("Tried to reference an undeclared variable '{}'", s), tok.pos.clone()));
-                }
+                };
+                res
+            } else {
+                return Err(error(format!("Tried to reference an undeclared variable '{}'", s), tok.pos.clone()));
             }
         },
         TokenValue::Punctuation(p) => {

@@ -1,0 +1,14 @@
+class Test {
+    val mut x: __prim_int = 0;
+
+    fn pub test() {
+    }
+}
+
+class Root {
+    fn pub main() {
+        val instance: Test = new Test();
+        instance.test();
+        instance.x = 2;
+    }
+}

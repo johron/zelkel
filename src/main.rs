@@ -10,7 +10,7 @@ pub fn error(message: String, pos: TokenPos) -> String {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let mut path: &String = &"test.zk".to_string();
+    let mut path: &String = &"root.zk".to_string();
     if args.len() >= 2 {
         path = &args[1];
     }

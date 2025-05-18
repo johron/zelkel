@@ -117,6 +117,14 @@ pub enum ExpressionKind {
     Term(Box<TermExpression>),
     Binary(Box<BinaryExpression>),
     Comparison(Box<ComparisonExpression>),
+    Instantiation(InstantiationExpression),
+}
+
+#[derive(Debug, Clone)]
+pub struct InstantiationExpression {
+    class: String,
+    args: Vec<Expression>,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
