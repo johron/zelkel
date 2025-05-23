@@ -1,13 +1,13 @@
 class Test {
-    val mut x: __prim_int = 0;
+    val! mut x: _i;
 
-    fn pub test() {
+    fn! test() {
     }
 }
 
 class Root {
-    fn pub main() {
-        val instance: Test = new Test();
+    fn! main() {
+        val mut instance: Test = new Test();
         instance.test();
         instance.x = 2;
     }

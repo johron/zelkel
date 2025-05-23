@@ -189,7 +189,9 @@ pub fn lex(input: String, path: String) -> Result<Vec<Token>, String> {
                 i += 2;
                 pos.col += 2;
             } else {
-                return Err(error("Unexpected character '!'".to_string(), pos));
+                token.value = TokenValue::Punctuation("!".to_string());
+                i += 1;
+                pos.col += 1;
             }
         } else if c == '&' {
             if i + 1 < input.len() && input.chars().nth(i + 1).unwrap() == '&' {

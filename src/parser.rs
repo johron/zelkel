@@ -1,8 +1,10 @@
 mod statement;
+mod expression;
 
 use std::collections::HashMap;
 use crate::error;
 use crate::lexer::{Token, TokenPos, TokenValue};
+use crate::parser::statement::parse_class_declaration;
 
 #[derive(Debug, Clone)]
 pub struct Statement {
@@ -51,11 +53,10 @@ pub struct ClassDeclaration {
 
 #[derive(Debug, Clone)]
 pub struct VariableDeclaration {
-    //name: String,
-    //typ: ValueType,
-    //expr: Expression,
-    //class: bool,
-    //pos: TokenPos,
+    name: String,
+    typ: ValueType,
+    expr: Option<Expression>,
+    pos: TokenPos,
 }
 
 #[derive(Debug, Clone)]
@@ -69,7 +70,8 @@ pub struct FunctionDeclaration {
 #[derive(Debug, Clone)]
 pub struct VariableOptions {
     pub mutable: bool,
-    pub typ: crate::parser_old::ValueType,
+    pub public: bool,
+    pub typ: ValueType,
 }
 
 #[derive(Debug, Clone)]
@@ -91,6 +93,79 @@ pub struct Scope {
     variables: HashMap<String, VariableOptions>, // Function-nested variables
     classes: HashMap<String, ClassOptions>,
     current_class: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExpressionStatement {
+    typ: ValueType,
+    expr: Expression,
+    pos: TokenPos,
+}
+
+#[derive(Debug, Clone)]
+pub enum ExpressionKind {
+    Primary(PrimaryExpression),
+    Unary(Box<UnaryExpression>),
+    Term(Box<TermExpression>),
+    Binary(Box<BinaryExpression>),
+    Comparison(Box<ComparisonExpression>),
+    Instantiation(InstantiationExpression),
+}
+
+#[derive(Debug, Clone)]
+pub struct Expression {
+    kind: ExpressionKind,
+    typ: ValueType,
+    pos: TokenPos,
+}
+
+#[derive(Debug, Clone)]
+pub struct PrimaryExpression {
+    value: Value,
+    typ: ValueType,
+    pos: TokenPos,
+}
+
+#[derive(Debug, Clone)]
+pub struct UnaryExpression {
+    left: ExpressionKind,
+    typ: ValueType,
+    op: Value,
+    pos: TokenPos,
+}
+
+#[derive(Debug, Clone)]
+pub struct TermExpression {
+    left: ExpressionKind,
+    right: ExpressionKind,
+    typ: ValueType,
+    op: Value,
+    pos: TokenPos,
+}
+
+#[derive(Debug, Clone)]
+pub struct BinaryExpression {
+    left: ExpressionKind,
+    right: ExpressionKind,
+    typ: ValueType,
+    op: Value,
+    pos: TokenPos,
+}
+
+#[derive(Debug, Clone)]
+pub struct ComparisonExpression {
+    left: ExpressionKind,
+    right: ExpressionKind,
+    typ: ValueType,
+    op: Value,
+    pos: TokenPos,
+}
+
+#[derive(Debug, Clone)]
+pub struct InstantiationExpression {
+    class: String,
+    args: Vec<Expression>,
+    pos: TokenPos,
 }
 
 fn enter_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
@@ -149,6 +224,26 @@ fn expect_unstrict(i: &usize, toks: &Vec<Token>, value: TokenValue) -> Result<To
     }
 
     Err(error(format!("Expected {:?} but got {:?}", value, toks[i].value), toks[i].pos.clone()))
+}
+
+fn parse_type(tok: &Token, scope_stack: &Vec<Scope>) -> Result<ValueType, String> {
+    //let current_class = scope_stack.last().unwrap().current_class.clone().unwrap();
+    match tok.value {
+        TokenValue::Identifier(ref s) => match s.as_str() {
+            "_i" => Ok(ValueType::PrimitiveInteger),
+            "_s" => Ok(ValueType::PrimitiveString),
+            "_f" => Ok(ValueType::PrimitiveFloat),
+            "_b" => Ok(ValueType::PrimitiveBool),
+            "i" => Ok(ValueType::Class("Integer".to_string())),
+            "s" => Ok(ValueType::Class("String".to_string())),
+            "f" => Ok(ValueType::Class("Float".to_string())),
+            "b" => Ok(ValueType::Class("Bool".to_string())),
+            _ => {
+                todo!("it may be a class");
+            }
+        },
+        _ => Err(error("Expected an identifier while parsing type".to_string(), tok.pos.clone())),
+    }
 }
 
 pub fn parse(toks: Vec<Token>) -> Result<Vec<Statement>, String> {

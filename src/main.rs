@@ -1,8 +1,7 @@
 use crate::lexer::{lex, TokenPos};
-use crate::parser_old::parse;
+use crate::parser::parse;
 
 mod lexer;
-mod parser_old;
 mod parser;
 
 pub fn error(message: String, pos: TokenPos) -> String {
