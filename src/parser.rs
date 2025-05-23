@@ -61,10 +61,12 @@ pub struct VariableDeclaration {
 
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
-    //name: String,
-    //typ: crate::parser_old::ValueType,
-    //body: Vec<crate::parser_old::Statement>,
-    //pos: TokenPos,
+    name: String,
+    typ: ValueType,
+    body: Vec<Statement>,
+    pos: TokenPos,
+    pub public: bool,
+    pub args: Vec<(String, ValueType)>,
 }
 
 #[derive(Debug, Clone)]
@@ -167,6 +169,20 @@ pub struct InstantiationExpression {
     args: Vec<Expression>,
     pos: TokenPos,
 }
+
+const RESERVED: [&str; 11] = [
+    "class",
+    "fn",
+    "val",
+    "if",
+    "else",
+    "while",
+    "for",
+    "return",
+    "break",
+    "continue",
+    "Self",
+];
 
 fn enter_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
     let parent_scope = scope.last().cloned().unwrap_or(Scope {

@@ -2,7 +2,7 @@ use crate::parser::expression::parse_expression;
 use std::collections::HashMap;
 use crate::error;
 use crate::lexer::{Token, TokenValue};
-use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionKind, FunctionDeclaration, PrimaryExpression, Scope, Statement, StatementKind, Value, ValueType, VariableDeclaration, VariableOptions};
+use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionKind, FunctionDeclaration, PrimaryExpression, Scope, Statement, StatementKind, Value, ValueType, VariableDeclaration, VariableOptions, RESERVED};
 use crate::parser::ExpressionKind::Primary;
 
 pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
@@ -11,7 +11,7 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
     let mut scope_stack = scope_stack.clone();
     i += 1;
 
-    let public = if let Ok(_) = expect(&i, &toks, TokenValue::Identifier("pub".to_string())) {
+    let public = if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation("!".to_string())) {
         i += 1;
         true
     } else {
@@ -23,8 +23,8 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
         return Err(error(format!("Class '{}' already declared", name), toks[i].pos.clone()));
     }
 
-    if name == "Self" {
-        return Err(error("Class name cannot be 'Self'".to_string(), toks[i].pos.clone()));
+    if RESERVED.contains(&name.as_str()) {
+        return Err(error(format!("Cannot name class '{}' a reserved keyword", name), toks[i].pos.clone()));
     }
 
     i += 1;
@@ -48,12 +48,27 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
     scope_stack = enter_scope(&mut scope_stack);
     scope_stack.last_mut().unwrap().current_class = Some(name.clone());
 
-    let (variables, j) = parse_class_variables(&i, &toks, &mut scope_stack)?;
-    i = j;
+    let mut variables: Vec<VariableDeclaration> = vec![];
+    let mut functions: Vec<FunctionDeclaration> = vec![];
+    while i < toks.len() {
+        if toks[i].value == TokenValue::Punctuation("}".to_string()) {
+            break;
+        } else if toks[i].value == TokenValue::Identifier("val".to_string()) {
+            i += 1;
+            let (var, j) = parse_variable_declaration(&i, &toks, &mut scope_stack)?;
+            variables.push(var);
+            i = j;
+        } else if toks[i].value == TokenValue::Identifier("fn".to_string()) {
+            i += 1;
+            let (func, j, mut new_scope) = parse_function_declaration(&i, &toks, &mut scope_stack)?;
+            functions.push(func);
+            i = j;
+            scope_stack = new_scope;
+        } else {
+            break;
+        }
+    }
 
-    let (functions, h, mut scope) = parse_class_functions(&i, &toks, &mut scope_stack)?;
-    i = h;
-    scope_stack = exit_scope(&mut scope);
     expect(&i, &toks, TokenValue::Punctuation("}".to_string()))?;
     i += 1;
 
@@ -67,31 +82,6 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
         }),
         pos: toks[begin].pos.clone(),
     }, i, scope_stack))
-}
-
-fn parse_class_variables(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Vec<VariableDeclaration>, usize), String> {
-    let mut i = *i;
-    let mut variables: Vec<VariableDeclaration> = vec![];
-
-    while i < toks.len() {
-        if toks[i].value == TokenValue::Punctuation("}".to_string()) {
-            break;
-        } else if toks[i].value == TokenValue::Identifier("val".to_string()) {
-            i += 1;
-            let (var, j) = parse_variable_declaration(&i, &toks, scope_stack)?;
-            variables.push(var);
-            i = j;
-        } else {
-            break;
-        }
-
-    }
-
-    Ok((variables, i))
-}
-
-fn parse_class_functions(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Vec<FunctionDeclaration>, usize, Vec<Scope>), String> {
-    todo!("Implement parse_class_functions function");
 }
 
 fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(VariableDeclaration, usize), String> {
@@ -117,7 +107,11 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
         return Err(error(format!("Variable '{}' already declared", name), toks[i].pos.clone()));
     }
 
-    i += 1;
+    if RESERVED.contains(&name.as_str()) {
+        return Err(error(format!("Cannot name variable '{}' a reserved keyword", name), toks[i].pos.clone()));
+    }
+
+        i += 1;
     expect(&i, &toks, TokenValue::Punctuation(":".to_string()))?;
     i += 1;
 
@@ -151,4 +145,85 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
         expr,
         pos: toks[begin].pos.clone(),
     }, i))
+}
+
+fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(FunctionDeclaration, usize, Vec<Scope>), String> {
+    let mut i = *i;
+    let begin = i;
+
+    let public = if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation("!".to_string())) {
+        i += 1;
+        true
+    } else {
+        false
+    };
+
+    let name = expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+    if scope_stack.last().unwrap().variables.iter().any(|v| v.0 == &name) {
+        return Err(error(format!("Function '{}' already declared", name), toks[i].pos.clone()));
+    }
+    i += 1;
+
+    if RESERVED.contains(&name.as_str()) {
+        return Err(error(format!("Cannot name function '{}' a reserved keyword", name), toks[i].pos.clone()));
+    }
+
+    expect(&i, &toks, TokenValue::Punctuation("(".to_string()))?;
+    i += 1;
+    let mut args: Vec<(String, ValueType)> = vec![];
+    while i < toks.len() {
+        if toks[i].value == TokenValue::Punctuation(")".to_string()) {
+            break;
+        } else if toks[i].value == TokenValue::Punctuation(",".to_string()) {
+            i += 1;
+            continue;
+        }
+
+        let arg_name = expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+        if scope_stack.last().unwrap().variables.iter().any(|v| v.0 == &arg_name) {
+            return Err(error(format!("Argument '{}' already declared", arg_name), toks[i].pos.clone()));
+        }
+        i += 1;
+
+        if RESERVED.contains(&arg_name.as_str()) {
+            return Err(error(format!("Cannot name argument '{}' a reserved keyword", arg_name), toks[i].pos.clone()));
+        }
+
+        expect(&i, &toks, TokenValue::Punctuation(":".to_string()))?;
+        i += 1;
+
+        let arg_type = parse_type(&expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?, scope_stack)?;
+        i += 1;
+
+        args.push((arg_name, arg_type));
+    }
+
+    expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
+    i += 1;
+    let typ = if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation("->".to_string())) {
+        i += 1;
+        let t = parse_type(&expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?, scope_stack)?;
+        i += 1;
+        t
+    } else {
+        ValueType::None
+    };
+    expect(&i, &toks, TokenValue::Punctuation("{".to_string()))?;
+    i += 1;
+
+    let mut scope_stack = enter_scope(scope_stack);
+    todo!("parse function body");
+
+    expect(&i, &toks, TokenValue::Punctuation("}".to_string()))?;
+    i += 1;
+    scope_stack = exit_scope(&mut scope_stack);
+
+    Ok((FunctionDeclaration {
+        name,
+        args,
+        typ,
+        public,
+        pos: toks[begin].pos.clone(),
+        body: vec![],
+    }, i, scope_stack))
 }

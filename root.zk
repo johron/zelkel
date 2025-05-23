@@ -5,7 +5,7 @@ class Test {
     }
 }
 
-class Root {
+class! Root {
     fn! main() {
         val mut instance: Test = new Test();
         instance.test();
