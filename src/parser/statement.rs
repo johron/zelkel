@@ -1,5 +1,6 @@
 use crate::parser::expression::parse_expression;
 use std::collections::HashMap;
+use std::thread::scope;
 use crate::error;
 use crate::lexer::{Token, TokenValue};
 use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionKind, FunctionDeclaration, PrimaryExpression, Scope, Statement, StatementKind, Value, ValueType, VariableDeclaration, VariableOptions, RESERVED};
@@ -133,11 +134,11 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
     i += 1;
 
-    scope_stack.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
-        mutable,
-        public,
-        typ: typ.clone(),
-    });
+    // scope_stack.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
+    //     mutable,
+    //     public,
+    //     typ: typ.clone(),
+    // }); TODO: fix this, because it could be a class variable or a function variable
 
     Ok((VariableDeclaration {
         name,
