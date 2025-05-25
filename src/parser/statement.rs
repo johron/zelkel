@@ -213,7 +213,7 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     i += 1;
 
     let mut scope_stack = enter_scope(scope_stack);
-    todo!("parse function body");
+    // parse function body
 
     expect(&i, &toks, TokenValue::Punctuation("}".to_string()))?;
     i += 1;
@@ -227,4 +227,38 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
         pos: toks[begin].pos.clone(),
         body: vec![],
     }, i, scope_stack))
+}
+
+fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<Vec<Statement>, String> {
+    let mut i = *i;
+    let mut body: Vec<Statement> = vec![];
+
+    while i < toks.len() {
+        if toks[i].value == TokenValue::Punctuation("}".to_string()) {
+            break;
+        }
+
+        if toks[i].value == TokenValue::Identifier("val".to_string()) {
+            i += 1;
+            let (var, j) = parse_variable_declaration(&i, toks, scope_stack)?;
+            body.push(Statement {
+                kind: StatementKind::VariableDeclaration(var),
+                pos: var.pos.clone(),
+            });
+            i = j;
+        } else if toks[i].value == TokenValue::Identifier("fn".to_string()) {
+            i += 1;
+            let (func, j, new_scope) = parse_function_declaration(&i, toks, scope_stack)?;
+            body.push(Statement {
+                kind: StatementKind::FunctionDeclaration(func.clone()),
+                pos: func.pos.clone(),
+            });
+            scope_stack.push(new_scope);
+            i = j;
+        } else {
+            return Err(error(format!("Unexpected token {:?}", toks[i].value), toks[i].pos.clone()));
+        }
+    }
+
+    Ok(body)
 }

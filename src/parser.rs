@@ -39,6 +39,7 @@ pub enum Value {
 #[derive(Debug, Clone)]
 pub enum StatementKind {
     ClassDeclaration(ClassDeclaration),
+    VariableDeclaration(VariableDeclaration),
     Block(Vec<Statement>),
 }
 
