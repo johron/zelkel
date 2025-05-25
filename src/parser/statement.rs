@@ -56,9 +56,10 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
             break;
         } else if toks[i].value == TokenValue::Identifier("val".to_string()) {
             i += 1;
-            let (var, j) = parse_variable_declaration(&i, &toks, &mut scope_stack)?;
+            let (var, j, new_scope) = parse_variable_declaration(&i, &toks, &mut scope_stack, true)?;
             variables.push(var);
             i = j;
+            scope_stack = new_scope;
         } else if toks[i].value == TokenValue::Identifier("fn".to_string()) {
             i += 1;
             let (func, j, mut new_scope) = parse_function_declaration(&i, &toks, &mut scope_stack)?;
@@ -73,6 +74,9 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
     expect(&i, &toks, TokenValue::Punctuation("}".to_string()))?;
     i += 1;
 
+    scope_stack = exit_scope(&mut scope_stack);
+
+
     Ok((Statement {
         kind: StatementKind::ClassDeclaration(ClassDeclaration {
             name,
@@ -85,9 +89,11 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
     }, i, scope_stack))
 }
 
-fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(VariableDeclaration, usize), String> {
+fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, class: bool) -> Result<(VariableDeclaration, usize, Vec<Scope>), String> {
     let mut i = *i;
     let begin = i;
+    let mut scope_stack = scope_stack.clone();
+    let current_class = scope_stack.last().unwrap().current_class.clone().unwrap();
 
     let public = if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation("!".to_string())) {
         i += 1;
@@ -116,12 +122,12 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation(":".to_string()))?;
     i += 1;
 
-    let typ = parse_type(&expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?, scope_stack)?;
+    let typ = parse_type(&expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?, &scope_stack)?;
     i += 1;
 
     let expr: Option<Expression> = if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation("=".to_string())) {
         i += 1;
-        let (expr, j) = parse_expression(&i, toks, scope_stack)?;
+        let (expr, j) = parse_expression(&i, toks, &mut scope_stack)?;
         i = j;
         if typ != expr.typ && expr.typ != ValueType::None {
             return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", typ, expr.typ), toks[i].pos.clone()));
@@ -134,18 +140,20 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
     i += 1;
 
-    // scope_stack.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
-    //     mutable,
-    //     public,
-    //     typ: typ.clone(),
-    // }); TODO: fix this, because it could be a class variable or a function variable
+    if !class {
+        scope_stack.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
+            mutable,
+            public,
+            typ: typ.clone(),
+        });
+    }
 
     Ok((VariableDeclaration {
         name,
         typ,
         expr,
         pos: toks[begin].pos.clone(),
-    }, i))
+    }, i, scope_stack.clone()))
 }
 
 fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(FunctionDeclaration, usize, Vec<Scope>), String> {
@@ -240,11 +248,13 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
 
         if toks[i].value == TokenValue::Identifier("val".to_string()) {
             i += 1;
-            let (var, j) = parse_variable_declaration(&i, toks, scope_stack)?;
+            let (var, j, new_scope) = parse_variable_declaration(&i, toks, scope_stack, false)?;
             body.push(Statement {
-                kind: StatementKind::VariableDeclaration(var),
+                kind: StatementKind::VariableDeclaration(var.clone()),
                 pos: var.pos.clone(),
             });
+            println!("{:?}", new_scope);
+            *scope_stack = new_scope;
             i = j;
         } else if toks[i].value == TokenValue::Identifier("fn".to_string()) {
             i += 1;
@@ -253,7 +263,8 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
                 kind: StatementKind::FunctionDeclaration(func.clone()),
                 pos: func.pos.clone(),
             });
-            scope_stack.push(new_scope);
+            println!("{:?}", new_scope);
+            *scope_stack = new_scope;
             i = j;
         } else {
             return Err(error(format!("Unexpected token {:?}", toks[i].value), toks[i].pos.clone()));

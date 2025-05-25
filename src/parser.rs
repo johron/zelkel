@@ -40,6 +40,7 @@ pub enum Value {
 pub enum StatementKind {
     ClassDeclaration(ClassDeclaration),
     VariableDeclaration(VariableDeclaration),
+    FunctionDeclaration(FunctionDeclaration),
     Block(Vec<Statement>),
 }
 
