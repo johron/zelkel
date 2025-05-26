@@ -68,7 +68,7 @@ pub struct FunctionDeclaration {
     body: Vec<Statement>,
     pos: TokenPos,
     pub public: bool,
-    pub args: Vec<(String, ValueType)>,
+    pub args: HashMap<String, VariableOptions>,
 }
 
 #[derive(Debug, Clone)]
@@ -80,7 +80,7 @@ pub struct VariableOptions {
 
 #[derive(Debug, Clone)]
 pub struct FunctionOptions {
-    pub args: Vec<VariableOptions>,
+    pub args: HashMap<String, VariableOptions>,
     pub typ: ValueType,
     pub public: bool,
 }
@@ -90,11 +90,24 @@ pub struct ClassOptions {
     pub functions: HashMap<String, FunctionOptions>,
     pub variables: HashMap<String, VariableOptions>,
     pub public: bool,
+    pub extends: Option<String>,
+}
+
+impl ClassOptions {
+    pub fn empty() -> Self {
+        ClassOptions {
+            functions: HashMap::new(),
+            variables: HashMap::new(),
+            extends: None,
+            public: false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct Scope {
-    variables: HashMap<String, VariableOptions>, // Function-nested variables
+    variables: HashMap<String, VariableOptions>,
+    functions: HashMap<String, FunctionOptions>,
     classes: HashMap<String, ClassOptions>,
     current_class: ClassOptions,
 }
@@ -189,8 +202,9 @@ const RESERVED: [&str; 11] = [
 fn enter_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
     let parent_scope = scope.last().cloned().unwrap_or(Scope {
         variables: HashMap::new(),
+        functions: HashMap::new(),
         classes: HashMap::new(),
-        current_class: 
+        current_class: ClassOptions::empty(),
     });
     scope.push(parent_scope);
     scope.clone()
@@ -199,8 +213,9 @@ fn enter_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
 fn exit_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
     scope.pop().unwrap_or_else(|| Scope {
         variables: HashMap::new(),
+        functions: HashMap::new(),
         classes: HashMap::new(),
-        current_class: None,
+        current_class: ClassOptions::empty(),
     });
     scope.clone()
 }
@@ -269,7 +284,7 @@ pub fn parse(toks: Vec<Token>) -> Result<Vec<Statement>, String> {
     let mut i = 0;
 
     let mut scope_stack: Vec<Scope> = Vec::new();
-    scope_stack.push(Scope { variables: HashMap::new(), classes: HashMap::new(), current_class: None });
+    scope_stack.push(Scope { variables: HashMap::new(), functions: HashMap::new(), classes: HashMap::new(), current_class: ClassOptions::empty() });
 
     while i < toks.len() {
         if toks[i].value != TokenValue::Identifier("class".to_string()) {
