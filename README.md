@@ -3,6 +3,7 @@
 
 ## Todo:
 - [ ] Get back to where I was before parser rewrite
+-   [ ] Think about how I'm gonna have all the types. Since it would be very inefficient to have to copy the String class code for each string, remove unused, convert to primitve if possible, research how other OOP langs do it.
 - [ ] Codegen
 
 ## How I want some stuff to work:
