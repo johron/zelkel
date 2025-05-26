@@ -95,7 +95,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                         }),
                         typ: var.typ.clone(),
                         pos: tok.pos.clone(),
-                    } // TODO: Forgot to add variable redefinitions
+                    } // TODO: Forgot to add variable redefinitions, should also but all this identifier things into its own function and further splitting
                 } else if current_class.functions.contains_key(&member) {
                     let func = current_class.functions.get(&member).unwrap();
                     expect(&i, &toks, TokenValue::Punctuation("(".to_string()))?;
