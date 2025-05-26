@@ -96,7 +96,7 @@ pub struct ClassOptions {
 pub struct Scope {
     variables: HashMap<String, VariableOptions>, // Function-nested variables
     classes: HashMap<String, ClassOptions>,
-    current_class: Option<String>,
+    current_class: ClassOptions,
 }
 
 #[derive(Debug, Clone)]
@@ -190,7 +190,7 @@ fn enter_scope(scope: &mut Vec<Scope>) -> Vec<Scope> {
     let parent_scope = scope.last().cloned().unwrap_or(Scope {
         variables: HashMap::new(),
         classes: HashMap::new(),
-        current_class: None,
+        current_class: 
     });
     scope.push(parent_scope);
     scope.clone()
