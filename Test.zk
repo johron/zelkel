@@ -1,12 +1,12 @@
 class Test {
     val x: _i;
     fn _() {
-        Self.x = 5;
+
     }
 }
 
 class! Root {
     fn! main() {
-
+        val a: Test = new Test();
     }
 }

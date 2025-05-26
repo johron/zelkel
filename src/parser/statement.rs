@@ -1,10 +1,8 @@
 use crate::parser::expression::parse_expression;
 use std::collections::HashMap;
-use std::thread::scope;
 use crate::error;
 use crate::lexer::{Token, TokenValue};
-use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionKind, FunctionDeclaration, FunctionOptions, PrimaryExpression, Scope, Statement, StatementKind, Value, ValueType, VariableDeclaration, VariableOptions, RESERVED};
-use crate::parser::ExpressionKind::Primary;
+use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionKind, ExpressionStatement, FunctionDeclaration, FunctionOptions, PrimaryExpression, Scope, Statement, StatementKind, Value, ValueType, VariableDeclaration, VariableOptions, RESERVED};
 
 pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
@@ -54,21 +52,26 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
         functions: HashMap::new(),
     };
 
-    let mut variables: Vec<VariableDeclaration> = vec![];
-    let mut functions: Vec<FunctionDeclaration> = vec![];
+    let mut variables: Vec<VariableDeclaration> = Vec::new();
+    let mut variable_options: Vec<VariableOptions> = Vec::new();
+    let mut functions: Vec<FunctionDeclaration> = Vec::new();
+    let mut function_options: Vec<FunctionOptions> = Vec::new();
+    
     while i < toks.len() {
         if toks[i].value == TokenValue::Punctuation("}".to_string()) {
             break;
         } else if toks[i].value == TokenValue::Identifier("val".to_string()) {
             i += 1;
-            let (var, j, new_scope) = parse_variable_declaration(&i, &toks, &mut scope_stack, true)?;
-            variables.push(var);
+            let (var, opt, j, new_scope) = parse_variable_declaration(&i, &toks, &mut scope_stack, true)?;
+            variables.push(var.clone());
+            variable_options.push(opt.clone());
             i = j;
             scope_stack = new_scope;
         } else if toks[i].value == TokenValue::Identifier("fn".to_string()) {
             i += 1;
-            let (func, j, mut new_scope) = parse_function_declaration(&i, &toks, &mut scope_stack, true)?;
-            functions.push(func);
+            let (func, opt, j, new_scope) = parse_function_declaration(&i, &toks, &mut scope_stack, true)?;
+            functions.push(func.clone());
+            function_options.push(opt.clone());
             i = j;
             scope_stack = new_scope;
         } else {
@@ -80,7 +83,24 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
     i += 1;
 
     scope_stack = exit_scope(&mut scope_stack);
-
+    
+    let mut vars: HashMap<String, VariableOptions> = HashMap::new();
+    let mut funcs: HashMap<String, FunctionOptions> = HashMap::new();
+    
+    for (var, opt) in variables.iter().zip(variable_options.iter()) {
+        vars.insert(var.name.clone(), opt.clone());
+    }
+    
+    for (func, opt) in functions.iter().zip(function_options.iter()) {
+        funcs.insert(func.name.clone(), opt.clone());
+    }
+    
+    scope_stack.last_mut().unwrap().classes.insert(name.clone(), ClassOptions {
+        public,
+        extends: extends.clone(),
+        variables: vars,
+        functions: funcs,
+    });
 
     Ok((Statement {
         kind: StatementKind::ClassDeclaration(ClassDeclaration {
@@ -94,7 +114,7 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
     }, i, scope_stack))
 }
 
-fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, class: bool) -> Result<(VariableDeclaration, usize, Vec<Scope>), String> {
+fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, class: bool) -> Result<(VariableDeclaration, VariableOptions, usize, Vec<Scope>), String> {
     let mut i = *i;
     let begin = i;
     let mut scope_stack = scope_stack.clone();
@@ -144,29 +164,29 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
     i += 1;
 
-    if class {
-        scope_stack.last_mut().unwrap().current_class.variables.insert(name.clone(), VariableOptions {
-            mutable,
-            public,
-            typ: typ.clone(),
-        });
-    } else {
-        scope_stack.last_mut().unwrap().variables.insert(name.clone(), VariableOptions {
-            mutable,
-            public,
-            typ: typ.clone(),
-        });
-    }
-
-    Ok((VariableDeclaration {
-        name,
-        typ,
-        expr,
+    let decl = VariableDeclaration {
+        name: name.clone(),
+        typ: typ.clone(),
+        expr: expr.clone(),
         pos: toks[begin].pos.clone(),
-    }, i, scope_stack.clone()))
+    };
+    
+    let options = VariableOptions {
+        mutable,
+        public,
+        typ: typ.clone(),
+    };
+    
+    if class {
+        scope_stack.last_mut().unwrap().current_class.variables.insert(name.clone(), options.clone());
+    } else {
+        scope_stack.last_mut().unwrap().variables.insert(name.clone(), options.clone());
+    }
+    
+    Ok((decl, options, i, scope_stack))
 }
 
-fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, class: bool) -> Result<(FunctionDeclaration, usize, Vec<Scope>), String> {
+fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, class: bool) -> Result<(FunctionDeclaration, FunctionOptions, usize, Vec<Scope>), String> {
     let mut i = *i;
     let begin = i;
 
@@ -243,28 +263,28 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     i += 1;
     scope_stack = exit_scope(&mut scope_stack);
     
-    if class {
-        scope_stack.last_mut().unwrap().current_class.functions.insert(name.clone(), FunctionOptions {
-            public: public.clone(),
-            args: args.clone(),
-            typ: typ.clone(),
-        });
-    } else {
-        scope_stack.last_mut().unwrap().functions.insert(name.clone(), FunctionOptions {
-            public: public.clone(),
-            args: args.clone(),
-            typ: typ.clone(),
-        });
-    }
-
-    Ok((FunctionDeclaration {
-        name,
-        args,
-        typ,
+    let options = FunctionOptions {
+        public,
+        args: args.clone(),
+        typ: typ.clone(),
+    };
+    
+    let decl = FunctionDeclaration {
+        name: name.clone(),
+        args: args.clone(),
+        typ: typ.clone(),
         public,
         pos: toks[begin].pos.clone(),
         body,
-    }, i, scope_stack))
+    };
+    
+    if class {
+        scope_stack.last_mut().unwrap().current_class.functions.insert(name.clone(), options.clone());
+    } else {
+        scope_stack.last_mut().unwrap().functions.insert(name.clone(), options.clone());
+    }
+
+    Ok((decl, options, i, scope_stack))
 }
 
 fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Vec<Statement>, usize, Vec<Scope>), String> {
@@ -278,7 +298,7 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
 
         if toks[i].value == TokenValue::Identifier("val".to_string()) {
             i += 1;
-            let (var, j, new_scope) = parse_variable_declaration(&i, toks, scope_stack, false)?;
+            let (var, _, j, new_scope) = parse_variable_declaration(&i, toks, scope_stack, false)?;
             body.push(Statement {
                 kind: StatementKind::VariableDeclaration(var.clone()),
                 pos: var.pos.clone(),
@@ -288,7 +308,7 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
             i = j;
         } else if toks[i].value == TokenValue::Identifier("fn".to_string()) {
             i += 1;
-            let (func, j, new_scope) = parse_function_declaration(&i, toks, scope_stack, false)?;
+            let (func, _, j, new_scope) = parse_function_declaration(&i, toks, scope_stack, false)?;
             body.push(Statement {
                 kind: StatementKind::FunctionDeclaration(func.clone()),
                 pos: func.pos.clone(),
@@ -297,7 +317,18 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
             *scope_stack = new_scope;
             i = j;
         } else {
-            return Err(error(format!("Unexpected token {:?}", toks[i].value), toks[i].pos.clone()));
+            let (expr, j) = parse_expression(&i, toks, scope_stack)?;
+            body.push(Statement {
+                kind: StatementKind::ExpressionStatement(ExpressionStatement {
+                    expr: expr.clone(),
+                    pos: toks[i].pos.clone(),
+                    typ: expr.typ.clone(),
+                }),
+                pos: toks[i].pos.clone(),
+            });
+            i = j;
+            expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
+            i += 1;
         }
     }
 

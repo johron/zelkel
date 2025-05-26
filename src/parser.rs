@@ -12,7 +12,7 @@ pub struct Statement {
     pos: TokenPos,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ValueType {
     PrimitiveInteger,
     PrimitiveFloat,
@@ -22,7 +22,7 @@ pub enum ValueType {
     None,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Integer(i32),
     Float(f32),
@@ -41,6 +41,7 @@ pub enum StatementKind {
     ClassDeclaration(ClassDeclaration),
     VariableDeclaration(VariableDeclaration),
     FunctionDeclaration(FunctionDeclaration),
+    ExpressionStatement(ExpressionStatement),
     Block(Vec<Statement>),
 }
 
@@ -53,7 +54,7 @@ pub struct ClassDeclaration {
     pos: TokenPos,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VariableDeclaration {
     name: String,
     typ: ValueType,
@@ -71,21 +72,21 @@ pub struct FunctionDeclaration {
     pub args: HashMap<String, VariableOptions>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct VariableOptions {
     pub mutable: bool,
     pub public: bool,
     pub typ: ValueType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FunctionOptions {
     pub args: HashMap<String, VariableOptions>,
     pub typ: ValueType,
     pub public: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ClassOptions {
     pub functions: HashMap<String, FunctionOptions>,
     pub variables: HashMap<String, VariableOptions>,
@@ -104,7 +105,7 @@ impl ClassOptions {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Scope {
     variables: HashMap<String, VariableOptions>,
     functions: HashMap<String, FunctionOptions>,
@@ -112,14 +113,14 @@ pub struct Scope {
     current_class: ClassOptions,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExpressionStatement {
     typ: ValueType,
     expr: Expression,
     pos: TokenPos,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExpressionKind {
     Primary(PrimaryExpression),
     Unary(Box<UnaryExpression>),
@@ -129,21 +130,21 @@ pub enum ExpressionKind {
     Instantiation(InstantiationExpression),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Expression {
     kind: ExpressionKind,
     typ: ValueType,
     pos: TokenPos,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PrimaryExpression {
     value: Value,
     typ: ValueType,
     pos: TokenPos,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UnaryExpression {
     left: ExpressionKind,
     typ: ValueType,
@@ -151,7 +152,7 @@ pub struct UnaryExpression {
     pos: TokenPos,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TermExpression {
     left: ExpressionKind,
     right: ExpressionKind,
@@ -160,7 +161,7 @@ pub struct TermExpression {
     pos: TokenPos,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BinaryExpression {
     left: ExpressionKind,
     right: ExpressionKind,
@@ -169,7 +170,7 @@ pub struct BinaryExpression {
     pos: TokenPos,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ComparisonExpression {
     left: ExpressionKind,
     right: ExpressionKind,
@@ -178,7 +179,7 @@ pub struct ComparisonExpression {
     pos: TokenPos,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InstantiationExpression {
     class: String,
     args: Vec<Expression>,
@@ -272,7 +273,12 @@ fn parse_type(tok: &Token, scope_stack: &Vec<Scope>) -> Result<ValueType, String
             "f" => Ok(ValueType::Class("Float".to_string())),
             "b" => Ok(ValueType::Class("Bool".to_string())),
             _ => {
-                todo!("it may be a class");
+                println!("Checking for class: {}", s);
+                if scope_stack.last().unwrap().classes.contains_key(s) {
+                    Ok(ValueType::Class(s.clone()))
+                } else {
+                    Err(error(format!("Unknown type identifier: {}", s), tok.pos.clone()))
+                }
             }
         },
         _ => Err(error("Expected an identifier while parsing type".to_string(), tok.pos.clone())),

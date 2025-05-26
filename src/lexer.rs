@@ -40,7 +40,7 @@ impl TokenValue {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct TokenPos {
     pub path: String,
     pub line: usize,

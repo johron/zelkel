@@ -2,6 +2,10 @@ use crate::error;
 use crate::lexer::{Token, TokenValue};
 use crate::parser::{expect, BinaryExpression, ComparisonExpression, Expression, ExpressionKind, PrimaryExpression, Scope, TermExpression, UnaryExpression, ValueType};
 
+fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
+    todo!("implement instantiation expression parsing");
+}
+
 pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
     let mut i = *i;
     let tok = &toks[i];
@@ -30,6 +34,15 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                 let (expr, j) = parse_expression(&i, toks, scope_stack)?;
                 i = j;
                 expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
+                expr
+            } else {
+                return Err(error("Expected a primary expression".to_string(), tok.pos.clone()));
+            }
+        },
+        TokenValue::Identifier(s) => {
+            if s == "new" {
+                let (expr, j) = parse_instantiation_expression(i, toks, scope_stack)?;
+                i = j;
                 expr
             } else {
                 return Err(error("Expected a primary expression".to_string(), tok.pos.clone()));
