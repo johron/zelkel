@@ -1,8 +1,42 @@
 use crate::error;
 use crate::lexer::{Token, TokenValue};
-use crate::parser::{expect, BinaryExpression, ComparisonExpression, Expression, ExpressionKind, PrimaryExpression, Scope, TermExpression, UnaryExpression, ValueType};
+use crate::parser::{expect, expect_unstrict, BinaryExpression, ComparisonExpression, Expression, ExpressionKind, InstantiationExpression, PrimaryExpression, Scope, TermExpression, UnaryExpression, ValueType};
 
 fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
+    let mut i = i;
+    let begin = toks[i].pos.clone();
+    
+    expect(&i, &toks, TokenValue::Identifier("new".to_string()))?;
+    i += 1;
+    let name = expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+    i += 1;
+    expect(&i, &toks, TokenValue::Punctuation("(".to_string()))?;
+    i += 1;
+    
+    let mut args = Vec::new();
+    while i < toks.len() && toks[i].value != TokenValue::Punctuation(")".to_string()) {
+        let (arg, j) = parse_expression(&i, toks, scope_stack)?;
+        args.push(arg);
+        i = j;
+        if i < toks.len() && toks[i].value == TokenValue::Punctuation(",".to_string()) {
+            i += 1; // Skip the comma
+        }
+    }
+    
+    expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
+    i += 1;
+    
+    let class = Expression {
+        kind: ExpressionKind::Instantiation(InstantiationExpression {
+            class: name.clone(),
+            args,
+            pos: begin.clone(),
+        }),
+        typ: ValueType::Class(name.clone()),
+        pos: begin.clone(),
+    };
+    
+    println!("{} {:#?}", name, class);
     todo!("implement instantiation expression parsing");
 }
 
