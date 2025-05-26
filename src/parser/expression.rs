@@ -1,6 +1,6 @@
 use crate::error;
 use crate::lexer::{Token, TokenValue};
-use crate::parser::{expect, expect_unstrict, BinaryExpression, ComparisonExpression, Expression, ExpressionKind, InstantiationExpression, PrimaryExpression, Scope, TermExpression, UnaryExpression, ValueType};
+use crate::parser::{expect, expect_unstrict, BinaryExpression, ComparisonExpression, Expression, ExpressionKind, InstantiationExpression, PrimaryExpression, Scope, TermExpression, UnaryExpression, Value, ValueType};
 
 fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
     let mut i = i;
@@ -19,13 +19,12 @@ fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut
         args.push(arg);
         i = j;
         if i < toks.len() && toks[i].value == TokenValue::Punctuation(",".to_string()) {
-            i += 1; // Skip the comma
+            i += 1;
         }
     }
     
     expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
-    i += 1;
-    
+
     let class = Expression {
         kind: ExpressionKind::Instantiation(InstantiationExpression {
             class: name.clone(),
@@ -35,9 +34,8 @@ fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut
         typ: ValueType::Class(name.clone()),
         pos: begin.clone(),
     };
-    
-    println!("{} {:#?}", name, class);
-    todo!("implement instantiation expression parsing");
+
+    Ok((class, i))
 }
 
 pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
@@ -78,6 +76,75 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                 let (expr, j) = parse_instantiation_expression(i, toks, scope_stack)?;
                 i = j;
                 expr
+            } else if s == "this" {
+                expect(&i, &toks, TokenValue::Identifier("this".to_string()))?;
+                i += 1;
+                expect(&i, &toks, TokenValue::Punctuation(".".to_string()))?;
+                i += 1;
+                let member = expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+                i += 1;
+
+                let current_class = scope_stack.last().unwrap().current_class.clone();
+                if current_class.variables.contains_key(&member) {
+                    let var = current_class.variables.get(&member).unwrap();
+                    Expression {
+                        kind: ExpressionKind::Primary(PrimaryExpression {
+                            value: Value::ClassVariable(member.clone()),
+                            typ: var.typ.clone(),
+                            pos: tok.pos.clone(),
+                        }),
+                        typ: var.typ.clone(),
+                        pos: tok.pos.clone(),
+                    } // TODO: Forgot to add variable redefinitions
+                } else if current_class.functions.contains_key(&member) {
+                    let func = current_class.functions.get(&member).unwrap();
+                    expect(&i, &toks, TokenValue::Punctuation("(".to_string()))?;
+                    i += 1;
+                    let mut args = Vec::new();
+                    while i < toks.len() && toks[i].value != TokenValue::Punctuation(")".to_string()) {
+                        let (arg, j) = parse_expression(&i, toks, scope_stack)?;
+                        args.push(arg);
+                        i = j;
+                        if i < toks.len() && toks[i].value == TokenValue::Punctuation(",".to_string()) {
+                            i += 1;
+                        }
+                    }
+                    expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
+
+                    if args.len() != func.args.len() {
+                        return Err(error(format!("Function '{}' expects {} arguments, but got {}", member, func.args.len(), args.len()), tok.pos.clone()));
+                    }
+                    for (arg, expected) in args.iter().zip(&func.args) {
+                        if arg.typ != expected.1.typ {
+                            return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", expected.1.typ, arg.typ), tok.pos.clone()));
+                        }
+                    }
+
+                    Expression {
+                        kind: ExpressionKind::Primary(PrimaryExpression {
+                            value: Value::ClassFunction(member.clone()),
+                            typ: func.typ.clone(),
+                            pos: tok.pos.clone(),
+                        }),
+                        typ: func.typ.clone(),
+                        pos: tok.pos.clone(),
+                    }
+                } else {
+                    return Err(error(format!("'this' does not have a member named '{}'", member), tok.pos.clone()));
+                }
+            } else if scope_stack.last().unwrap().variables.contains_key(s) {
+                let var = scope_stack.last().unwrap().variables.get(s).unwrap();
+                Expression {
+                    kind: ExpressionKind::Primary(PrimaryExpression {
+                        value: Value::Variable(s.clone()),
+                        typ: var.typ.clone(),
+                        pos: tok.pos.clone(),
+                    }),
+                    typ: var.typ.clone(),
+                    pos: tok.pos.clone(),
+                }
+            } else if scope_stack.last().unwrap().functions.contains_key(s) {
+                todo!("Function calls are not yet implemented");
             } else {
                 return Err(error("Expected a primary expression".to_string(), tok.pos.clone()));
             }

@@ -1,7 +1,7 @@
-class Test {
-    val x: _i;
-    fn _() {
-
+class String {
+    fn hi() {}
+    fn _(value: _s) {
+        this.hi();
     }
 }
 
