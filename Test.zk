@@ -7,6 +7,6 @@ class String {
 
 class! Root {
     fn! main() {
-        val a: Test = new Test();
+        val a: String = new String("hello");
     }
 }
