@@ -1,8 +1,9 @@
 use crate::parser::expression::parse_expression;
 use std::collections::HashMap;
+use std::thread::current;
 use crate::error;
 use crate::lexer::{Token, TokenValue};
-use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionKind, ExpressionStatement, FunctionDeclaration, FunctionOptions, PrimaryExpression, Scope, Statement, StatementKind, Value, ValueType, VariableDeclaration, VariableOptions, RESERVED};
+use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionKind, ExpressionStatement, FunctionDeclaration, FunctionOptions, PrimaryExpression, Scope, Statement, StatementKind, Value, ValueType, VariableDeclaration, VariableOptions, VariableRedeclaration, RESERVED};
 
 pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
@@ -42,15 +43,18 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
         None
     };
 
-    expect(&i, &toks, TokenValue::Punctuation("{".to_string()))?;
-    i += 1;
-    scope_stack = enter_scope(&mut scope_stack);
-    scope_stack.last_mut().unwrap().current_class = ClassOptions {
+    let class_options = ClassOptions {
         public,
         extends: extends.clone(),
         variables: HashMap::new(),
         functions: HashMap::new(),
+        name: name.clone(),
     };
+
+    expect(&i, &toks, TokenValue::Punctuation("{".to_string()))?;
+    i += 1;
+    scope_stack = enter_scope(&mut scope_stack);
+    scope_stack.last_mut().unwrap().current_class = class_options.clone();
 
     let mut variables: Vec<VariableDeclaration> = Vec::new();
     let mut variable_options: Vec<VariableOptions> = Vec::new();
@@ -95,12 +99,7 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
         funcs.insert(func.name.clone(), opt.clone());
     }
     
-    scope_stack.last_mut().unwrap().classes.insert(name.clone(), ClassOptions {
-        public,
-        extends: extends.clone(),
-        variables: vars,
-        functions: funcs,
-    });
+    scope_stack.last_mut().unwrap().classes.insert(name.clone(), class_options);
 
     Ok((Statement {
         kind: StatementKind::ClassDeclaration(ClassDeclaration {
@@ -317,15 +316,9 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
             *scope_stack = new_scope;
             i = j;
         } else {
-            let (expr, j) = parse_expression(&i, toks, scope_stack)?;
-            body.push(Statement {
-                kind: StatementKind::ExpressionStatement(ExpressionStatement {
-                    expr: expr.clone(),
-                    pos: toks[i].pos.clone(),
-                    typ: expr.typ.clone(),
-                }),
-                pos: toks[i].pos.clone(),
-            });
+            let (stmt, j, new_scope) = parse_expression_statement(&i, toks, scope_stack)?;
+            body.push(stmt);
+            *scope_stack = new_scope;
             i = j;
             expect(&i, &toks, TokenValue::Punctuation(";".to_string()))?;
             i += 1;
@@ -333,4 +326,75 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
     }
 
     Ok((body, i, scope_stack.clone()))
+}
+
+fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
+    let mut i = *i;
+    let begin = toks[i].pos.clone();
+    let current_class = scope_stack.last().unwrap().current_class.clone();
+
+    if expect(&i, &toks, TokenValue::Identifier("this".to_string())).is_ok() { // TODO: A lot of this should be moved to a separate function for recursive member access
+        expect(&i, &toks, TokenValue::Identifier("this".to_string()))?;
+        i += 1;
+        expect(&i, &toks, TokenValue::Punctuation(".".to_string()))?;
+        i += 1;
+        let member = expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string(); // TODO: multiple members should be allowed, e.g. this.member1.member2...
+        i += 1;
+
+        // no more members
+
+        if current_class.variables.contains_key(&member) {
+            // in the future, there could be more members after this so maybe expect(".") if so then continue checking for members
+            expect(&i, &toks, TokenValue::Punctuation("=".to_string()))?;
+            i += 1;
+
+            if !current_class.variables[&member].mutable {
+                return Err(error(format!("Cannot assign to immutable variable 'this.{}'", member), toks[i].pos.clone()));
+            }
+
+            let (expr, j) = parse_expression(&i, toks, scope_stack)?;
+            i = j;
+
+            if expr.typ != current_class.variables[&member].typ && expr.typ != ValueType::None {
+                return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", current_class.variables[&member].typ, expr.typ), toks[i].pos.clone()));
+            }
+
+            return Ok((Statement {
+                kind: StatementKind::VariableRedeclaration(VariableRedeclaration {
+                    name: member,
+                    class: Some(current_class.name),
+                    typ: expr.typ.clone(),
+                    expr: expr.clone(),
+                    pos: expr.pos.clone(),
+                }),
+                pos: begin,
+            }, i, scope_stack.clone()));
+        } else if current_class.functions.contains_key(&member) {
+            todo!("Implement function call handling for 'this' member");
+        } else {
+            return Err(error(format!("'this.{}' is not a valid member of the current class", member), toks[i].pos.clone()));
+        }
+    } else if expect(&i, &toks, TokenValue::Identifier("super".to_string())).is_ok() {
+        // if is in constructor
+        todo!("Implement 'super' expression handling");
+    } else if scope_stack.last().unwrap().variables.contains_key(toks[i].clone().value.as_string().as_str()) {
+        todo!("Implement variable assignment handling in expression statement");
+    } else if scope_stack.last().unwrap().functions.contains_key(toks[i].clone().value.as_string().as_str()) {
+        todo!("Implement function call handling in expression statement");
+    } else {
+        let (expr, j) = parse_expression(&i, toks, scope_stack)?;
+        i = j;
+
+        return Ok((Statement {
+            kind: StatementKind::ExpressionStatement(ExpressionStatement {
+                typ: expr.typ.clone(),
+                expr: expr.clone(),
+                pos: expr.pos.clone(),
+            }),
+            pos: begin,
+        }, i, scope_stack.clone()));
+    }
+
+    println!("{:#?}", toks[i]);
+    todo!("Implement expression statement parsing");
 }

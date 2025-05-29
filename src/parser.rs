@@ -43,6 +43,7 @@ pub enum StatementKind {
     VariableDeclaration(VariableDeclaration),
     FunctionDeclaration(FunctionDeclaration),
     ExpressionStatement(ExpressionStatement),
+    VariableRedeclaration(VariableRedeclaration),
     Block(Vec<Statement>),
 }
 
@@ -73,6 +74,15 @@ pub struct FunctionDeclaration {
     pub args: HashMap<String, VariableOptions>,
 }
 
+#[derive(Debug, Clone)]
+pub struct VariableRedeclaration {
+    name: String,
+    class: Option<String>,
+    typ: ValueType,
+    expr: Expression,
+    pos: TokenPos,
+}
+
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct VariableOptions {
     pub mutable: bool,
@@ -93,6 +103,7 @@ pub struct ClassOptions {
     pub variables: HashMap<String, VariableOptions>,
     pub public: bool,
     pub extends: Option<String>,
+    pub name: String,
 }
 
 impl ClassOptions {
@@ -102,6 +113,7 @@ impl ClassOptions {
             variables: HashMap::new(),
             extends: None,
             public: false,
+            name: String::new(),
         }
     }
 }
@@ -297,6 +309,8 @@ pub fn parse(toks: Vec<Token>) -> Result<Vec<Statement>, String> {
         if toks[i].value != TokenValue::Identifier("class".to_string()) {
             Err(error("Expected a class declaration".to_string(), toks[i].pos.clone()))?;
         }
+
+        // In the future have enums too
 
         let (stmt, j, scope) = parse_class_declaration(&i, &toks, &mut scope_stack)?;
         scope_stack = scope;

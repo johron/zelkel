@@ -1,12 +1,6 @@
-class String {
-    fn hi() {}
-    fn _(value: _s) {
-        this.hi();
-    }
-}
-
 class! Root {
+    val mut test: _i = 42;
     fn! main() {
-        val a: String = new String("hello");
+        this.test = 100;
     }
 }

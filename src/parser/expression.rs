@@ -9,6 +9,10 @@ fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut
     expect(&i, &toks, TokenValue::Identifier("new".to_string()))?;
     i += 1;
     let name = expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+    if name == "Root" {
+        return Err(error("Instantiation of 'Root' class is not allowed".to_string(), toks[i].pos.clone()));
+    }
+
     i += 1;
     expect(&i, &toks, TokenValue::Punctuation("(".to_string()))?;
     i += 1;
@@ -81,7 +85,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                 i += 1;
                 expect(&i, &toks, TokenValue::Punctuation(".".to_string()))?;
                 i += 1;
-                let member = expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+                let member = expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string(); // TODO: multiple members should be allowed, e.g. this.member1.member2...
                 i += 1;
 
                 let current_class = scope_stack.last().unwrap().current_class.clone();
@@ -95,7 +99,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                         }),
                         typ: var.typ.clone(),
                         pos: tok.pos.clone(),
-                    } // TODO: Forgot to add variable redefinitions, should also but all this identifier things into its own function and further splitting
+                    }
                 } else if current_class.functions.contains_key(&member) {
                     let func = current_class.functions.get(&member).unwrap();
                     expect(&i, &toks, TokenValue::Punctuation("(".to_string()))?;
@@ -144,7 +148,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                     pos: tok.pos.clone(),
                 }
             } else if scope_stack.last().unwrap().functions.contains_key(s) {
-                todo!("Function calls are not yet implemented");
+                todo!("Function calls are not yet implemented"); // Should only allow function calls that return a value
             } else {
                 return Err(error("Expected a primary expression".to_string(), tok.pos.clone()));
             }
