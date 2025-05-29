@@ -277,10 +277,10 @@ fn parse_type(tok: &Token, scope_stack: &Vec<Scope>) -> Result<ValueType, String
     //let current_class = scope_stack.last().unwrap().current_class.clone().unwrap();
     match tok.value {
         TokenValue::Identifier(ref s) => match s.as_str() {
-            "_i" => Ok(ValueType::PrimitiveInteger),
-            "_s" => Ok(ValueType::PrimitiveString),
-            "_f" => Ok(ValueType::PrimitiveFloat),
-            "_b" => Ok(ValueType::PrimitiveBool),
+            "_pint" => Ok(ValueType::PrimitiveInteger),
+            "_pstr" => Ok(ValueType::PrimitiveString),
+            "_pfloat" => Ok(ValueType::PrimitiveFloat),
+            "_pbloat" => Ok(ValueType::PrimitiveBool),
             "i" => Ok(ValueType::Class("Integer".to_string())),
             "s" => Ok(ValueType::Class("String".to_string())),
             "f" => Ok(ValueType::Class("Float".to_string())),

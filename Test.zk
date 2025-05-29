@@ -1,5 +1,5 @@
 class! Root {
-    val mut test: _i = 42;
+    val mut test: _pint = 42;
     fn! main() {
         this.test = 100;
     }

@@ -21,8 +21,8 @@
 - Comment at the end is what it basically does. Auto-construction
 ```kotlin
 class! String {
-  val value: _s; // "_s" is a primitive string type
-  fn! _(value: _s) {
+  val value: _pstr; // "_pstr" is a primitive string type
+  fn! _(value: _pstr) {
     this.value = value;
   }
   
