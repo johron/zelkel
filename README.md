@@ -2,9 +2,18 @@
 - Object-oriented programming language targeting a [custom virtual machine](https://github.com/johron/zelkel-vm)
 
 ## Todo:
-- [ ] Get back to where I was before parser rewrite
--   [ ] Think about how I'm gonna have all the types. Since it would be very inefficient to have to copy the String class code for each string, remove unused, convert to primitve if possible, research how other OOP langs do it.
+- [] Parser
+  - [ ] Class instantiation with constructors with only one argument and the class as the variable type: `val x: String = new String("hi");` becomes `val x: String = "hi";`
+  - [ ] Recursive members
+  - [ ] If statements, while loops, for loops, etc.
+  - [ ] Arrays
+  - [ ] Enums
+  - [ ] Variadic arguments in functions
+  - [ ] Think about how I'm going to have all the types. Since it would be very inefficient to have to copy the String class code for each string, remove unused, convert to primitve if possible, research how other OOP langs do it.
 - [ ] Codegen
+  - [ ] Rewrite the virtual machine to work for object-oriented programming and to refresh my memory on it. Implement arrays, I want these in the VM as primitives.
+- [ ] Make a standard library
+- [ ] Self-hosting compiler
 
 ## How I want some stuff to work:
 ### Making strings or any other type/value
