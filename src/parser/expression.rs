@@ -303,7 +303,7 @@ pub fn parse_comparison_expression(i: &usize, toks: &Vec<Token>, scope_stack: &m
 fn convert_primitive_to_class_instantiation(expr: Expression, expected_type: &ValueType) -> Result<Expression, String> {
     // No må eg finne ut hvilke klasse som skal instansieres basert på expected_type
     // og så lage en InstantiationExpression med den klassen og den primitive verdien som argument.
-    
+
     todo!("finish")
 }
 
@@ -313,16 +313,16 @@ pub fn parse_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scop
         let (expr, j) = cmp?;
         let typ = expr.typ.clone();
         if typ != *expected_type && expected_type != &ValueType::None {
-            match expected_type {
+            return match expected_type {
                 ValueType::PrimitiveInteger | ValueType::PrimitiveFloat | ValueType::PrimitiveString | ValueType::PrimitiveBool => {
                     let convert = convert_primitive_to_class_instantiation(expr.clone(), expected_type);
-                    return if convert.is_ok() {
+                    if convert.is_ok() {
                         Ok((convert?, j))
                     } else {
                         Err(error(format!("Type mismatch: expected {:?}, but found {:?}", expected_type, typ), toks[*i].pos.clone()))
                     }
                 }
-                _ => return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", expected_type, typ), toks[*i].pos.clone()))
+                _ => Err(error(format!("Type mismatch: expected {:?}, but found {:?}", expected_type, typ), toks[*i].pos.clone()))
             }
         }
         Ok((expr, j))
