@@ -1,9 +1,8 @@
 use crate::parser::expression::parse_expression;
 use std::collections::HashMap;
-use std::thread::current;
 use crate::error;
 use crate::lexer::{Token, TokenValue};
-use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionKind, ExpressionStatement, FunctionDeclaration, FunctionOptions, PrimaryExpression, Scope, Statement, StatementKind, Value, ValueType, VariableDeclaration, VariableOptions, VariableRedeclaration, RESERVED};
+use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionStatement, FunctionDeclaration, FunctionOptions, PrimaryExpression, Scope, Statement, StatementKind, Value, ValueType, VariableDeclaration, VariableOptions, VariableRedeclaration, RESERVED};
 
 pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;
@@ -150,7 +149,7 @@ fn parse_variable_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
 
     let expr: Option<Expression> = if let Ok(_) = expect(&i, &toks, TokenValue::Punctuation("=".to_string())) {
         i += 1;
-        let (expr, j) = parse_expression(&i, toks, &mut scope_stack)?;
+        let (expr, j) = parse_expression(&i, toks, &mut scope_stack, &typ)?;
         i = j;
         if typ != expr.typ && expr.typ != ValueType::None {
             return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", typ, expr.typ), toks[i].pos.clone()));
@@ -352,7 +351,7 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
                 return Err(error(format!("Cannot assign to immutable variable 'this.{}'", member), toks[i].pos.clone()));
             }
 
-            let (expr, j) = parse_expression(&i, toks, scope_stack)?;
+            let (expr, j) = parse_expression(&i, toks, scope_stack, &current_class.variables[&member].typ)?;
             i = j;
 
             if expr.typ != current_class.variables[&member].typ && expr.typ != ValueType::None {
@@ -382,7 +381,7 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     } else if scope_stack.last().unwrap().functions.contains_key(toks[i].clone().value.as_string().as_str()) {
         todo!("Implement function call handling in expression statement");
     } else {
-        let (expr, j) = parse_expression(&i, toks, scope_stack)?;
+        let (expr, j) = parse_expression(&i, toks, scope_stack, &ValueType::None)?;
         i = j;
 
         return Ok((Statement {

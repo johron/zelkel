@@ -1,8 +1,13 @@
+use std::ffi::CString;
 use crate::error;
 use crate::lexer::{Token, TokenValue};
 use crate::parser::{expect, expect_unstrict, BinaryExpression, ComparisonExpression, Expression, ExpressionKind, InstantiationExpression, PrimaryExpression, Scope, TermExpression, UnaryExpression, Value, ValueType};
 
-fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
+fn parse_primary_expression_as_instantiation(expr: PrimaryExpression, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
+    todo!("Implement parse_primary_expression_as_instantiation");
+}
+
+fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, expected_type: &ValueType) -> Result<(Expression, usize), String> {
     let mut i = i;
     let begin = toks[i].pos.clone();
     
@@ -19,7 +24,7 @@ fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut
     
     let mut args = Vec::new();
     while i < toks.len() && toks[i].value != TokenValue::Punctuation(")".to_string()) {
-        let (arg, j) = parse_expression(&i, toks, scope_stack)?;
+        let (arg, j) = parse_expression(&i, toks, scope_stack, expected_type)?;
         args.push(arg);
         i = j;
         if i < toks.len() && toks[i].value == TokenValue::Punctuation(",".to_string()) {
@@ -42,7 +47,7 @@ fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut
     Ok((class, i))
 }
 
-pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
+pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, expected_type: &ValueType) -> Result<(Expression, usize), String> {
     let mut i = *i;
     let tok = &toks[i];
     let expr = match &tok.value {
@@ -67,7 +72,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
         TokenValue::Punctuation(p) => {
             if p == "(" {
                 i += 1;
-                let (expr, j) = parse_expression(&i, toks, scope_stack)?;
+                let (expr, j) = parse_expression(&i, toks, scope_stack, expected_type)?;
                 i = j;
                 expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
                 expr
@@ -77,7 +82,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
         },
         TokenValue::Identifier(s) => {
             if s == "new" {
-                let (expr, j) = parse_instantiation_expression(i, toks, scope_stack)?;
+                let (expr, j) = parse_instantiation_expression(i, toks, scope_stack, expected_type)?;
                 i = j;
                 expr
             } else if s == "this" {
@@ -106,7 +111,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                     i += 1;
                     let mut args = Vec::new();
                     while i < toks.len() && toks[i].value != TokenValue::Punctuation(")".to_string()) {
-                        let (arg, j) = parse_expression(&i, toks, scope_stack)?;
+                        let (arg, j) = parse_expression(&i, toks, scope_stack, expected_type)?;
                         args.push(arg);
                         i = j;
                         if i < toks.len() && toks[i].value == TokenValue::Punctuation(",".to_string()) {
@@ -159,12 +164,12 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
     Ok((expr, i))
 }
 
-pub fn parse_unary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
+pub fn parse_unary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, expected_type: &ValueType) -> Result<(Expression, usize), String> {
     let mut i = *i;
     let tok = &toks[i];
     if let TokenValue::Arithmetic(_) = &tok.value {
         i += 1;
-        let (expr, j) = parse_primary_expression(&mut i, toks, scope_stack)?;
+        let (expr, j) = parse_primary_expression(&mut i, toks, scope_stack, expected_type)?;
 
         if expr.typ == ValueType::PrimitiveInteger || expr.typ == ValueType::PrimitiveFloat {
             return Ok((Expression {
@@ -181,19 +186,19 @@ pub fn parse_unary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
 
         return Err(error(format!("Type mismatch: expected {:?} or {:?}, but found {:?}", ValueType::PrimitiveInteger, ValueType::PrimitiveFloat, expr.typ), toks[i].pos.clone()));
     }
-    parse_primary_expression(&mut i, toks, scope_stack)
+    parse_primary_expression(&mut i, toks, scope_stack, expected_type)
 }
 
-pub fn parse_term_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
+pub fn parse_term_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, expected_type: &ValueType) -> Result<(Expression, usize), String> {
     let mut i = *i;
-    let (mut expr, j) = parse_unary_expression(&mut i, toks, scope_stack)?;
+    let (mut expr, j) = parse_unary_expression(&mut i, toks, scope_stack, expected_type)?;
     i = j;
     while i < toks.len() {
         let tok = &toks[i];
         if let TokenValue::Arithmetic(op) = &tok.value {
             if op == "*" || op == "/" {
                 i += 1;
-                let (right, h) = parse_unary_expression(&mut i, toks, scope_stack)?;
+                let (right, h) = parse_unary_expression(&mut i, toks, scope_stack, expected_type)?;
                 i = h;
 
                 if expr.typ != right.typ {
@@ -221,16 +226,16 @@ pub fn parse_term_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec
     Ok((expr, i))
 }
 
-pub fn parse_binary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
+pub fn parse_binary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, expected_type: &ValueType) -> Result<(Expression, usize), String> {
     let mut i = *i;
-    let (mut expr, j) = parse_term_expression(&mut i, toks, scope_stack)?;
+    let (mut expr, j) = parse_term_expression(&mut i, toks, scope_stack, expected_type)?;
     i = j;
     while i < toks.len() {
         let tok = &toks[i];
         if let TokenValue::Arithmetic(op) = &tok.value {
             if op == "+" || op == "-" || op == "%" {
                 i += 1;
-                let (right, h) = parse_term_expression(&mut i, toks, scope_stack)?;
+                let (right, h) = parse_term_expression(&mut i, toks, scope_stack, expected_type)?;
                 i = h;
 
                 if expr.typ != right.typ {
@@ -258,16 +263,16 @@ pub fn parse_binary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut V
     Ok((expr, i))
 }
 
-pub fn parse_comparison_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
+pub fn parse_comparison_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, expected_type: &ValueType) -> Result<(Expression, usize), String> {
     let mut i = *i;
-    let (mut expr, j) = parse_binary_expression(&mut i, toks, scope_stack)?;
+    let (mut expr, j) = parse_binary_expression(&mut i, toks, scope_stack, expected_type)?;
     i = j;
     while i < toks.len() {
         let tok = &toks[i];
         if let TokenValue::Arithmetic(op) = &tok.value {
             if op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=" {
                 i += 1;
-                let (right, h) = parse_binary_expression(&mut i, toks, scope_stack)?;
+                let (right, h) = parse_binary_expression(&mut i, toks, scope_stack, expected_type)?;
                 i = h;
 
                 if expr.typ != right.typ {
@@ -295,6 +300,33 @@ pub fn parse_comparison_expression(i: &usize, toks: &Vec<Token>, scope_stack: &m
     Ok((expr, i))
 }
 
-pub fn parse_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
-    parse_comparison_expression(i, toks, scope_stack)
+fn convert_primitive_to_class_instantiation(expr: Expression, expected_type: &ValueType) -> Result<Expression, String> {
+    // No må eg finne ut hvilke klasse som skal instansieres basert på expected_type
+    // og så lage en InstantiationExpression med den klassen og den primitive verdien som argument.
+    
+    todo!("finish")
+}
+
+pub fn parse_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, expected_type: &ValueType) -> Result<(Expression, usize), String> {
+    let cmp = parse_comparison_expression(i, toks, scope_stack, &expected_type);
+    if cmp.is_ok() {
+        let (expr, j) = cmp?;
+        let typ = expr.typ.clone();
+        if typ != *expected_type && expected_type != &ValueType::None {
+            match expected_type {
+                ValueType::PrimitiveInteger | ValueType::PrimitiveFloat | ValueType::PrimitiveString | ValueType::PrimitiveBool => {
+                    let convert = convert_primitive_to_class_instantiation(expr.clone(), expected_type);
+                    return if convert.is_ok() {
+                        Ok((convert?, j))
+                    } else {
+                        Err(error(format!("Type mismatch: expected {:?}, but found {:?}", expected_type, typ), toks[*i].pos.clone()))
+                    }
+                }
+                _ => return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", expected_type, typ), toks[*i].pos.clone()))
+            }
+        }
+        Ok((expr, j))
+    } else {
+        cmp
+    }
 }
