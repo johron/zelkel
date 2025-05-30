@@ -1,11 +1,6 @@
-use std::ffi::CString;
 use crate::error;
 use crate::lexer::{Token, TokenValue};
 use crate::parser::{expect, expect_unstrict, BinaryExpression, ComparisonExpression, Expression, ExpressionKind, InstantiationExpression, PrimaryExpression, Scope, TermExpression, UnaryExpression, Value, ValueType};
-
-fn parse_primary_expression_as_instantiation(expr: PrimaryExpression, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
-    todo!("Implement parse_primary_expression_as_instantiation");
-}
 
 fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, expected_type: &ValueType) -> Result<(Expression, usize), String> {
     let mut i = i;
@@ -23,13 +18,16 @@ fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut
     i += 1;
     
     let mut args = Vec::new();
+    let mut count = 0;
     while i < toks.len() && toks[i].value != TokenValue::Punctuation(")".to_string()) {
-        let (arg, j) = parse_expression(&i, toks, scope_stack, expected_type)?;
+        let arg_type = scope_stack.last().unwrap().classes.get(name.as_str()).unwrap().functions.get("_").unwrap().args.values().nth(count).unwrap().typ.clone();
+        let (arg, j) = parse_expression(&i, toks, scope_stack, &arg_type)?;
         args.push(arg);
         i = j;
         if i < toks.len() && toks[i].value == TokenValue::Punctuation(",".to_string()) {
             i += 1;
         }
+        count += 1;
     }
     
     expect(&i, &toks, TokenValue::Punctuation(")".to_string()))?;
@@ -141,7 +139,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                 } else {
                     return Err(error(format!("'this' does not have a member named '{}'", member), tok.pos.clone()));
                 }
-            } else if scope_stack.last().unwrap().variables.contains_key(s) {
+            } else if scope_stack.last().unwrap().variables.contains_key(s) { // TODO: Fix adding functions arguments to scope!!
                 let var = scope_stack.last().unwrap().variables.get(s).unwrap();
                 Expression {
                     kind: ExpressionKind::Primary(PrimaryExpression {
@@ -300,11 +298,31 @@ pub fn parse_comparison_expression(i: &usize, toks: &Vec<Token>, scope_stack: &m
     Ok((expr, i))
 }
 
-fn convert_primitive_to_class_instantiation(expr: Expression, expected_type: &ValueType) -> Result<Expression, String> {
+fn convert_primitive_to_class_instantiation(mut expr: Expression, expected_type: &ValueType) -> Result<Expression, String> {
     // No må eg finne ut hvilke klasse som skal instansieres basert på expected_type
     // og så lage en InstantiationExpression med den klassen og den primitive verdien som argument.
-
-    todo!("finish")
+    match expected_type {
+        ValueType::Class(class_name) => {
+            if (class_name == "Integer" && expr.typ == ValueType::PrimitiveInteger)
+                || (class_name == "Float" && expr.typ == ValueType::PrimitiveFloat)
+                || (class_name == "String" && expr.typ == ValueType::PrimitiveString)
+                || (class_name == "Bool" && expr.typ == ValueType::PrimitiveBool)
+            {
+                expr.kind = ExpressionKind::Instantiation(InstantiationExpression {
+                    class: class_name.clone(),
+                    args: vec![expr.clone()],
+                    pos: expr.pos.clone(),
+                });
+                expr.typ = ValueType::Class(class_name.clone());
+                Ok(expr)
+            } else {
+                return Err(error(format!("Cannot convert primitive type {:?} to class instantiation of {:?}", expr.typ, expected_type), expr.pos.clone()));
+            }
+        },
+        _ => {
+            Err(error(format!("Cannot convert primitive type to class instantiation: expected {:?}", expected_type), expr.pos.clone()))
+        }
+    }
 }
 
 pub fn parse_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, expected_type: &ValueType) -> Result<(Expression, usize), String> {
@@ -313,7 +331,7 @@ pub fn parse_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scop
         let (expr, j) = cmp?;
         let typ = expr.typ.clone();
         if typ != *expected_type && expected_type != &ValueType::None {
-            return match expected_type {
+            return match typ {
                 ValueType::PrimitiveInteger | ValueType::PrimitiveFloat | ValueType::PrimitiveString | ValueType::PrimitiveBool => {
                     let convert = convert_primitive_to_class_instantiation(expr.clone(), expected_type);
                     if convert.is_ok() {

@@ -98,6 +98,14 @@ pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack:
         funcs.insert(func.name.clone(), opt.clone());
     }
     
+    let class_options = ClassOptions {
+        public,
+        extends: extends.clone(),
+        variables: vars,
+        functions: funcs,
+        name: name.clone(),
+    };
+    
     scope_stack.last_mut().unwrap().classes.insert(name.clone(), class_options);
 
     Ok((Statement {
@@ -275,6 +283,8 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
         pos: toks[begin].pos.clone(),
         body,
     };
+    
+    println!("Function options: {:?}", options);
     
     if class {
         scope_stack.last_mut().unwrap().current_class.functions.insert(name.clone(), options.clone());

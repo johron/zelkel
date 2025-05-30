@@ -1,7 +1,11 @@
-class! Root {
-    val mut test: _pint = 42;
-    val mut test2: _pstr = "hi";
-    fn! main() {
-        this.test2 = 100;
+class Integer {
+    val mut value: _pint;
+    fn! _(value: _pint) {
+        this.value = value;
     }
+}
+
+class! Root {
+    val num1: i = 42;
+    val num2: i = new Integer(42);
 }
