@@ -9,7 +9,7 @@ pub enum TokenValue {
     Bool(bool),
     Arithmetic(String),
     Punctuation(String),
-    Nested,
+    //Nested,
 }
 
 impl TokenValue {
@@ -35,7 +35,7 @@ impl TokenValue {
             TokenValue::Bool(b) => b.to_string(),
             TokenValue::Arithmetic(s) => s.clone(),
             TokenValue::Punctuation(c) => c.to_string(),
-            TokenValue::Nested => "nested".to_string(),
+            //TokenValue::Nested => "nested".to_string(),
         }
     }
 }
@@ -53,11 +53,11 @@ pub struct Token {
     pub pos: TokenPos,
 }
 
-impl Token {
+/*impl Token {
     pub fn empty() -> Token {
         Token { value: TokenValue::Identifier("".to_owned()), pos: TokenPos { path: "".to_string(), line: 0, col: 0 } }
     }
-}
+}*/
 
 fn could_be(c: char, s: &str) -> bool {
     s.chars().any(|x| x == c)

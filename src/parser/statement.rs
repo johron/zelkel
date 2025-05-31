@@ -2,7 +2,7 @@ use crate::parser::expression::parse_expression;
 use std::collections::HashMap;
 use crate::error;
 use crate::lexer::{Token, TokenValue};
-use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionStatement, FunctionDeclaration, FunctionOptions, PrimaryExpression, Scope, Statement, StatementKind, Value, ValueType, VariableDeclaration, VariableOptions, VariableRedeclaration, RESERVED};
+use crate::parser::{enter_scope, exit_scope, expect, expect_unstrict, parse_type, ClassDeclaration, ClassOptions, Expression, ExpressionStatement, FunctionDeclaration, FunctionOptions, Scope, Statement, StatementKind, ValueType, VariableDeclaration, VariableOptions, VariableRedeclaration, RESERVED};
 
 pub(crate) fn parse_class_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Statement, usize, Vec<Scope>), String> {
     let mut i = *i;

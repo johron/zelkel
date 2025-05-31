@@ -2,7 +2,7 @@ use crate::error;
 use crate::lexer::{Token, TokenValue};
 use crate::parser::{expect, expect_unstrict, BinaryExpression, ComparisonExpression, Expression, ExpressionKind, InstantiationExpression, PrimaryExpression, Scope, TermExpression, UnaryExpression, Value, ValueType};
 
-fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>, expected_type: &ValueType) -> Result<(Expression, usize), String> {
+fn parse_instantiation_expression(i: usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope>) -> Result<(Expression, usize), String> {
     let mut i = i;
     let begin = toks[i].pos.clone();
     
@@ -81,7 +81,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
         },
         TokenValue::Identifier(s) => {
             if s == "new" {
-                let (expr, j) = parse_instantiation_expression(i, toks, scope_stack, expected_type)?;
+                let (expr, j) = parse_instantiation_expression(i, toks, scope_stack)?;
                 i = j;
                 expr
             } else if s == "this" {
