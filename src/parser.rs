@@ -286,7 +286,6 @@ fn parse_type(tok: &Token, scope_stack: &Vec<Scope>) -> Result<ValueType, String
             "f" => Ok(ValueType::Class("Float".to_string())),
             "b" => Ok(ValueType::Class("Bool".to_string())),
             _ => {
-                println!("Checking for class: {}", s);
                 if scope_stack.last().unwrap().classes.contains_key(s) {
                     Ok(ValueType::Class(s.clone()))
                 } else {

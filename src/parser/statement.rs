@@ -260,6 +260,10 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
     expect(&i, &toks, TokenValue::Punctuation("{".to_string()))?;
     i += 1;
 
+    for (arg_name, arg_opts) in &args {
+        scope_stack.last_mut().unwrap().variables.insert(arg_name.clone(), arg_opts.clone());
+    }
+
     let mut scope_stack = enter_scope(scope_stack);
     let (body, j, new_scope) = parse_function_body(&i, toks, &mut scope_stack)?;
     i = j;
@@ -284,7 +288,6 @@ fn parse_function_declaration(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
         body,
     };
     
-    println!("Function options: {:?}", options);
     
     if class {
         scope_stack.last_mut().unwrap().current_class.functions.insert(name.clone(), options.clone());
@@ -311,7 +314,6 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
                 kind: StatementKind::VariableDeclaration(var.clone()),
                 pos: var.pos.clone(),
             });
-            println!("{:?}", new_scope);
             *scope_stack = new_scope;
             i = j;
         } else if toks[i].value == TokenValue::Identifier("fn".to_string()) {
@@ -321,7 +323,6 @@ fn parse_function_body(i: &usize, toks: &Vec<Token>, scope_stack: &mut Vec<Scope
                 kind: StatementKind::FunctionDeclaration(func.clone()),
                 pos: func.pos.clone(),
             });
-            println!("{:?}", new_scope);
             *scope_stack = new_scope;
             i = j;
         } else {
@@ -403,7 +404,4 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
             pos: begin,
         }, i, scope_stack.clone()));
     }
-
-    println!("{:#?}", toks[i]);
-    todo!("Implement expression statement parsing");
 }

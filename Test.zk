@@ -6,6 +6,8 @@ class Integer {
 }
 
 class! Root {
-    val num1: i = 42;
-    val num2: i = new Integer(42);
+    fn! main() {
+        val x: i = new Integer(3);
+        x.value = 5;
+    }
 }

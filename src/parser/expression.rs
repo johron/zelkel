@@ -67,6 +67,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                 pos: tok.pos.clone(),
             }
         },
+        
         TokenValue::Punctuation(p) => {
             if p == "(" {
                 i += 1;
@@ -89,7 +90,6 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                 expect(&i, &toks, TokenValue::Punctuation(".".to_string()))?;
                 i += 1;
                 let member = expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string(); // TODO: multiple members should be allowed, e.g. this.member1.member2...
-                i += 1;
 
                 let current_class = scope_stack.last().unwrap().current_class.clone();
                 if current_class.variables.contains_key(&member) {
@@ -139,7 +139,7 @@ pub fn parse_primary_expression(i: &usize, toks: &Vec<Token>, scope_stack: &mut 
                 } else {
                     return Err(error(format!("'this' does not have a member named '{}'", member), tok.pos.clone()));
                 }
-            } else if scope_stack.last().unwrap().variables.contains_key(s) { // TODO: Fix adding functions arguments to scope!!
+            } else if scope_stack.last().unwrap().variables.contains_key(s) {
                 let var = scope_stack.last().unwrap().variables.get(s).unwrap();
                 Expression {
                     kind: ExpressionKind::Primary(PrimaryExpression {
@@ -316,7 +316,7 @@ fn convert_primitive_to_class_instantiation(mut expr: Expression, expected_type:
                 expr.typ = ValueType::Class(class_name.clone());
                 Ok(expr)
             } else {
-                return Err(error(format!("Cannot convert primitive type {:?} to class instantiation of {:?}", expr.typ, expected_type), expr.pos.clone()));
+                Err(error(format!("Cannot convert primitive type {:?} to class instantiation of {:?}", expr.typ, expected_type), expr.pos.clone()))
             }
         },
         _ => {
