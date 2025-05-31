@@ -7,7 +7,7 @@ class Integer {
 
 class! Root {
     fn! main() {
-        val x: i = new Integer(3);
+        val mut x: i = new Integer(3);
         x.value = 5;
     }
 }

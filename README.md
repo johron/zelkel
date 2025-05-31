@@ -3,8 +3,9 @@
 
 ## Todo:
 - [] Parser
-  - [ ] Class instantiation with constructors with only one argument and the class as the variable type: `val x: String = new String("hi");` becomes `val x: String = "hi";`
+  - [x] Class instantiation with constructors with only one argument and the class as the variable type: `val x: String = new String("hi");` becomes `val x: String = "hi";`
     - [ ] Converting between the primitive type and the class type
+  - [ ] Fix member reassignment bugs. Ast does not know which variable the class is from.
   - [ ] Recursive members
   - [ ] If statements, while loops, for loops, etc.
   - [ ] Arrays

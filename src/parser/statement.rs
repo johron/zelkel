@@ -388,7 +388,73 @@ fn parse_expression_statement(i: &usize, toks: &Vec<Token>, scope_stack: &mut Ve
         // if is in constructor
         todo!("Implement 'super' expression handling");
     } else if scope_stack.last().unwrap().variables.contains_key(toks[i].clone().value.as_string().as_str()) {
-        todo!("Implement variable assignment handling in expression statement");
+        let var_name = toks[i].clone().value.as_string();
+        i += 1;
+        
+        let mut var = scope_stack.last().unwrap().variables.get(&var_name).unwrap().clone();
+        if matches!(var.typ, ValueType::Class(_)) && expect(&i, &toks, TokenValue::Punctuation(".".to_string())).is_ok() {
+            // TODO: recursive member access
+            i += 1;
+            let member_name = expect_unstrict(&i, &toks, TokenValue::empty("identifier")?)?.value.as_string();
+            i += 1;
+            
+            let class = scope_stack.last().unwrap().classes.get(&var.typ.to_string()).unwrap();
+            
+            if !class.variables.contains_key(&member_name) {
+                return Err(error(format!("Class '{:?}' does not have a member '{}'", var.typ, member_name), toks[i].pos.clone()));
+            }
+            
+            let member = class.variables[&member_name].clone();
+            if !member.mutable {
+                return Err(error(format!("Cannot assign to immutable member '{:?}.{}'", var.typ, member_name), toks[i].pos.clone()));
+            }
+            
+            expect(&i, &toks, TokenValue::Punctuation("=".to_string()))?;
+            i += 1;
+            
+            let (expr, j) = parse_expression(&i, toks, scope_stack, &member.typ)?;
+            i = j;
+            
+            if expr.typ != member.typ && expr.typ != ValueType::None {
+                return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", member.typ, expr.typ), toks[i].pos.clone()));
+            }
+            
+            return Ok((Statement {
+                kind: StatementKind::VariableRedeclaration(VariableRedeclaration {
+                    name: member_name,
+                    class: Some(var.typ.to_string()),
+                    typ: expr.typ.clone(),
+                    expr: expr.clone(),
+                    pos: expr.pos.clone(),
+                }),
+                pos: begin,
+            }, i, scope_stack.clone()));
+        } else {
+            if !var.clone().mutable {
+                return Err(error(format!("Cannot assign to immutable variable '{:?}'", var), toks[i].pos.clone()));
+            }
+
+            expect(&i, &toks, TokenValue::Punctuation("=".to_string()))?;
+            i += 1;
+
+            let (expr, j) = parse_expression(&i, toks, scope_stack, &var.typ)?;
+            i = j;
+
+            if expr.typ != var.typ && expr.typ != ValueType::None {
+                return Err(error(format!("Type mismatch: expected {:?}, but found {:?}", var.typ, expr.typ), toks[i].pos.clone()));
+            }
+
+            return Ok((Statement {
+                kind: StatementKind::VariableRedeclaration(VariableRedeclaration {
+                    name: var_name,
+                    class: None,
+                    typ: expr.typ.clone(),
+                    expr: expr.clone(),
+                    pos: expr.pos.clone(),
+                }),
+                pos: begin,
+            }, i, scope_stack.clone()));
+        }
     } else if scope_stack.last().unwrap().functions.contains_key(toks[i].clone().value.as_string().as_str()) {
         todo!("Implement function call handling in expression statement");
     } else {

@@ -22,6 +22,19 @@ pub enum ValueType {
     None,
 }
 
+impl ValueType {
+    pub fn to_string(&self) -> String {
+        match self {
+            ValueType::PrimitiveInteger => "_pint".to_string(),
+            ValueType::PrimitiveFloat => "_pfloat".to_string(),
+            ValueType::PrimitiveString => "_pstr".to_string(),
+            ValueType::PrimitiveBool => "_pbloat".to_string(),
+            ValueType::Class(s) => s.clone(),
+            ValueType::None => "None".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Integer(i32),
