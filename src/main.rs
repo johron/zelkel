@@ -1,5 +1,6 @@
 use crate::lexer::Token;
 use logos::Logos;
+use crate::parser::parser::parse_program;
 
 mod lexer;
 mod ast;
@@ -14,10 +15,13 @@ static fn! main() {
 "#;
     let mut lex = Token::lexer(src);
 
+    let tokens = vec![];
     while let Some(result) = lex.next() {
         match result {
             Ok(token) => println!("Matched: {:?}", token),
             Err(_) => println!("Error at span: {:?}, found '{}'", lex.span(), lex.slice()),
         }
     }
+
+    let (_, program) = parse_program(&tokens).unwrap();
 }
