@@ -11,7 +11,7 @@ pub type Tokens<'a> = &'a [Token];
 
 
 fn parse_item(input: Tokens) -> IResult<Tokens, Item> {
-    alt((parse_require, parse_class, parse_function))(input)
+    alt((parse_require, parse_class, parse_function))(input) // TODO: parse_function here should only be static functions, no dynamic. Functions outside of a class need to be static
 }
 
 pub fn parse_program(input: Tokens) -> IResult<Tokens, Program> {
