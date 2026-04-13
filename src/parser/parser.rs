@@ -10,15 +10,30 @@ use crate::parser::parse_require::parse_require;
 
 pub type TokenSlice<'a> = &'a [Token];
 
-pub fn parse_program(input: &[Token]) -> IResult<&[Token], Program> {
-    let (input, items) = many0(parse_item).parse(input)?;
+//pub fn parse_program(input: &[Token]) -> IResult<&[Token], Program> {
+//    let (input, items) = many0(parse_item).parse(input)?;
+//
+//    Ok((input, Program { items }))
+//}
 
-    Ok((input, Program { items }))
+pub(crate) fn parse_program(input: &[Token]) -> IResult<&[Token], Vec<Item>> {
+    let mut input = input;
+    let mut items = Vec::new();
+
+    while let Ok((next_input, item)) = parse_head_item(input) {
+        items.push(item);
+        input = next_input;
+
+        if input.is_empty() {
+            break;
+        }
+    }
+
+    Ok((input, items))
 }
 
-fn parse_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
+fn parse_head_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
     alt((parse_require, parse_class, parse_function_item)).parse(input)
-    //alt((parse_require, parse_class, parse_function_item))(input) // TODO: parse_function here should only be static functions, no dynamic. Functions outside of a class need to be static
 }
 
 fn parse_function_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
