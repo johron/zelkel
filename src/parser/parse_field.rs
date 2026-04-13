@@ -3,22 +3,22 @@ use crate::ast::ast::Field;
 use crate::lexer::Token;
 use crate::parser::parse_ident::parse_ident;
 use crate::parser::parse_type::parse_type;
-use crate::parser::parser::{match_token, Tokens};
+use crate::parser::parser::{match_token, TokenSlice};
 
-pub fn parse_field(input: Tokens) -> IResult<Tokens, Field> {
-    let (input, dynamic) = match match_token(Token::Static)(input) {
+pub fn parse_field(input: TokenSlice) -> IResult<TokenSlice, Field> {
+    let (input, dynamic) = match match_token(Token::Static)(input.clone()) {
         Ok((i, _)) => Ok((i, false)),
         Err(_) => Ok((input, true)),
     }?;
 
     let (input, _) = match_token(Token::Val)(input)?;
 
-    let (input, mutable) = match match_token(Token::Mut)(input) {
+    let (input, mutable) = match match_token(Token::Mut)(input.clone()) {
         Ok((i, _)) => Ok((i, true)),
         Err(_) => Ok((input, false)),
     }?;
 
-    let (input, public) = match match_token(Token::Bang)(input) {
+    let (input, public) = match match_token(Token::Bang)(input.clone()) {
         Ok((i, _)) => Ok((i, true)),
         Err(_) => Ok((input, false)),
     }?;

@@ -1,27 +1,23 @@
 use crate::lexer::Token;
 use logos::Logos;
-use crate::parser::parser::parse_program;
+use crate::parser::parser::{parse_program};
 
 mod lexer;
 mod ast;
 mod codegen;
 mod parser;
 
-fn main() {
+fn main() -> Result<(), String> {
     let src = r#"
-static fn! main() {
-    std::io.println("Hello, world!"); // test
+class String {
 }
 "#;
-    let mut lex = Token::lexer(src);
+    let lex = Token::lexer(src);
 
-    let tokens = vec![];
-    while let Some(result) = lex.next() {
-        match result {
-            Ok(token) => println!("Matched: {:?}", token),
-            Err(_) => println!("Error at span: {:?}, found '{}'", lex.span(), lex.slice()),
-        }
-    }
-
-    let (_, program) = parse_program(&tokens).unwrap();
+    let tokens: Vec<Token> = lex.filter_map(|res| res.ok()).collect();
+    
+    let (_, program) = parse_program(&tokens).map_err(|e| format!("Parse error: {:?}", e))?;
+    
+    println!("{:#?}", program);
+    Ok(())
 }

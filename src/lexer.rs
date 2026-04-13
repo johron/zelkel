@@ -1,6 +1,6 @@
 use logos::Logos;
 
-#[derive(Logos, Debug, PartialEq, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, logos::Logos)]
 #[logos(skip r"[ \t\n\f]+")]
 #[logos(skip(r"//[^\n]*", allow_greedy = true))]
 pub enum Token {
@@ -83,7 +83,6 @@ pub enum Token {
     #[regex(r#""([^"\\]|\\.)*""#, |lex| lex.slice().to_string())]
     Str(String),
 
-    // identifiers
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
     Ident(String),
 }
