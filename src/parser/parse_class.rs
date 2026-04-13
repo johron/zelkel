@@ -2,7 +2,7 @@ use nom::IResult;
 use nom::multi::many0;
 use nom::Parser;
 use crate::ast::ast::{Class, Item};
-use crate::lexer::Token;
+use crate::lexer2::Token;
 use crate::parser::parse_field::parse_field;
 use crate::parser::parse_function::parse_function;
 use crate::parser::parse_ident::parse_ident;

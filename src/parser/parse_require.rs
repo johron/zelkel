@@ -1,6 +1,6 @@
 use nom::IResult;
 use crate::ast::ast::Item;
-use crate::lexer::Token;
+use crate::lexer2::Token;
 use crate::parser::parse_ident::parse_ident;
 use crate::parser::parser::{match_token, TokenSlice};
 

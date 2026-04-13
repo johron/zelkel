@@ -1,7 +1,7 @@
 use nom::combinator::cut;
 use nom::IResult;
 use crate::ast::ast::Field;
-use crate::lexer::Token;
+use crate::lexer2::Token;
 use crate::parser::parse_ident::parse_ident;
 use crate::parser::parse_type::parse_type;
 use crate::parser::parser::{match_token, TokenSlice};

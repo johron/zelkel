@@ -1,5 +1,5 @@
 use nom::IResult;
-use crate::lexer::Token;
+use crate::lexer2::Token;
 use crate::parser::parser::{TokenSlice};
 
 pub fn parse_ident(input: TokenSlice) -> IResult<TokenSlice, String> {
