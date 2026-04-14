@@ -2,8 +2,8 @@ use nom::IResult;
 use crate::ast::ast::Field;
 use crate::expect_token;
 use crate::lexer::token::Token;
-use crate::parser::parse_ident::parse_ident;
-use crate::parser::parse_type::parse_type;
+use crate::parser::literal::parse_identifier::parse_identifier;
+use crate::parser::literal::parse_type::parse_type;
 use crate::parser::parser::{match_token, TokenSlice};
 
 pub fn parse_field(input: TokenSlice) -> IResult<TokenSlice, Field> {
@@ -24,7 +24,7 @@ pub fn parse_field(input: TokenSlice) -> IResult<TokenSlice, Field> {
         Err(_) => Ok((input, false)),
     }?;
 
-    let (input, name) = parse_ident(input)?;
+    let (input, name) = parse_identifier(input)?;
     let (input, _) = expect_token!(input, Colon)?;
     let (input, ty) = parse_type(input)?;
     let (input, _) = expect_token!(input, Semi)?;

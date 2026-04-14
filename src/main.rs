@@ -9,14 +9,12 @@ mod lexer;
 
 fn main() -> Result<(), String> {
     let src = r#"
-class String {
-  val mut length: u64;
-  val mut capacity: u64;
-  val mut data: *u8;
-}
+require std::io;
+
+static fn! main() -> void {}
 "#;
 
-    let (rest, token_vec) = lexer(src, src).map_err(|e| {
+    let (rest, token_vec) = lexer(src).map_err(|e| {
         if let nom::Err::Error(err) = e {
             let (line, col) = get_line_col(src, err.input);
             let unexpected = err.input.chars().next().unwrap_or(' ');
@@ -30,7 +28,6 @@ class String {
         let unexpected = rest.trim().chars().next().unwrap_or(' ');
         return Err(format!("Lex error at line {}, col {}: Unexpected character '{}'", line, col, unexpected));
     }
-
 
     let input = Tokens::new(&token_vec);
 

@@ -1,14 +1,21 @@
 #[derive(Debug)]
 pub struct Program {
-    pub items: Vec<Item>,
+    pub items: Vec<Statement>,
 }
 
 #[derive(Debug)]
-pub enum Item {
-    Require(String),
-    Class(Class),
-    Function(Function),
-    ExpressionStmt(Expression),
+pub enum Statement {
+    Require(Require),
+    ClassDeclaration(Class),
+    FunctionDeclaration(Function),
+    Expression(Expression),
+}
+
+#[derive(Debug)]
+pub enum Require {
+    Module(String, Box<Require>),
+    EndingModule(String),
+    Identifier(String),
 }
 
 #[derive(Debug)]
@@ -69,8 +76,25 @@ pub enum Literal {
     Variable(String),
 }
 
+impl Literal {
+    pub fn to_integer(&self) -> i64 {
+        match self {
+            Literal::Integer(i) => *i,
+            _ => panic!("Literal::to_integer")
+        }
+    }
+
+    pub fn to_usize(&self) -> usize {
+        match self {
+            Literal::Integer(i) => *i as usize,
+            _ => panic!("Literal::to_usize")
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Type {
     Ident(String),
+    SizeIdent(String, usize),
     Pointer(Box<Type>),
 }

@@ -2,7 +2,7 @@ use nom::{Input, Needed};
 use std::iter::{Copied, Enumerate};
 use std::slice::Iter;
 
-#[derive(PartialEq, Copy, Debug, Clone)]
+#[derive(PartialEq, Copy, Debug, Clone, Eq)]
 pub enum Token<'a> {
     Fn(usize),
     Class(usize),
@@ -16,6 +16,7 @@ pub enum Token<'a> {
     LParen(usize),
     RParen(usize),
     Semi(usize),
+    DoubleColon(usize),
     Colon(usize),
     Comma(usize),
     Arrow(usize),
@@ -39,7 +40,7 @@ impl<'a> Token<'a> {
             Token::Class(o) | Token::Mut(o) | Token::Val(o) | Token::Require(o) | Token::Return(o) => *o,
             Token::LBrace(o) | Token::RBrace(o) | Token::LParen(o) | Token::RParen(o) | Token::Semi(o) | Token::Colon(o) | Token::Comma(o) => *o,
             Token::Arrow(o) | Token::Dot(o) | Token::Plus(o) | Token::Minus(o) | Token::Star(o) | Token::Slash(o) | Token::Eq(o) | Token::Ampersand(o) | Token::Bang(o) => *o,
-            Token::Int(_, o) => *o, Token::Str(_, o) => *o,
+            Token::Int(_, o) => *o, Token::Str(_, o) => *o, Token::DoubleColon(o) => *o,
         }
     }
 }

@@ -1,7 +1,7 @@
 use nom::Parser;
 use nom::IResult;
 use crate::ast::ast::Function;
-use crate::parser::parse_ident::parse_ident;
+use crate::parser::literal::parse_identifier::parse_identifier;
 use crate::parser::parser::{TokenSlice};
 
 use nom::combinator::{cut, map, opt};
@@ -19,11 +19,11 @@ pub fn parse_function_declaration(input: TokenSlice) -> IResult<TokenSlice, Func
 
     let (input, (public, name, _, _, _, type_name, _, _)) = cut((
         map(opt(is_tok!(Bang)), |o| o.is_some()),
-        context("function name", parse_ident),
+        context("function name", parse_identifier),
         is_tok!(LParen),
         is_tok!(RParen),
         is_tok!(Arrow),
-        context("return type", parse_ident),
+        context("return type", parse_identifier),
         is_tok!(LBrace),
         is_tok!(RBrace),
     )).parse(input)?;

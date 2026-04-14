@@ -12,7 +12,7 @@ use crate::lexer::token::Token;
 
 use nom::combinator::all_consuming;
 
-pub fn lexer<'a>(input: &'a str, src: &str) -> IResult<&'a str, Vec<Token<'a>>> {
+pub fn lexer(input: &str) -> IResult<&str, Vec<Token>> {
     all_consuming(
         terminated(
             many0(preceded(multispace0, |i| alt_tokens(i, input.clone()))), // i, src
@@ -39,6 +39,7 @@ fn lex_integer(input: &str, offset: usize) -> IResult<&str, Token> {
 fn lex_symbol(input: &str, offset: usize) -> IResult<&str, Token> {
     alt((
         map(tag("->"), |_| Token::Arrow(offset)),
+        map(tag("::"), |_| Token::DoubleColon(offset)),
         map(tag("+"), |_| Token::Plus(offset)),
         map(tag("-"), |_| Token::Minus(offset)),
         map(tag("*"), |_| Token::Star(offset)),
@@ -71,8 +72,9 @@ fn lex_ident_or_keyword(input: &str, offset: usize) -> IResult<&str, Token> {
         "static" => Token::Static(offset),
         "mut" => Token::Mut(offset),
         "val" => Token::Val(offset),
-        "require" => Token::Require(offset),
+        "path" => Token::Require(offset),
         "return" => Token::Return(offset),
+        "require" => Token::Require(offset),
         _ => Token::Ident(id, offset),
     };
 

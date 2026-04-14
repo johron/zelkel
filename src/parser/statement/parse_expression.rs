@@ -1,5 +1,5 @@
 use crate::ast::ast::{Expression, Literal, Operator};
-use crate::parser::parse_ident::parse_ident;
+use crate::parser::literal::parse_identifier::parse_identifier;
 use crate::parser::parser::{TokenSlice};
 
 use nom::{IResult, Parser};
@@ -8,7 +8,7 @@ use nom::combinator::map;
 use nom::sequence::delimited;
 use crate::is_tok;
 use crate::lexer::token::{Token, Tokens};
-use crate::parser::parse_type::parse_type;
+use crate::parser::literal::parse_type::parse_type;
 
 fn get_precedence(t: &Token) -> i8 {
     match t {
@@ -65,7 +65,7 @@ fn parse_expr_precedence(input: TokenSlice, min_precedence: i8) -> IResult<Token
 fn parse_atom(input: TokenSlice) -> IResult<TokenSlice, Expression> {
     alt((
         //map(parse_integer, |n| Expression::Literal(n)),
-        map(parse_ident, |s| Expression::Literal(Literal::Variable(s))),
+        map(parse_identifier, |s| Expression::Literal(Literal::Variable(s))),
         delimited(is_tok!(LParen), parse_expression, is_tok!(RParen))
     )).parse(input)
 }

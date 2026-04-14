@@ -4,11 +4,11 @@ use nom::combinator::{all_consuming, map};
 use nom::error::{Error, ErrorKind};
 use nom::multi::many0;
 
-use crate::ast::ast::{Item, Program};
+use crate::ast::ast::{Statement, Program};
 use crate::lexer::token::{Token, Tokens};
-use crate::parser::parse_class::parse_class;
-use crate::parser::parse_function_declaration::parse_function_declaration;
-use crate::parser::parse_require::parse_require;
+use crate::parser::statement::parse_class::parse_class;
+use crate::parser::statement::parse_function_declaration::parse_function_declaration;
+use crate::parser::statement::parse_require::parse_require;
 
 pub(crate) type TokenSlice<'source> = Tokens<'source>;
 
@@ -24,7 +24,7 @@ pub fn parse_program(input: TokenSlice) -> IResult<TokenSlice, Program> {
 //    }
 //}
 
-fn parse_head_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
+fn parse_head_item(input: TokenSlice) -> IResult<TokenSlice, Statement> {
     alt((
         |i| parse_require(i),
         |i| parse_class(i),
@@ -32,9 +32,9 @@ fn parse_head_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
     )).parse(input)
 }
 
-fn parse_function_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
+fn parse_function_item(input: TokenSlice) -> IResult<TokenSlice, Statement> {
     let (input, func) = parse_function_declaration(input)?;
-    Ok((input, Item::Function(func)))
+    Ok((input, Statement::FunctionDeclaration(func)))
 }
 
 pub fn match_token<'a>(

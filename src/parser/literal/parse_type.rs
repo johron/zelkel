@@ -2,7 +2,8 @@ use nom::IResult;
 use crate::ast::ast::Type;
 use crate::expect_token;
 use crate::lexer::token::Token;
-use crate::parser::parse_ident::parse_ident;
+use crate::parser::literal::parse_identifier::parse_identifier;
+use crate::parser::literal::parse_integer::parse_integer;
 use crate::parser::parser::{match_token, TokenSlice};
 
 pub fn parse_type(input: TokenSlice) -> IResult<TokenSlice, Type> {
@@ -11,6 +12,13 @@ pub fn parse_type(input: TokenSlice) -> IResult<TokenSlice, Type> {
         return Ok((input, Type::Pointer(Box::new(inner))));
     }
 
-    let (input, name) = parse_ident(input)?;
+    let (input, name) = parse_identifier(input)?;
+    
+    if let Ok((input, _)) = expect_token!(input.clone(), LBrace) {
+        let (input, n) = parse_integer(input)?;
+        let (input, _) = expect_token!(input, RBrace)?;
+        return Ok((input, Type::SizeIdent(name, n.to_usize())))
+    }
+    
     Ok((input, Type::Ident(name)))
 }
