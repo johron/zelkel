@@ -1,49 +1,35 @@
-use logos_nom_bridge::Tokens;
 use nom::branch::alt;
-use crate::lexer2::Token;
 use nom::{IResult, Parser};
+use nom::combinator::{all_consuming, map};
+use nom::error::{Error, ErrorKind};
 use nom::multi::many0;
 
 use crate::ast::ast::{Item, Program};
-use crate::lexer::token::Tokens;
+use crate::lexer::token::{Token, Tokens};
 use crate::parser::parse_class::parse_class;
-use crate::parser::parse_function::parse_function;
+use crate::parser::parse_function_decl::parse_function;
 use crate::parser::parse_require::parse_require;
 
-pub type TokenSlice<'a> = &'a [Token];
+pub(crate) type TokenSlice<'source> = Tokens<'source>;
 
-type Input<'source> = Tokens<'source, Token>;
-
-pub fn parse_program(input: Input<'_>) -> IResult<Input<'_>, Program> {
-    let (input, items) = many0(parse_head_item).parse(input)?;
-
-    Ok((input, Program { items }))
+pub fn parse_program(input: TokenSlice) -> IResult<TokenSlice, Program> {
+    all_consuming(
+        map(many0(parse_head_item), |items| Program { items })
+    ).parse(input)
 }
-
-//pub fn parse_program(input: &[Token]) -> IResult<&[Token], Program> {
-//    let (input, items) = many0(parse_item).parse(input)?;
-//
-//    Ok((input, Program { items }))
+//fn any_token(input: TokenSlice<'_>) -> IResult<TokenSlice<'_>, Token<'_>> {
+//    match input.tokens.split_first() {
+//        Some((first, rest)) => Ok((Tokens::new(rest), *first)),
+//        None => Err(nom::Err::Error(Error::new(input, ErrorKind::Eof))),
+//    }
 //}
 
-// pub(crate) fn parse_program(input: &[Token]) -> IResult<&[Token], Vec<Item>> {
-//     let mut input = input;
-//     let mut items = Vec::new();
-//
-//     while let Ok((next_input, item)) = parse_head_item(input) {
-//         items.push(item);
-//         input = next_input;
-//
-//         if input.is_empty() {
-//             break;
-//         }
-//     }
-//
-//     Ok((input, items))
-// }
-
 fn parse_head_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
-    alt((parse_require, parse_class, parse_function_item)).parse(input)
+    alt((
+        |i| parse_require(i),
+        |i| parse_class(i),
+        |i| parse_function_item(i)
+    )).parse(input)
 }
 
 fn parse_function_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
@@ -51,11 +37,19 @@ fn parse_function_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
     Ok((input, Item::Function(func)))
 }
 
-pub fn match_token(expected: Token) -> impl Fn(TokenSlice) -> IResult<TokenSlice, Token> {
-    move |input: TokenSlice| {
-        match input.split_first() {
-            Some((tok, rest)) if *tok == expected => Ok((rest, tok.clone())),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Tag))),
+pub fn match_token<'a>(
+    check: impl Fn(&Token<'a>) -> bool
+) -> impl Fn(TokenSlice<'a>) -> IResult<TokenSlice<'a>, Token<'a>> {
+    move |input: TokenSlice<'a>| {
+        match input.tokens.split_first() {
+            // Use the provided closure to check if the token is what we want
+            Some((tok, rest)) if check(tok) => {
+                Ok((Tokens::new(rest), *tok))
+            }
+            _ => Err(nom::Err::Error(Error::new(
+                input,
+                ErrorKind::Tag,
+            ))),
         }
     }
 }

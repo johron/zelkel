@@ -4,35 +4,47 @@ use std::slice::Iter;
 
 #[derive(PartialEq, Copy, Debug, Clone)]
 pub enum Token<'a> {
-    Fn,
-    Static,
-    Mut,
-    Val,
-    Require,
-    Return,
-    LBrace,
-    RBrace,
-    LParen,
-    RParen,
-    Semi,
-    Colon,
-    Comma,
-    Arrow,
-    Dot,
-    Plus,
-    Minus,
-    Star,
-    Slash,
-    Eq,
-    Ampersand,
-    Int(i64),
-    Str(&'a str),
-    Ident(&'a str),
+    Fn(usize),
+    Class(usize),
+    Static(usize),
+    Mut(usize),
+    Val(usize),
+    Require(usize),
+    Return(usize),
+    LBrace(usize),
+    RBrace(usize),
+    LParen(usize),
+    RParen(usize),
+    Semi(usize),
+    Colon(usize),
+    Comma(usize),
+    Arrow(usize),
+    Dot(usize),
+    Plus(usize),
+    Minus(usize),
+    Star(usize),
+    Slash(usize),
+    Eq(usize),
+    Ampersand(usize),
+    Bang(usize),
+    Int(i64, usize),
+    Str(&'a str, usize),
+    Ident(&'a str, usize),
+}
+
+impl<'a> Token<'a> {
+    pub fn offset(&self) -> usize {
+        match self {
+            Token::Ident(_, o) | Token::Fn(o) | Token::Static(o) => *o,
+            // ... map all variants ...
+            _ => 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tokens<'a> {
-    tokens: &'a [Token<'a>],
+    pub(crate) tokens: &'a [Token<'a>],
     start: usize,
     end: usize,
 }

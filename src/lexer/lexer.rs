@@ -7,52 +7,57 @@ use nom::{
     sequence::{delimited, pair},
     IResult, Parser,
 };
-use nom::sequence::preceded;
+use nom::sequence::{preceded, terminated};
 use crate::lexer::token::Token;
 
-pub fn lexer(input: &str) -> IResult<&str, Vec<Token>> {
-    many0(preceded(
-        multispace0,
-        alt((
-            lex_integer,
-            lex_symbol,
-            lex_ident_or_keyword,
-            lex_string,
-        ))
-    )).parse(input)
+use nom::combinator::all_consuming;
+
+pub fn lexer<'a>(input: &'a str, src: &str) -> IResult<&'a str, Vec<Token<'a>>> {
+    all_consuming(
+        terminated(
+            many0(preceded(multispace0, |i| alt_tokens(i, input.clone()))), // i, src
+            multispace0
+        )
+    ).parse(input)
 }
 
+fn alt_tokens<'a>(input: &'a str, src: &str) -> IResult<&'a str, Token<'a>> {
+    let offset = src.len() - input.len();
 
-fn skip_ws(input: &str) -> IResult<&str, &str> {
-    multispace0(input)
-}
-
-fn lex_integer(input: &str) -> IResult<&str, Token> {
-    // Instead of map(...)(input), use .parse(input)
-    map(digit1, |s: &str| Token::Int(s.parse().unwrap())).parse(input)
-}
-
-fn lex_symbol(input: &str) -> IResult<&str, Token> {
     alt((
-        map(tag("->"), |_| Token::Arrow),
-        map(tag("+"), |_| Token::Plus),
-        map(tag("-"), |_| Token::Minus),
-        map(tag("*"), |_| Token::Star),
-        map(tag("/"), |_| Token::Slash),
-        map(tag("="), |_| Token::Eq),
-        map(tag("&"), |_| Token::Ampersand),
-        map(tag(";"), |_| Token::Semi),
-        map(tag(":"), |_| Token::Colon),
-        map(tag(","), |_| Token::Comma),
-        map(tag("."), |_| Token::Dot),
-        map(tag("{"), |_| Token::LBrace),
-        map(tag("}"), |_| Token::RBrace),
-        map(tag("("), |_| Token::LParen),
-        map(tag(")"), |_| Token::RParen),
+        |i| lex_integer(i, offset),
+        |i| lex_symbol(i, offset),
+        |i| lex_ident_or_keyword(i, offset),
+        |i| lex_string(i, offset),
     )).parse(input)
 }
 
-fn lex_ident_or_keyword(input: &str) -> IResult<&str, Token> {
+fn lex_integer(input: &str, offset: usize) -> IResult<&str, Token> {
+    map(digit1, |s: &str| Token::Int(s.parse().unwrap(), offset)).parse(input)
+}
+
+fn lex_symbol(input: &str, offset: usize) -> IResult<&str, Token> {
+    alt((
+        map(tag("->"), |_| Token::Arrow(offset)),
+        map(tag("+"), |_| Token::Plus(offset)),
+        map(tag("-"), |_| Token::Minus(offset)),
+        map(tag("*"), |_| Token::Star(offset)),
+        map(tag("/"), |_| Token::Slash(offset)),
+        map(tag("="), |_| Token::Eq(offset)),
+        map(tag("&"), |_| Token::Ampersand(offset)),
+        map(tag("!"), |_| Token::Bang(offset)),
+        map(tag(";"), |_| Token::Semi(offset)),
+        map(tag(":"), |_| Token::Colon(offset)),
+        map(tag(","), |_| Token::Comma(offset)),
+        map(tag("."), |_| Token::Dot(offset)),
+        map(tag("{"), |_| Token::LBrace(offset)),
+        map(tag("}"), |_| Token::RBrace(offset)),
+        map(tag("("), |_| Token::LParen(offset)),
+        map(tag(")"), |_| Token::RParen(offset)),
+    )).parse(input)
+}
+
+fn lex_ident_or_keyword(input: &str, offset: usize) -> IResult<&str, Token> {
     let mut identifier = recognize(pair(
         alt((alpha1, tag("_"))),
         many0(alt((alphanumeric1, tag("_"))))
@@ -61,23 +66,23 @@ fn lex_ident_or_keyword(input: &str) -> IResult<&str, Token> {
     let (rest, id) = identifier.parse(input)?;
 
     let token = match id {
-        "fn" => Token::Fn,
-        "static" => Token::Static,
-        "mut" => Token::Mut,
-        "val" => Token::Val,
-        "require" => Token::Require,
-        "return" => Token::Return,
-        _ => Token::Ident(id),
+        "fn" => Token::Fn(offset),
+        "class" => Token::Class(offset),
+        "static" => Token::Static(offset),
+        "mut" => Token::Mut(offset),
+        "val" => Token::Val(offset),
+        "require" => Token::Require(offset),
+        "return" => Token::Return(offset),
+        _ => Token::Ident(id, offset),
     };
 
     Ok((rest, token))
 }
 
-fn lex_string(input: &str) -> IResult<&str, Token> {
-    // Simple string: double quotes containing anything except quotes or backslashes
+fn lex_string(input: &str, offset: usize) -> IResult<&str, Token> {
     map(
         delimited(char('"'), many0(none_of("\"\\")), char('"')),
 
-        |_| Token::Str(input) // Note: Simplified for context; typically use 'recognize'
+        |_| Token::Str(input, offset) // Note: Simplified for context; typically use 'recognize'
     ).parse(input)
 }
