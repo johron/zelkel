@@ -7,7 +7,7 @@ use nom::multi::many0;
 use crate::ast::ast::{Item, Program};
 use crate::lexer::token::{Token, Tokens};
 use crate::parser::parse_class::parse_class;
-use crate::parser::parse_function_decl::parse_function;
+use crate::parser::parse_function_declaration::parse_function_declaration;
 use crate::parser::parse_require::parse_require;
 
 pub(crate) type TokenSlice<'source> = Tokens<'source>;
@@ -33,7 +33,7 @@ fn parse_head_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
 }
 
 fn parse_function_item(input: TokenSlice) -> IResult<TokenSlice, Item> {
-    let (input, func) = parse_function(input)?;
+    let (input, func) = parse_function_declaration(input)?;
     Ok((input, Item::Function(func)))
 }
 
@@ -42,7 +42,6 @@ pub fn match_token<'a>(
 ) -> impl Fn(TokenSlice<'a>) -> IResult<TokenSlice<'a>, Token<'a>> {
     move |input: TokenSlice<'a>| {
         match input.tokens.split_first() {
-            // Use the provided closure to check if the token is what we want
             Some((tok, rest)) if check(tok) => {
                 Ok((Tokens::new(rest), *tok))
             }

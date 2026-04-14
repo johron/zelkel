@@ -8,15 +8,13 @@ use nom::combinator::{cut, map, opt};
 use nom::error::context;
 use crate::{expect_token, is_tok};
 
-pub fn parse_function(input: TokenSlice) -> IResult<TokenSlice, Function> {
-    // 1. Check for 'static' (Optional)
+pub fn parse_function_declaration(input: TokenSlice) -> IResult<TokenSlice, Function> {
     let (input, is_static) = match expect_token!(input.clone(), Static) {
         Ok((i, _)) => (i, true),
         Err(_) => (input, false),
     };
     let dynamic = !is_static;
 
-    // 2. Look for 'fn'. If this fails, alt() will try the next parser (like parse_class).
     let (input, _) = expect_token!(input, Fn)?;
 
     let (input, (public, name, _, _, _, type_name, _, _)) = cut((
@@ -29,7 +27,6 @@ pub fn parse_function(input: TokenSlice) -> IResult<TokenSlice, Function> {
         is_tok!(LBrace),
         is_tok!(RBrace),
     )).parse(input)?;
-
-
+    
     Ok((input, Function { name, public, dynamic }))
 }

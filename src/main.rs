@@ -9,15 +9,14 @@ mod lexer;
 
 fn main() -> Result<(), String> {
     let src = r#"
-require io;
-
-static fn! main() -> void {
-    io:println("Hello, world!");
+class String {
+  val mut length: u64;
+  val mut capacity: u64;
+  val mut data: *u8;
 }
 "#;
 
     let (rest, token_vec) = lexer(src, src).map_err(|e| {
-        // e is a nom::Err<nom::error::Error<&str>>
         if let nom::Err::Error(err) = e {
             let (line, col) = get_line_col(src, err.input);
             let unexpected = err.input.chars().next().unwrap_or(' ');
@@ -26,7 +25,6 @@ static fn! main() -> void {
         format!("Lexing failed: {:?}", e)
     })?;
 
-    // Check if the whole input was consumed (important if not using all_consuming)
     if !rest.trim().is_empty() {
         let (line, col) = get_line_col(src, rest);
         let unexpected = rest.trim().chars().next().unwrap_or(' ');
@@ -39,10 +37,8 @@ static fn! main() -> void {
     let (_, program) = parse_program(input).map_err(|e| {
         match e {
             nom::Err::Error(err) | nom::Err::Failure(err) => {
-                // err.input is the TokenSlice where the error happened
                 if let Some(first_token) = err.input.tokens.first() {
                     let offset = first_token.offset();
-                    // Re-use the src to find line/col from the byte offset
                     let (line, col) = get_line_col_from_offset(src, offset);
                     format!("Parse error at line {}, col {}: Unexpected token {:?}", line, col, first_token)
                 } else {
@@ -64,7 +60,6 @@ fn get_line_col(full_src: &str, remaining: &str) -> (usize, usize) {
     let line = prefix.lines().count();
     let col = prefix.lines().last().map(|l| l.len() + 1).unwrap_or(1);
 
-    // If the prefix ends with a newline, we are at the start of the next line
     if prefix.ends_with('\n') {
         (line + 1, 1)
     } else {

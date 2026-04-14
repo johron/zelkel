@@ -3,9 +3,8 @@ use nom::multi::many0;
 use nom::Parser;
 use crate::ast::ast::{Class, Item};
 use crate::{expect_token, is_token};
-use crate::lexer::token::Token;
 use crate::parser::parse_field::parse_field;
-use crate::parser::parse_function_decl::parse_function;
+use crate::parser::parse_function_declaration::parse_function_declaration;
 use crate::parser::parse_ident::parse_ident;
 use crate::parser::parser::{match_token, TokenSlice};
 
@@ -17,7 +16,6 @@ pub fn parse_class(input: TokenSlice) -> IResult<TokenSlice, Item> {
 
     let (input, _) = expect_token!(input, Class)?;
 
-    // After matching 'class', we're committed to parsing a class. Any errors from here on are hard failures.
     let (input, public) = match expect_token!(input.clone(), Class) {
         Ok((i, _)) => Ok((i, true)),
         Err(_) => Ok((input, false)),
@@ -28,7 +26,7 @@ pub fn parse_class(input: TokenSlice) -> IResult<TokenSlice, Item> {
 
     // TODO: This might make the order strict, which I don't want. Now: Class: Fields -> Methods. I want: Class: (Fields | Methods)*
     let (input, fields) = (|i| many0(parse_field).parse(i))(input)?;
-    let (input, methods) = (|i| many0(parse_function).parse(i))(input)?;
+    let (input, methods) = (|i| many0(parse_function_declaration).parse(i))(input)?;
 
     let (input, _) = expect_token!(input, RBrace)?;
 

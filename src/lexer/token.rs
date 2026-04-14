@@ -36,8 +36,10 @@ impl<'a> Token<'a> {
     pub fn offset(&self) -> usize {
         match self {
             Token::Ident(_, o) | Token::Fn(o) | Token::Static(o) => *o,
-            // ... map all variants ...
-            _ => 0,
+            Token::Class(o) | Token::Mut(o) | Token::Val(o) | Token::Require(o) | Token::Return(o) => *o,
+            Token::LBrace(o) | Token::RBrace(o) | Token::LParen(o) | Token::RParen(o) | Token::Semi(o) | Token::Colon(o) | Token::Comma(o) => *o,
+            Token::Arrow(o) | Token::Dot(o) | Token::Plus(o) | Token::Minus(o) | Token::Star(o) | Token::Slash(o) | Token::Eq(o) | Token::Ampersand(o) | Token::Bang(o) => *o,
+            Token::Int(_, o) => *o, Token::Str(_, o) => *o,
         }
     }
 }
