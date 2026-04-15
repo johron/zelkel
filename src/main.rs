@@ -9,6 +9,8 @@ mod lexer;
 
 fn main() -> Result<(), String> {
     let src = r#"
+require test;
+
 class! String {
   val mut length: u64;
   val mut capacity: u64;

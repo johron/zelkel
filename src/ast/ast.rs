@@ -30,7 +30,7 @@ pub struct Class {
 #[derive(Debug)]
 pub struct Field {
     pub name: String,
-    pub ty: Type,
+    pub field_type: Type,
     pub public: bool,
     pub mutable: bool,
     pub dynamic: bool,

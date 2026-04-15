@@ -3,7 +3,9 @@
 
 ## TODO
 - [ ] Implement cut in parser for all sub-parsers
+- [ ] Better error handling and reporting, "unexpected token", should also include the actual expected token
 - [ ] Other TODOs in the code
+- [ ] Add comments, single and multiline, and documentation comments
 
 ## Syntax example
 ```cpp

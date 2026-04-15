@@ -18,7 +18,7 @@ pub fn parse_function_declaration(input: TokenSlice) -> IResult<TokenSlice, Func
 
     let (input, _) = expect_token!(input, Fn)?;
 
-    let (input, (public, name, _, _, _, return_type, _)) = cut((
+    let (input, (public, name, _, _, _, return_type, _, _)) = cut((
         map(opt(is_tok!(Bang)), |o| o.is_some()),
         context("function name", parse_identifier),
         is_tok!(LParen),
@@ -26,9 +26,8 @@ pub fn parse_function_declaration(input: TokenSlice) -> IResult<TokenSlice, Func
         is_tok!(Arrow),
         context("return type", parse_type),
         is_tok!(LBrace),
+        is_tok!(RBrace)
     )).parse(input)?;
-
-    let (input, _) = expect_token!(input, RBrace)?;
 
     Ok((input, Function { name, public, dynamic, return_type }))
 }

@@ -1,6 +1,9 @@
+use nom::Parser;
+use nom::combinator::{cut, map, opt};
+use nom::error::context;
 use nom::IResult;
 use crate::ast::ast::Field;
-use crate::expect_token;
+use crate::{expect_token, is_tok};
 use crate::lexer::token::Token;
 use crate::parser::literal::parse_identifier::parse_identifier;
 use crate::parser::literal::parse_type::parse_type;
@@ -14,20 +17,16 @@ pub fn parse_field(input: TokenSlice) -> IResult<TokenSlice, Field> {
 
     let (input, _) = expect_token!(input, Val)?;
 
-    let (input, mutable) = match expect_token!(input.clone(), Mut) {
-        Ok((i, _)) => Ok((i, true)),
-        Err(_) => Ok((input, false)),
-    }?;
+    let (input, (mutable, public, name, _, field_type, _)) = cut((
+        map(opt(is_tok!(Mut)), |o| o.is_some()),
+        map(opt(is_tok!(Bang)), |o| o.is_some()),
+        context("field name", parse_identifier),
+        is_tok!(Colon),
+        context("field type", parse_type),
+        // = [expr];
+        is_tok!(Semi),
+    )).parse(input)?;
+    
 
-    let (input, public) = match expect_token!(input.clone(), Bang) {
-        Ok((i, _)) => Ok((i, true)),
-        Err(_) => Ok((input, false)),
-    }?;
-
-    let (input, name) = parse_identifier(input)?;
-    let (input, _) = expect_token!(input, Colon)?;
-    let (input, ty) = parse_type(input)?;
-    let (input, _) = expect_token!(input, Semi)?;
-
-    Ok((input, Field { name, ty, public, mutable, dynamic }))
+    Ok((input, Field { name, field_type, public, mutable, dynamic }))
 }
