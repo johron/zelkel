@@ -58,14 +58,17 @@ pub enum Expression {
         left: Box<Expression>,
         right: Box<Expression>,
         op: Operator,
-        ty: Type,
+        ty: Option<Type>,
     },
     Unary {
         right: Box<Expression>,
         op: Operator,
-        ty: Type,
+        ty: Option<Type>,
     },
-    Literal(Literal),
+    Literal {
+        val: Literal,
+        ty: Option<Type>,
+    },
 }
 
 #[derive(Debug)]

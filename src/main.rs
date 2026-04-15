@@ -12,9 +12,9 @@ fn main() -> Result<(), String> {
 require test;
 
 class! String {
-  val mut length: u64;
-  val mut capacity: u64;
-  val mut data: *u8;
+  val mut length: u64 = 0;
+  val mut capacity: u64 = 0;
+  val mut data: *u8 = 0;
 
   static fn! new() -> *Self {}
 }

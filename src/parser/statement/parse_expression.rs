@@ -8,6 +8,7 @@ use nom::combinator::map;
 use nom::sequence::delimited;
 use crate::is_tok;
 use crate::lexer::token::{Token, Tokens};
+use crate::parser::literal::parse_integer::parse_integer;
 use crate::parser::literal::parse_type::parse_type;
 
 fn get_precedence(t: &Token) -> i8 {
@@ -17,7 +18,6 @@ fn get_precedence(t: &Token) -> i8 {
         _ => -1,
     }
 }
-
 
 pub fn parse_expression(input: TokenSlice) -> IResult<TokenSlice, Expression> {
     parse_expr_precedence(input, 0)
@@ -55,7 +55,7 @@ fn parse_expr_precedence(input: TokenSlice, min_precedence: i8) -> IResult<Token
             left: Box::new(left),
             right: Box::new(right),
             op,
-            ty: parse_type(Tokens::new(peek_input))?.1, // Parse type after operator
+            ty: None, // TODO: Type eval in ast walk semantic eval
         };
     }
 
@@ -64,8 +64,8 @@ fn parse_expr_precedence(input: TokenSlice, min_precedence: i8) -> IResult<Token
 
 fn parse_atom(input: TokenSlice) -> IResult<TokenSlice, Expression> {
     alt((
-        //map(parse_integer, |n| Expression::Literal(n)),
-        map(parse_identifier, |s| Expression::Literal(Literal::Variable(s))),
+        map(parse_integer, |n| Expression::Literal { val: n, ty: None }),
+        map(parse_identifier, |s| Expression::Literal { val: Literal::Variable(s), ty: None }), // TODO: this needs work, especially with the type, we don't know the type at this time, we will know it at ast walk semantic eval.
         delimited(is_tok!(LParen), parse_expression, is_tok!(RParen))
     )).parse(input)
 }
