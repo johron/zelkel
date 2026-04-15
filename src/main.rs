@@ -9,9 +9,14 @@ mod lexer;
 
 fn main() -> Result<(), String> {
     let src = r#"
-require std::io;
+class! String {
+  val mut length: u64;
+  val mut capacity: u64;
+  val mut data: *u8;
 
-static fn! main() -> void {}
+  static fn! new() -> *Self {}
+}
+
 "#;
 
     let (rest, token_vec) = lexer(src).map_err(|e| {
@@ -31,7 +36,7 @@ static fn! main() -> void {}
 
     let input = Tokens::new(&token_vec);
 
-    let (_, program) = parse_program(input).map_err(|e| {
+    let (rest, program) = parse_program(input).map_err(|e| {
         match e {
             nom::Err::Error(err) | nom::Err::Failure(err) => {
                 if let Some(first_token) = err.input.tokens.first() {

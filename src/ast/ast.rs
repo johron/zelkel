@@ -41,6 +41,7 @@ pub struct Function {
     pub name: String,
     pub public: bool,
     pub dynamic: bool, // dynamic=false => static
+    pub return_type: Type,
 }
 
 #[derive(Debug)]

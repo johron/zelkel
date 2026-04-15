@@ -1,11 +1,14 @@
+use nom::combinator::{cut, map, opt};
+use nom::error::context;
 use nom::IResult;
 use nom::multi::many0;
 use nom::Parser;
 use crate::ast::ast::{Class, Statement};
-use crate::{expect_token, is_token};
+use crate::{expect_token, is_tok, is_token};
 use crate::parser::statement::parse_field::parse_field;
 use crate::parser::statement::parse_function_declaration::parse_function_declaration;
 use crate::parser::literal::parse_identifier::parse_identifier;
+use crate::parser::literal::parse_type::parse_type;
 use crate::parser::parser::{match_token, TokenSlice};
 
 pub fn parse_class(input: TokenSlice) -> IResult<TokenSlice, Statement> {
@@ -16,13 +19,11 @@ pub fn parse_class(input: TokenSlice) -> IResult<TokenSlice, Statement> {
 
     let (input, _) = expect_token!(input, Class)?;
 
-    let (input, public) = match expect_token!(input.clone(), Class) {
-        Ok((i, _)) => Ok((i, true)),
-        Err(_) => Ok((input, false)),
-    }?;
-
-    let (input, name) = parse_identifier(input)?;
-    let (input, _) = expect_token!(input, LBrace)?;
+    let (input, (public, name, _)) = cut((
+        map(opt(is_tok!(Bang)), |o| o.is_some()),
+        context("class name", parse_identifier),
+        is_tok!(LBrace),
+    )).parse(input)?;
 
     // TODO: This might make the order strict, which I don't want. Now: Class: Fields -> Methods. I want: Class: (Fields | Methods)*
     let (input, fields) = (|i| many0(parse_field).parse(i))(input)?;
