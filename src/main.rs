@@ -16,7 +16,9 @@ class! String {
   val mut capacity: u64 = 0;
   val mut data: *u8 = 0;
 
-  static fn! new() -> *Self {}
+  static fn! new() -> *Self {
+    val test: i32 = 13;
+  }
 }
 
 "#;

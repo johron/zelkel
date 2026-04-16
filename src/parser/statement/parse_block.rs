@@ -7,16 +7,14 @@ pub fn parse_block(input: TokenSlice) -> IResult<TokenSlice, Block> {
 
     // cut, many0 alt
 
-    let (input, stms) = cut(map(many0(parse_stmts), |stmts| Block { stmts })).parse(input)?;
+    let (input, block) = cut(map(many0(parse_stmts), |stmts| Block { stmts })).parse(input)?;
     
 
     let (input, _) = expect_token!(input, RBrace)?;
 
     Ok((
         input,
-        Block {
-            stmts: Vec::new()
-        }
+        block,
     ))
 } 
 
