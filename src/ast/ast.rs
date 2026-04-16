@@ -9,6 +9,7 @@ pub enum Statement {
     ClassDeclaration(Class),
     FunctionDeclaration(Function),
     Expression(Expression),
+    Block(Block),
 }
 
 #[derive(Debug)]
@@ -42,6 +43,7 @@ pub struct Function {
     pub public: bool,
     pub dynamic: bool, // dynamic=false => static
     pub return_type: Type,
+    pub block: Block,
 }
 
 #[derive(Debug)]
@@ -101,4 +103,9 @@ pub enum Type {
     Ident(String),
     SizeIdent(String, usize),
     Pointer(Box<Type>),
+}
+
+#[derive(Debug)]
+pub struct Block {
+    pub stmts: Vec<Statement>
 }

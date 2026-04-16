@@ -8,7 +8,7 @@ use crate::lexer::token::Token;
 use crate::parser::literal::parse_identifier::parse_identifier;
 use crate::parser::literal::parse_type::parse_type;
 use crate::parser::parser::{match_token, TokenSlice};
-use crate::parser::statement::parse_expression::parse_expression;
+use crate::parser::expr::parse_expression::parse_expression;
 
 pub fn parse_field(input: TokenSlice) -> IResult<TokenSlice, Field> {
     let (input, dynamic) = match expect_token!(input.clone(), Static) {
@@ -26,6 +26,7 @@ pub fn parse_field(input: TokenSlice) -> IResult<TokenSlice, Field> {
         context("field type", parse_type),
         // = [expr];
 
+        // map(opt(many0))
         is_tok!(Eq),
         context("expression", parse_expression),
 

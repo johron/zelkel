@@ -6,7 +6,7 @@ use nom::Parser;
 use crate::ast::ast::{Class, Statement};
 use crate::{expect_token, is_tok, is_token};
 use crate::parser::statement::parse_field::parse_field;
-use crate::parser::statement::parse_function_declaration::parse_function_declaration;
+use crate::parser::statement::parse_function::parse_function_declaration;
 use crate::parser::literal::parse_identifier::parse_identifier;
 use crate::parser::literal::parse_type::parse_type;
 use crate::parser::parser::{match_token, TokenSlice};

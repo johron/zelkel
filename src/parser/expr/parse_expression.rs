@@ -1,4 +1,4 @@
-use crate::ast::ast::{Expression, Literal, Operator};
+use crate::ast::ast::{Expression, Literal, Operator, Statement};
 use crate::parser::literal::parse_identifier::parse_identifier;
 use crate::parser::parser::{TokenSlice};
 
@@ -68,4 +68,9 @@ fn parse_atom(input: TokenSlice) -> IResult<TokenSlice, Expression> {
         map(parse_identifier, |s| Expression::Literal { val: Literal::Variable(s), ty: None }), // TODO: this needs work, especially with the type, we don't know the type at this time, we will know it at ast walk semantic eval.
         delimited(is_tok!(LParen), parse_expression, is_tok!(RParen))
     )).parse(input)
+}
+
+pub fn parse_expression_statement(input: TokenSlice) -> IResult<TokenSlice, Statement> {
+    let (input, expr) = parse_expression(input)?;
+    Ok((input, Statement::Expression(expr)))
 }

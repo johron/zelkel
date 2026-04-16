@@ -33,7 +33,7 @@ pub enum Token<'a> {
     Ident(&'a str, usize),
 }
 
-impl<'a> Token<'a> {
+impl <'a> Token<'a> {
     pub fn offset(&self) -> usize {
         match self {
             Token::Ident(_, o) | Token::Fn(o) | Token::Static(o) => *o,
