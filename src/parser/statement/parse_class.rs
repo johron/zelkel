@@ -5,7 +5,7 @@ use nom::multi::many0;
 use nom::Parser;
 use crate::ast::ast::{Class, Statement};
 use crate::{expect_token, is_tok, is_token};
-use crate::parser::statement::parse_field::parse_field;
+use crate::parser::statement::parse_variable::parse_variable;
 use crate::parser::statement::parse_function::parse_function_declaration;
 use crate::parser::literal::parse_identifier::parse_identifier;
 use crate::parser::literal::parse_type::parse_type;
@@ -26,7 +26,7 @@ pub fn parse_class(input: TokenSlice) -> IResult<TokenSlice, Statement> {
     )).parse(input)?;
 
     // TODO: This might make the order strict, which I don't want. Now: Class: Fields -> Methods. I want: Class: (Fields | Methods)*
-    let (input, fields) = (|i| many0(parse_field).parse(i))(input)?;
+    let (input, fields) = (|i| many0(parse_variable).parse(i))(input)?;
     let (input, methods) = (|i| many0(parse_function_declaration).parse(i))(input)?;
 
     let (input, _) = expect_token!(input, RBrace)?;

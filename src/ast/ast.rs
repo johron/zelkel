@@ -8,6 +8,7 @@ pub enum Statement {
     Require(Require),
     ClassDeclaration(Class),
     FunctionDeclaration(Function),
+    VariableDeclaration(Variable),
     Expression(Expression),
     Block(Block),
 }
@@ -22,16 +23,16 @@ pub enum Require {
 #[derive(Debug)]
 pub struct Class {
     pub name: String,
-    pub fields: Vec<Field>,
+    pub fields: Vec<Variable>,
     pub methods: Vec<Function>,
     pub public: bool,
     pub dynamic: bool,
 }
 
 #[derive(Debug)]
-pub struct Field {
+pub struct Variable {
     pub name: String,
-    pub field_type: Type,
+    pub var_type: Type,
     pub public: bool,
     pub mutable: bool,
     pub dynamic: bool,
