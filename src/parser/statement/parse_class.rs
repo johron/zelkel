@@ -12,10 +12,8 @@ use crate::parser::literal::parse_type::parse_type;
 use crate::parser::parser::{match_token, TokenSlice};
 
 pub fn parse_class(input: TokenSlice) -> IResult<TokenSlice, Statement> {
-    let (input, dynamic) = match match_token(is_token!(Static))(input.clone()) {
-        Ok((i, _)) => Ok((i, false)),
-        Err(_) => Ok((input, true)),
-    }?;
+    let (input, dynamic) =
+        map(opt(is_tok!(Static)), |s| s.is_none()).parse(input)?;
 
     let (input, _) = expect_token!(input, Class)?;
 

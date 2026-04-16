@@ -46,7 +46,7 @@ class! String {
                 if let Some(first_token) = err.input.tokens.first() {
                     let offset = first_token.offset();
                     let (line, col) = get_line_col_from_offset(src, offset);
-                    format!("Parse error at line {}, col {}: Unexpected token {:?}", line, col, first_token)
+                    format!("Parse error at line {}, col {}: Unexpected token {:?} {:?}", line, col, first_token, err)
                 } else {
                     "Parse error at end of file".to_string()
                 }

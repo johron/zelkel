@@ -11,11 +11,8 @@ use crate::{expect_token, is_tok};
 use crate::parser::literal::parse_type::parse_type;
 
 pub fn parse_function_declaration(input: TokenSlice) -> IResult<TokenSlice, Function> {
-    let (input, is_static) = match expect_token!(input.clone(), Static) {
-        Ok((i, _)) => (i, true),
-        Err(_) => (input, false),
-    };
-    let dynamic = !is_static;
+    let (input, dynamic) =
+        map(opt(is_tok!(Static)), |s| s.is_none()).parse(input)?;
 
     let (input, _) = expect_token!(input, Fn)?;
 

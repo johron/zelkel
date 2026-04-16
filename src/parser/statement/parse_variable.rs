@@ -11,10 +11,8 @@ use crate::parser::parser::{match_token, TokenSlice};
 use crate::parser::expr::parse_expression::parse_expression;
 
 pub fn parse_variable(input: TokenSlice) -> IResult<TokenSlice, Variable> {
-    let (input, dynamic) = match expect_token!(input.clone(), Static) {
-        Ok((i, _)) => Ok((i, false)),
-        Err(_) => Ok((input, true)),
-    }?;
+    let (input, dynamic) =
+        map(opt(is_tok!(Static)), |s| s.is_none()).parse(input)?;
 
     let (input, _) = expect_token!(input, Val)?;
 

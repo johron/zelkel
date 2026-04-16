@@ -6,7 +6,7 @@ use nom::{IResult, Parser};
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::sequence::delimited;
-use crate::is_tok;
+use crate::{expect_token, is_tok};
 use crate::lexer::token::{Token, Tokens};
 use crate::parser::literal::parse_integer::parse_integer;
 use crate::parser::literal::parse_type::parse_type;
@@ -72,5 +72,6 @@ fn parse_atom(input: TokenSlice) -> IResult<TokenSlice, Expression> {
 
 pub fn parse_expression_statement(input: TokenSlice) -> IResult<TokenSlice, Statement> {
     let (input, expr) = parse_expression(input)?;
+    let (input, _) = expect_token!(input, Semi)?;
     Ok((input, Statement::Expression(expr)))
 }

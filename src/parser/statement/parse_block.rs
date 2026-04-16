@@ -7,8 +7,8 @@ pub fn parse_block(input: TokenSlice) -> IResult<TokenSlice, Block> {
 
     // cut, many0 alt
 
-    let (input, block) = cut(map(many0(parse_stmts), |stmts| Block { stmts })).parse(input)?;
-    
+    let (input, block) = map(many0(parse_stmts), |stmts| Block { stmts }).parse(input)?;
+
 
     let (input, _) = expect_token!(input, RBrace)?;
 
@@ -16,14 +16,14 @@ pub fn parse_block(input: TokenSlice) -> IResult<TokenSlice, Block> {
         input,
         block,
     ))
-} 
+}
 
 fn parse_stmts(input: TokenSlice) -> IResult<TokenSlice, Statement> {
     alt((
-        |i| parse_class(i),
-        |i| parse_function_item(i),
-        |i| parse_expression_statement(i),
-        |i| parse_variable_item(i),
+        parse_class,
+        parse_function_item,
+        parse_variable_item,
+        parse_expression_statement,
     )).parse(input)
 }
 
