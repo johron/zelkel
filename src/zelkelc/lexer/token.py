@@ -49,23 +49,7 @@ class Equals:
     pass
 
 @dataclass
-class Plus:
-    pass
+class Operator:
+    value: str
 
-@dataclass
-class Minus:
-    pass
-
-@dataclass
-class Star:
-    pass
-
-@dataclass
-class Slash:
-    pass
-
-@dataclass
-class Ampersand:
-    pass
-
-Token = Identifier | String | Integer | LParen | RParen | LBrace | RBrace | Period | Comma | Arrow | Colon | Equals | Plus | Minus | Star | Slash | Ampersand
+Token = Identifier | String | Integer | LParen | RParen | LBrace | RBrace | Period | Comma | Arrow | Colon | Equals | Operator

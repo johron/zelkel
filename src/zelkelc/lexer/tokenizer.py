@@ -78,16 +78,16 @@ def lex(source: str) -> list[token.Token]:
                     tokens.append(token.Equals())
                     i += 1
                 case '+':
-                    tokens.append(token.Plus())
+                    tokens.append(token.Operator('+'))
                     i += 1
                 case '-':
-                    tokens.append(token.Minus())
+                    tokens.append(token.Operator('-'))
                     i += 1
                 case '*':
-                    tokens.append(token.Star())
+                    tokens.append(token.Operator('*'))
                     i += 1
                 case '/':
-                    tokens.append(token.Slash())
+                    tokens.append(token.Operator('/'))
                     i += 1
                 case _:
                     print(f"Unknown character found during lexing: '{c}' at {i}")

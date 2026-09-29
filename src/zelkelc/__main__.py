@@ -13,8 +13,7 @@ class MyClass {
 }
 
 static fn main() -> i64 {
-    println("Hello, world!")
-    return 0
+    return 0 + 0 + 1
 }
 """
 

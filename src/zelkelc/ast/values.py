@@ -12,4 +12,8 @@ class String:
 class Void:
     pass
 
-Value = Integer | String | Void
+@dataclass
+class Variable:
+    name: str
+
+Value = Integer | String | Void | Variable

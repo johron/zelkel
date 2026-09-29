@@ -169,7 +169,7 @@ class Parser:
         self.expect(token.Identifier("return"))
         # if there is an expression then check for add it?
         
-        expr = None
+        expr = self.parse_expression()
         
         return nodes.ReturnStatement(
             expr
@@ -198,3 +198,57 @@ class Parser:
             typ,
             expr,
         )
+    
+    def parse_expression(self) -> nodes.Expression:
+        if self.current_type(token.Operator) == True:
+            self.parse_unary_expression()
+        
+        left = self.parse_primary_expression()
+        if self.current_type(token.Operator) == True:
+            self.cursor -= 1
+            return self.parse_binary_expression()
+        
+        return left
+    
+    def parse_binary_expression(self) -> nodes.BinaryExpression:
+        left = self.parse_expressio        kjkfksdfkjdsafkljdsflkjdsalkfjdslkfs
+        
+        
+        
+        
+        
+        
+        
+        jfkjdsfkjdslkjdsfkjdsflkjdskw
+        op = self.expect_type(token.Operator).value
+        right = self.parse_expression()
+        return nodes.BinaryExpression(
+            left,
+            op,
+            right,
+        )
+    
+    def parse_unary_expression(self) -> nodes.UnaryExpression:
+        pass
+    
+    def parse_primary_expression(self) -> nodes.PrimaryExpression:
+        t = self.tokens[self.cursor]
+        
+        match t:
+            case token.Identifier():
+                self.cursor += 1
+                return nodes.PrimaryExpression(
+                    value = values.Variable(t.value)
+                )
+            case token.Integer():
+                self.cursor += 1
+                return nodes.PrimaryExpression(
+                    value = values.Integer(t.value)
+                )
+            case token.String():
+                self.cursor += 1
+                return nodes.PrimaryExpression(
+                    value = values.String(t.value)
+                )
+            case _:
+                return None
