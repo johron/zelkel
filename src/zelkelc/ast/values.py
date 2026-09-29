@@ -8,4 +8,8 @@ class Integer:
 class String:
     value: str
 
-Value = Integer | String
+@dataclass
+class Void:
+    pass
+
+Value = Integer | String | Void

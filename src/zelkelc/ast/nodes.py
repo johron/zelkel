@@ -19,9 +19,14 @@ class ValueDeclaration:
 @dataclass
 class FunctionDeclaration:
     name: str
-    args: dict[str, values.Value]
     typ: values.Value
+    static: bool
+    args: dict[str, values.Value]
     body: list[Node]
+    
+@dataclass
+class ReturnStatement:
+    expr: Expression | None
 
 Node = ClassDeclaration | ValueDeclaration | FunctionDeclaration
 

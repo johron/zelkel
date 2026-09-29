@@ -23,11 +23,31 @@ class Parser:
         self.cursor += 1
         return self.tokens[self.cursor - 1]
     
-    def parse_type(self) -> values.Value:
-        pass    
+    def next(self, tok: token.Token): 
+        if not self.tokens[self.cursor] == tok:
+            return False
+        return True
+
+    def next_type(self, tok_type: token.Token) -> bool:
+        if not type(self.tokens[self.cursor]) == tok_type:
+            return False
+        return True
+
+    def parse_type(self, is_return_type: bool) -> values.Value:
+        identifier = self.expect_type(token.Identifier)
+        match identifier.value:
+            case "String":
+                return values.String
+            case "i64":
+                return values.Integer
+            case "void" if is_return_type == True:
+                return values.Void
+            case _:
+                print("Invalid type found in parse_type")
+                exit(1)
 
     def parse(self):
-        ast: list[nodes.Node] = []
+        ast: list[nodes.FunctionDeclaration | nodes.ClassDeclaration] = []
         
         while self.cursor < len(self.tokens):
             t = self.tokens[self.cursor]
@@ -35,17 +55,21 @@ class Parser:
             match t:
                 case token.Identifier():
                     match t.value:
+                        case "static":
+                            self.expect(token.Identifier("static"))
+                            if self.next(token.Identifier("fn")):
+                                ast.append(self.parse_function_declaration(True))
+                            else:
+                                print(f"Keyword {self.tokens[self.cursor]} does not exist or may not be static")
+                                exit(1)
                         case "class":
                             ast.append(self.parse_class_declaration())
-                        case "static":
-                            print("TODO: static keyword not implemented")
-                            exit(1)
         
         return ast
-
+    
     def parse_class_declaration(self) -> nodes.ClassDeclaration:
         self.expect(token.Identifier("class"))
-        name = self.expect_type(token.Identifier)
+        name = self.expect_type(token.Identifier).value
         self.expect(token.LBrace())
         
         members, methods = self.parse_class_declaration_body()
@@ -62,14 +86,14 @@ class Parser:
         members: list[nodes.ValueDeclaration] = []
         methods: list[nodes.FunctionDeclaration] = []
         
-        while self.cursor < len(self.tokens):
+        while self.cursor < len(self.tokens) and not self.tokens[self.cursor] == token.RBrace():
             t = self.tokens[self.cursor]
             
             match t:
                 case token.Identifier():
                     match t.value:
                         case "fn":
-                            methods.append(self.parse_function_declaration())
+                            methods.append(self.parse_function_declaration(False))
                         case "val":
                             members.append(self.parse_value_declaration(False))
                         case "var":
@@ -77,9 +101,9 @@ class Parser:
                             
         return members, methods
     
-    def parse_function_declaration(self) -> nodes.FunctionDeclaration:
+    def parse_function_declaration(self, static: bool) -> nodes.FunctionDeclaration:
         self.expect(token.Identifier("fn"))
-        name = self.expect_type(token.Identifier)
+        name = self.expect_type(token.Identifier).value
         self.expect(token.LParen())
         
         # parse declaration arguments
@@ -88,23 +112,57 @@ class Parser:
         
         self.expect(token.Arrow())
         
-        typ = self.parse_type()
+        typ = self.parse_type(True)
         
         self.expect(token.LBrace())
         
-        # parse function declaration body
+        body = self.parse_function_declaration_body()
         
         self.expect(token.RBrace())
         
         return nodes.FunctionDeclaration(
-            name,
-            typ,
-            args = [],
-            body = []
+            name = name,
+            typ = typ,
+            static = static,
+            args = {},
+            body = body,
         )
         
     def parse_function_declaration_body(self) -> list[nodes.Node]:
-        pass
+        body: list[nodes.Node] = []
+        hasReturn: bool = False # TODO: should be replaced with real return tree checking, this is not a good system
+        
+        while self.cursor < len(self.tokens) and not self.tokens[self.cursor] == token.RBrace():
+            t = self.tokens[self.cursor]
+            
+            match t:
+                case token.Identifier():
+                    match t.value:
+                        case "fn":
+                            body.append(self.parse_function_declaration())
+                        case "val":
+                            body.append(self.parse_value_declaration(False))
+                        case "var":
+                            body.append(self.parse_value_declaration(True))
+                        case "return":
+                            body.append(self.parse_return())
+                            hasReturn = True
+        
+        if hasReturn == False:
+            print("Function must have return")
+            exit(1)
+        
+        return body
+    
+    def parse_return(self) -> nodes.ReturnStatement:
+        self.expect(token.Identifier("return"))
+        # if there is an expression then check for add it?
+        
+        expr = None
+        
+        return nodes.ReturnStatement(
+            expr
+        )
     
     def parse_value_declaration(self, mutable: bool) -> nodes.ValueDeclaration:
         if mutable:
@@ -112,15 +170,16 @@ class Parser:
         else:
             self.expect(token.Identifier("val"))
         
-        name = self.expect_type(token.Identifier)
+        name = self.expect_type(token.Identifier).value
         
         self.expect(token.Colon())
-        typ = self.parse_type()
+        typ = self.parse_type(False)
         
-        self.expect(token.Equals)
+        self.expect(token.Equals())
         
         # TODO: parse value declaration expression
         expr = None
+        self.cursor += 1
         
         return nodes.ValueDeclaration(
             name,
