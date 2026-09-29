@@ -12,6 +12,7 @@ class ClassDeclaration:
 @dataclass
 class ValueDeclaration:
     name: str
+    mutable: bool
     typ: values.Value
     expr: Expression
     
