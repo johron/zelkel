@@ -23,12 +23,12 @@ class Parser:
         self.cursor += 1
         return self.tokens[self.cursor - 1]
     
-    def next(self, tok: token.Token): 
+    def current(self, tok: token.Token): 
         if not self.tokens[self.cursor] == tok:
             return False
         return True
 
-    def next_type(self, tok_type: token.Token) -> bool:
+    def current_type(self, tok_type: token.Token) -> bool:
         if not type(self.tokens[self.cursor]) == tok_type:
             return False
         return True
@@ -57,7 +57,7 @@ class Parser:
                     match t.value:
                         case "static":
                             self.expect(token.Identifier("static"))
-                            if self.next(token.Identifier("fn")):
+                            if self.current(token.Identifier("fn")):
                                 ast.append(self.parse_function_declaration(True))
                             else:
                                 print(f"Keyword {self.tokens[self.cursor]} does not exist or may not be static")
@@ -106,25 +106,36 @@ class Parser:
         name = self.expect_type(token.Identifier).value
         self.expect(token.LParen())
         
-        # parse declaration arguments
+        args: dict[str, values.Value] = {}
+        while self.cursor < len(self.tokens) and not self.current(token.RParen()):
+            name = self.expect_type(token.Identifier).value
+            if name in args:
+                print(f"Cannot define argument {name} twice")
+                exit(1)
+            
+            self.expect(token.Colon())
+            typ = self.parse_type(False)
+            args[name] = typ
+            
+            if not self.current(token.Comma()):
+                break
+            else:
+                self.expect(token.Comma())
         
         self.expect(token.RParen())
         
         self.expect(token.Arrow())
-        
         typ = self.parse_type(True)
         
         self.expect(token.LBrace())
-        
         body = self.parse_function_declaration_body()
-        
         self.expect(token.RBrace())
         
         return nodes.FunctionDeclaration(
             name = name,
             typ = typ,
             static = static,
-            args = {},
+            args = args,
             body = body,
         )
         

@@ -7,7 +7,7 @@ class MyClass {
     val immutable_value: String = "sdf"
     var mutable_value: i64 = 128
     
-    fn function() -> void {
+    fn function(test: i64, test2: String) -> void {
         return
     }
 }

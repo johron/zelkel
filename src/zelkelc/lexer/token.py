@@ -64,5 +64,8 @@ class Star:
 class Slash:
     pass
 
+@dataclass
+class Ampersand:
+    pass
 
-Token = Identifier | String | Integer | LParen | RParen | LBrace | RBrace | Period | Comma | Arrow | Colon | Equals | Plus | Minus | Star | Slash
+Token = Identifier | String | Integer | LParen | RParen | LBrace | RBrace | Period | Comma | Arrow | Colon | Equals | Plus | Minus | Star | Slash | Ampersand
