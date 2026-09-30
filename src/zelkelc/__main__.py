@@ -13,7 +13,7 @@ class MyClass {
 }
 
 static fn main() -> i64 {
-    return 0 + 0 + 1
+    return 0 + 1 + 2
 }
 """
 

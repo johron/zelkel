@@ -64,6 +64,13 @@ class Parser:
                                 exit(1)
                         case "class":
                             ast.append(self.parse_class_declaration())
+                        case _:
+                            print(f"Invalid keyword {t.value}")
+                            exit(1)
+                case _:
+                    print(f"Invalid token found while parsing global {t}")
+                    exit(1)
+                            
         
         return ast
     
@@ -98,6 +105,12 @@ class Parser:
                             members.append(self.parse_value_declaration(False))
                         case "var":
                             members.append(self.parse_value_declaration(True))
+                        case _:
+                            print(f"Invalid keyword {t.value}")
+                            exit(1)
+                case _:
+                    print(f"Invalid token found while parsing class declaration: {t}")
+                    exit(1)
                             
         return members, methods
     
@@ -158,6 +171,13 @@ class Parser:
                         case "return":
                             body.append(self.parse_return())
                             hasReturn = True
+                        case _:
+                            print(f"Invalid keyword {t.value}")
+                            exit(1)
+                case _:
+                    #TODO: expression statement
+                    print(f"implement expression statement: {t}")
+                    exit(1)
         
         if hasReturn == False:
             print("Function must have return")
@@ -211,17 +231,9 @@ class Parser:
         return left
     
     def parse_binary_expression(self) -> nodes.BinaryExpression:
-        left = self.parse_expressio        kjkfksdfkjdsafkljdsflkjdsalkfjdslkfs
-        
-        
-        
-        
-        
-        
-        
-        jfkjdsfkjdslkjdsfkjdsflkjdskw
+        left = self.parse_primary_expression()
         op = self.expect_type(token.Operator).value
-        right = self.parse_expression()
+        right = self.parse_primary_expression()
         return nodes.BinaryExpression(
             left,
             op,
@@ -229,7 +241,8 @@ class Parser:
         )
     
     def parse_unary_expression(self) -> nodes.UnaryExpression:
-        pass
+        print("TODO: Implement parse_unary_expression")
+        exit(1)
     
     def parse_primary_expression(self) -> nodes.PrimaryExpression:
         t = self.tokens[self.cursor]
@@ -252,3 +265,4 @@ class Parser:
                 )
             case _:
                 return None
+            
