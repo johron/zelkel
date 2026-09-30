@@ -1,5 +1,6 @@
 from src.zelkelc.lexer.tokenizer import lex
 from src.zelkelc.ast.parser import Parser
+from src.zelkelc.codegen.codegen import Codegen
 
 import rich # type: ignore
 
@@ -25,3 +26,7 @@ if __name__ == "__main__":
     parser = Parser(tokens, 0)
     ast = parser.parse()
     rich.print(ast)
+    
+    codegen = Codegen(ast)
+    ir = codegen.generate()
+    print(ir)
