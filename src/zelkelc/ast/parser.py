@@ -65,7 +65,7 @@ class Parser:
                         case "class":
                             ast.append(self.parse_class_declaration())
                         case _:
-                            print(f"Invalid keyword {t.value}")
+                            print(f"Invalid keyword in global {t.value}")
                             exit(1)
                 case _:
                     print(f"Invalid token found while parsing global {t}")
@@ -106,7 +106,7 @@ class Parser:
                         case "var":
                             members.append(self.parse_value_declaration(True))
                         case _:
-                            print(f"Invalid keyword {t.value}")
+                            print(f"Invalid keyword in class body {t.value}")
                             exit(1)
                 case _:
                     print(f"Invalid token found while parsing class declaration: {t}")
@@ -172,7 +172,7 @@ class Parser:
                             body.append(self.parse_return())
                             hasReturn = True
                         case _:
-                            print(f"Invalid keyword {t.value}")
+                            print(f"Invalid keyword in function body {t.value}")
                             exit(1)
                 case _:
                     #TODO: expression statement
@@ -187,8 +187,8 @@ class Parser:
     
     def parse_return(self) -> nodes.ReturnStatement:
         self.expect(token.Identifier("return"))
-        # if there is an expression then check for add it?
         
+        # TODO: if there is an expression then check for add it?
         expr = self.parse_expression()
         
         return nodes.ReturnStatement(
@@ -208,9 +208,7 @@ class Parser:
         
         self.expect(token.Equals())
         
-        # TODO: parse value declaration expression
-        expr = None
-        self.cursor += 1
+        expr = self.parse_expression()
         
         return nodes.ValueDeclaration(
             name,
@@ -220,49 +218,72 @@ class Parser:
         )
     
     def parse_expression(self) -> nodes.Expression:
-        if self.current_type(token.Operator) == True:
-            self.parse_unary_expression()
-        
-        left = self.parse_primary_expression()
-        if self.current_type(token.Operator) == True:
-            self.cursor -= 1
-            return self.parse_binary_expression()
-        
+        return self.parse_binary_expression(0)
+
+    def parse_binary_expression(self, min_precedence: int = 0) -> nodes.Expression:
+        left = self.parse_unary_expression()
+
+        while self.current_type(token.Operator):
+            op_token = self.tokens[self.cursor]
+            op = op_token.value
+            precedence = self._operator_precedence(op)
+
+            if precedence < min_precedence:
+                break
+
+            self.cursor += 1
+
+            right = self.parse_binary_expression(precedence + 1)
+
+            left = nodes.BinaryExpression(left, right, op)
+
         return left
-    
-    def parse_binary_expression(self) -> nodes.BinaryExpression:
-        left = self.parse_primary_expression()
-        op = self.expect_type(token.Operator).value
-        right = self.parse_primary_expression()
-        return nodes.BinaryExpression(
-            left,
-            op,
-            right,
-        )
-    
-    def parse_unary_expression(self) -> nodes.UnaryExpression:
-        print("TODO: Implement parse_unary_expression")
-        exit(1)
-    
-    def parse_primary_expression(self) -> nodes.PrimaryExpression:
+
+    def parse_unary_expression(self) -> nodes.Expression:
+        if self.current_type(token.Operator):
+            op = self.expect_type(token.Operator).value
+
+            if op not in ("-", "+"):
+                print(f"Invalid unary operator: {op}")
+                exit(1)
+            operand = self.parse_unary_expression()
+            return nodes.UnaryExpression(operand, op)
+
+        return self.parse_primary_expression()
+
+    def parse_primary_expression(self) -> nodes.Expression:
         t = self.tokens[self.cursor]
-        
+
         match t:
             case token.Identifier():
                 self.cursor += 1
-                return nodes.PrimaryExpression(
-                    value = values.Variable(t.value)
-                )
+                return nodes.PrimaryExpression(value=values.Variable(t.value))
+
             case token.Integer():
                 self.cursor += 1
-                return nodes.PrimaryExpression(
-                    value = values.Integer(t.value)
-                )
+                return nodes.PrimaryExpression(value=values.Integer(t.value))
+
             case token.String():
                 self.cursor += 1
-                return nodes.PrimaryExpression(
-                    value = values.String(t.value)
-                )
+                return nodes.PrimaryExpression(value=values.String(t.value))
+
+            case token.LParen():
+                self.expect(token.LParen())
+                expr = self.parse_expression()
+                self.expect(token.RParen())
+                return expr
+
             case _:
-                return None
-            
+                print(f"Unexpected token in primary expression: {t}")
+                exit(1)
+
+    def _operator_precedence(self, op: str) -> int:
+        table = {
+            "||": 1,
+            "&&": 2,
+            "==": 3, "!=": 3,
+            "<": 4, "<=": 4, ">": 4, ">=": 4,
+            "+": 5, "-": 5,
+            "*": 6, "/": 6, "%": 6,
+        }
+        return table.get(op, 0)

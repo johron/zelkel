@@ -1,6 +1,8 @@
 from src.zelkelc.lexer.tokenizer import lex
 from src.zelkelc.ast.parser import Parser
 
+import rich # type: ignore
+
 source = """
 //test
 class MyClass {
@@ -8,12 +10,12 @@ class MyClass {
     var mutable_value: i64 = 128
     
     fn function(test: i64, test2: String) -> void {
-        return
+        return 0
     }
 }
 
 static fn main() -> i64 {
-    return 0 + 1 + 2
+    return 0
 }
 """
 
@@ -22,4 +24,4 @@ if __name__ == "__main__":
     print(tokens)
     parser = Parser(tokens, 0)
     ast = parser.parse()
-    print(ast)
+    rich.print(ast)

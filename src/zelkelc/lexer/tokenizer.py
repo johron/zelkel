@@ -49,6 +49,24 @@ def lex(source: str) -> list[token.Token]:
         elif c == '-' and source[i + 1] == '>':
             tokens.append(token.Arrow())
             i += 2
+        elif c == '<' and source[i + 1] == '=':
+            tokens.append(token.Operator("<="))
+            i += 2
+        elif c == '>' and source[i + 1] == '=':
+            tokens.append(token.Operator(">="))
+            i += 2
+        elif c == '|' and source[i + 1] == '|':
+            tokens.append(token.Operator("||"))
+            i += 2
+        elif c ==  '&' and source[i + 1] == '&':
+            tokens.append(token.Operator("&&"))
+            i += 2
+        elif c == '=' and source[i + 1] == '=':
+            tokens.append(token.Operator("=="))
+            i += 2
+        elif c == '!' and source[i + 1] == '=':
+            tokens.append(token.Operator("!="))
+            i += 2
         else:
             match c:
                 case ' ' | '\n':
@@ -89,6 +107,8 @@ def lex(source: str) -> list[token.Token]:
                 case '/':
                     tokens.append(token.Operator('/'))
                     i += 1
+                case '%':
+                    tokens.append(token.Operator('%'))
                 case _:
                     print(f"Unknown character found during lexing: '{c}' at {i}")
                     break
