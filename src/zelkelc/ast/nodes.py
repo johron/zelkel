@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import src.zelkelc.ast.values as values
+import src.zelkelc.ast.scope as scope
 
 @dataclass
 class ClassDeclaration:

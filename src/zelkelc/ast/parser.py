@@ -6,6 +6,7 @@ class Parser:
     tokens: list[token.Token]
     cursor: int
     
+    
     def __init__(self, tokens: list[token.Token], cursor: int):
         self.tokens = tokens
         self.cursor = cursor
