@@ -2,7 +2,7 @@ from src.zelkelc.lexer.tokenizer import lex
 from src.zelkelc.ast.parser import Parser
 from src.zelkelc.codegen.codegen import Codegen
 
-import rich # type: ignore
+import rich
 
 source = """
 //test
