@@ -7,15 +7,17 @@ import rich
 source = """
 //test
 class MyClass {
-    val immutable_value: String = "sdf"
-    var mutable_value: i64 = 128
+    val immutable_value: i64
+    var mutable_value: String
     
     fn function(test: i64, test2: String) -> void {
         return 0
     }
 }
 
-static fn main() -> i64 {
+fn main() -> i64 {
+    val test: i64 = 16
+    var test2: i64 = 2
     return 0
 }
 """

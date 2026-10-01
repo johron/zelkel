@@ -39,7 +39,7 @@ class Parser:
             case "String":
                 return values.String
             case "i64":
-                return values.Integer
+                return values.Integer64
             case "void" if is_return_type == True:
                 return values.Void
             case _:
@@ -55,13 +55,8 @@ class Parser:
             match t:
                 case token.Identifier():
                     match t.value:
-                        case "static":
-                            self.expect(token.Identifier("static"))
-                            if self.current(token.Identifier("fn")):
-                                ast.append(self.parse_function_declaration(True))
-                            else:
-                                print(f"Keyword {self.tokens[self.cursor]} does not exist or may not be static")
-                                exit(1)
+                        case "fn":
+                            ast.append(self.parse_function_declaration())
                         case "class":
                             ast.append(self.parse_class_declaration())
                         case _:
@@ -114,7 +109,7 @@ class Parser:
                             
         return members, methods
     
-    def parse_function_declaration(self, static: bool) -> nodes.FunctionDeclaration:
+    def parse_function_declaration(self) -> nodes.FunctionDeclaration:
         self.expect(token.Identifier("fn"))
         name = self.expect_type(token.Identifier).value
         self.expect(token.LParen())
@@ -147,7 +142,6 @@ class Parser:
         return nodes.FunctionDeclaration(
             name = name,
             typ = typ,
-            static = static,
             args = args,
             body = body,
         )
@@ -261,7 +255,7 @@ class Parser:
 
             case token.Integer():
                 self.cursor += 1
-                return nodes.PrimaryExpression(value=values.Integer(t.value))
+                return nodes.PrimaryExpression(value=values.Integer64(t.value))
 
             case token.String():
                 self.cursor += 1

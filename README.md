@@ -8,3 +8,39 @@
 * [ ] Scope checking and stuff in parser
 * [ ] Parser should generate all names (unique), struct indexes, etc for codegen, this should also be in the scope
     * [ ] Multi pass parser: first scope/symbol collection (what i've been doing now), then check if it makes sense :)
+
+## Planning code + ideas + sketch, ... etc
+```kotlin
+class Parser {
+  val tokens: Arr<Token>
+  val cursor: Int
+
+  // :: for constructor?, under the hood so vert denne funksjonen kjørt av ein anna der self har blitt laga, allocated, idk, noko sånn. Den hook constructor funksjonen har alle members av classen og returner pointer til objektet i minne
+  fn::new(self, tokens: Arr<Token>) {
+    self.tokens = tokens
+    self.cursor = Int::from(0)
+  }
+}
+
+fn main() -> i64 {
+  val parser: &Parser = Parser::new(etcetc...) // with hooked constructor, also puts reference counting
+  
+  val parser_manually: &Parser = mem.alloc(mem.sizeof(Parser)) // will not be tracked by reference counter, the pointer address is not added to the GC's pointer track list. GC only counts addresses in it's list
+  parser_manually.tokens = ...
+  parser_manually.cursor = ...
+
+  mem.free(parser_manually)
+
+  // Kanskje noko sånn heller?
+  val allocated: Result<&OtherClass> = mem.alloc(mem.sizeof(OtherClass))
+  val allocated_real: &OtherClass = allocated.expect("yes!")
+
+  mem.free(allocated_real)
+
+  // Alternativ, meire generics?
+  val allocated: Result<&OtherClass> = mem.alloc<OtherClass>()
+  val allocated_real: &OtherClass = allocated.expect("Couldn't allocate memory")
+
+  return 0
+}
+```

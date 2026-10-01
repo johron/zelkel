@@ -21,7 +21,6 @@ class ValueDeclaration:
 class FunctionDeclaration:
     name: str
     typ: values.Value
-    static: bool
     args: dict[str, values.Value]
     body: list[Node]
     
