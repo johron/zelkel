@@ -30,4 +30,12 @@ class Variable:
         print("Cannot convert Variable to llvm ir")
         exit(1)
 
+@dataclass
+class Ptr[T]:
+    pass
+
+@dataclass
+class Val[T]:
+    pass
+
 Value = Integer64 | String | Void | Variable

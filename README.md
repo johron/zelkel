@@ -8,6 +8,9 @@
 * [ ] Scope checking and stuff in parser
 * [ ] Parser should generate all names (unique), struct indexes, etc for codegen, this should also be in the scope
     * [ ] Multi pass parser: first scope/symbol collection (what i've been doing now), then check if it makes sense :)
+* Types:
+  * With no * or & before type it will be "dynamic", the compiler figures out if it's the pointer or the value that is being used
+  * explicit value with * or explicit pointer with &. You can also use & and * on a "dynamic" type to get both, "dynamic" types are both at the same time, but in reality they are probably the pointer and then you know both 
 
 ## Planning code + ideas + sketch, ... etc
 ```kotlin
@@ -23,11 +26,11 @@ class Parser {
 }
 
 fn main() -> i64 {
-  val parser: &Parser = Parser::new(etcetc...) // with hooked constructor, also puts reference counting
+  val parser: Parser = Parser::new(etcetc...) // with hooked constructor, also puts reference counting
   
   val parser_manually: &Parser = mem.alloc(mem.sizeof(Parser)) // will not be tracked by reference counter, the pointer address is not added to the GC's pointer track list. GC only counts addresses in it's list
-  parser_manually.tokens = ...
-  parser_manually.cursor = ...
+  *parser_manually.tokens = ...
+  *parser_manually.cursor = ...
 
   mem.free(parser_manually)
 
