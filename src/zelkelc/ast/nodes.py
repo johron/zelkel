@@ -14,7 +14,7 @@ class ClassDeclaration:
 @dataclass
 class StructDeclaration:
     name: str
-    members: list[ValueDeclaration]
+    members: list[MemberDeclaration]
     real_name: str
 
 @dataclass
@@ -22,7 +22,6 @@ class MemberDeclaration:
     name: str
     mutable: bool
     typ: values.Value
-    real_name: str
     real_idx: int
 
 @dataclass

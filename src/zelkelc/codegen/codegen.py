@@ -1,13 +1,15 @@
-from dataclasses import dataclass
-
 import src.zelkelc.ast.nodes as nodes
 import src.zelkelc.ast.values as values
 
-@dataclass
 class IRTable:
     structs: str
     struct_functions: str
     global_functions: str
+    
+    def __init__(self):
+        self.structs = ""
+        self.struct_functions = ""
+        self.global_functions = ""
 
 class Codegen:
     ast: list[nodes.FunctionDeclaration | nodes.ClassDeclaration]
@@ -15,7 +17,7 @@ class Codegen:
     
     def __init__(self, ast: list[nodes.FunctionDeclaration | nodes.ClassDeclaration]):
         self.ast = ast
-        self.ir = IRTable("", "", "")
+        self.ir = IRTable()
         
     def generate(self):
         for node in self.ast:

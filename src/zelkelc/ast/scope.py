@@ -1,30 +1,29 @@
 from __future__ import annotations
 
-import src.zelkelc.ast.nodes as nodes
 import src.zelkelc.ast.values as values
 from dataclasses import dataclass
 
 @dataclass
-class ClassInfo:
+class ClassSignature:
     name: str
-    members: list[ValueInfo]
-    methods: list[FunctionInfo]
+    members: list[ValueSignature]
+    methods: list[FunctionSignature]
 
 @dataclass 
-class FunctionInfo:
+class FunctionSignature:
     name: str
     static: bool
     typ: values.Value
     args: dict[str, values.Value]
     
 @dataclass
-class ValueInfo:
+class ValueSignature:
     name: str
     mutable: bool
     typ: values.Value
 
 @dataclass
 class Scope:
-    classes: nodes.ClassDeclaration # burde ikkje bruke node, fordi den har masse unødvendig info, trenger berre navn, real_name, real_idx, ..., args, static,mutable, type, osv
-    functions: nodes.FunctionDeclaration # burde ikkje bruke node, fordi den har masse unødvendig info, trenger berre navn, real_name, real_idx, ..., args, static,mutable, type, osv
-    variables: nodes.ValueDeclaration # burde ikkje bruke node, fordi den har masse unødvendig info, trenger berre navn, real_name, real_idx, ..., args, static,mutable, type, osv
+    classes: ClassSignature
+    functions: FunctionSignature
+    variables: ValueSignature

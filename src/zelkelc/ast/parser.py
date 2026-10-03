@@ -38,7 +38,7 @@ class Parser:
     def parse_type(self, is_return_type: bool) -> values.Value:
         identifier = self.expect_type(token.Identifier)
         match identifier.value:
-            case "String":
+            case "str":
                 return values.String
             case "i64":
                 return values.Integer64
@@ -58,11 +58,11 @@ class Parser:
                 case token.Identifier():
                     match t.value:
                         case "fn":
-                            ast.append(self.parse_function_declaration())
+                            ast.append(self.parse_function_declaration("_main.zk_")) # TODO: replace with actual filepath to the file
                         case "struct":
-                            ast.append(self.parse_struct_declaration())
+                            ast.append(self.parse_struct_declaration("_main.zk_"))
                         case "class":
-                            ast.append(self.parse_class_declaration())
+                            ast.append(self.parse_class_declaration("_main.zk_"))
                         case _:
                             print(f"Invalid keyword in global {t.value}")
                             exit(1)
@@ -73,22 +73,11 @@ class Parser:
         
         return ast
 
-    def parse_struct_declaration(self) -> nodes.StructDeclaration:
+    def parse_struct_declaration(self, path: str) -> nodes.StructDeclaration:
         self.expect(token.Identifier("struct"))
         name = self.expect_type(token.Identifier).value
         self.expect(token.LBrace())
         
-        members = self.parse_struct_declaration_body(name)
-        
-        self.expect(token.RBrace())
-        
-        return nodes.StructDeclaration(
-            name,
-            members,
-            real_name = f"s_{name}"
-        )
-        
-    def parse_struct_declaration_body(self, struct_name: str) -> list[nodes.MemberDeclaration]:
         members: list[nodes.MemberDeclaration] = []
                 
         while self.cursor < len(self.tokens) and not self.tokens[self.cursor] == token.RBrace():
@@ -98,19 +87,25 @@ class Parser:
                 case token.Identifier():
                     match t.value:
                         case "val":
-                            members.append(self.parse_member_declaration(False, struct_name, len(members)))
+                            members.append(self.parse_member_declaration(False, len(members)))
                         case "var":
-                            members.append(self.parse_member_declaration(True, struct_name, len(members)))
+                            members.append(self.parse_member_declaration(True, len(members)))
                         case _:
                             print(f"Invalid keyword in struct body {t.value}")
                             exit(1)
                 case _:
                     print(f"Invalid token found while parsing class declaration: {t}")
                     exit(1)
-                            
-        return members
+        
+        self.expect(token.RBrace())
+        
+        return nodes.StructDeclaration(
+            name,
+            members,
+            real_name = f"{path}.s_{name}"
+        )
     
-    def parse_member_declaration(self, mutable: bool, struct_name: str, member_idx) -> nodes.MemberDeclaration:
+    def parse_member_declaration(self, mutable: bool, member_idx: int) -> nodes.MemberDeclaration:
         if mutable:
             self.expect(token.Identifier("var"))
         else:
@@ -125,16 +120,35 @@ class Parser:
             name,
             mutable,
             typ,
-            real_name = f"s_m_{struct_name}_{member_idx}_{name}",
-            real_idx=member_idx
+            real_idx = member_idx
         )
     
-    def parse_class_declaration(self) -> nodes.ClassDeclaration:
+    def parse_class_declaration(self, path: str) -> nodes.ClassDeclaration:
         self.expect(token.Identifier("class"))
         name = self.expect_type(token.Identifier).value
         self.expect(token.LBrace())
         
-        members, methods = self.parse_class_declaration_body()
+        members: list[nodes.ValueDeclaration] = []
+        methods: list[nodes.FunctionDeclaration] = []
+        
+        while self.cursor < len(self.tokens) and not self.tokens[self.cursor] == token.RBrace():
+            t = self.tokens[self.cursor]
+
+            match t:
+                case token.Identifier():
+                    match t.value:
+                        case "fn":
+                            methods.append(self.parse_function_declaration(f"{path}.c_{name}"))
+                        case "val":
+                            members.append(self.parse_member_declaration(False, len(members)))
+                        case "var":
+                            members.append(self.parse_member_declaration(True, len(members)))
+                        case _:
+                            print(f"Invalid keyword in class body {t.value}")
+                            exit(1)
+                case _:
+                    print(f"Invalid token found while parsing class declaration: {t}")
+                    exit(1)
         
         self.expect(token.RBrace())
         
@@ -142,34 +156,10 @@ class Parser:
             name,
             members,
             methods,
+            real_name = f"{path}.c_{name}"
         )
     
-    def parse_class_declaration_body(self) -> tuple[list[nodes.ValueDeclaration], list[nodes.FunctionDeclaration]]:
-        members: list[nodes.ValueDeclaration] = []
-        methods: list[nodes.FunctionDeclaration] = []
-        
-        while self.cursor < len(self.tokens) and not self.tokens[self.cursor] == token.RBrace():
-            t = self.tokens[self.cursor]
-            
-            match t:
-                case token.Identifier():
-                    match t.value:
-                        case "fn":
-                            methods.append(self.parse_function_declaration())
-                        case "val":
-                            members.append(self.parse_value_declaration(False))
-                        case "var":
-                            members.append(self.parse_value_declaration(True))
-                        case _:
-                            print(f"Invalid keyword in class body {t.value}")
-                            exit(1)
-                case _:
-                    print(f"Invalid token found while parsing class declaration: {t}")
-                    exit(1)
-                            
-        return members, methods
-    
-    def parse_function_declaration(self) -> nodes.FunctionDeclaration:
+    def parse_function_declaration(self, path: str) -> nodes.FunctionDeclaration:
         self.expect(token.Identifier("fn"))
         name = self.expect_type(token.Identifier).value
         self.expect(token.LParen())
@@ -196,17 +186,7 @@ class Parser:
         typ = self.parse_type(True)
         
         self.expect(token.LBrace())
-        body = self.parse_function_declaration_body()
-        self.expect(token.RBrace())
         
-        return nodes.FunctionDeclaration(
-            name = name,
-            typ = typ,
-            args = args,
-            body = body,
-        )
-        
-    def parse_function_declaration_body(self) -> list[nodes.Node]:
         body: list[nodes.Node] = []
         hasReturn: bool = False # TODO: should be replaced with real return tree checking, this is not a good system
         
@@ -217,7 +197,7 @@ class Parser:
                 case token.Identifier():
                     match t.value:
                         case "fn":
-                            body.append(self.parse_function_declaration())
+                            body.append(self.parse_function_declaration(f"{path}.f_{name}"))
                         case "val":
                             body.append(self.parse_value_declaration(False))
                         case "var":
@@ -237,7 +217,15 @@ class Parser:
             print("Function must have return")
             exit(1)
         
-        return body
+        self.expect(token.RBrace())
+        
+        return nodes.FunctionDeclaration(
+            name = name,
+            typ = typ,
+            args = args,
+            body = body,
+            real_name = f"{path}.f_{name}_{typ}"
+        )
     
     def parse_return(self) -> nodes.ReturnStatement:
         self.expect(token.Identifier("return"))
@@ -269,6 +257,7 @@ class Parser:
             mutable,
             typ,
             expr,
+            real_name = f"{self.cursor}_{name}"
         )
     
     def parse_expression(self) -> nodes.Expression:

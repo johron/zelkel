@@ -11,8 +11,8 @@ struct MyStruct {
 
 //test
 class MyClass {
-    val immutable_value: i64 = 12
-    var mutable_value: i64 = "sjdhfjsd"
+    val immutable_value: i64
+    var mutable_value: i64
     
     fn function(test: i64, test2: i64) -> void {
         return 0
