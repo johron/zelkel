@@ -1,10 +1,12 @@
 import src.zelkelc.lexer.token as token
 import src.zelkelc.ast.nodes as nodes
 import src.zelkelc.ast.values as values
+import src.zelkelc.ast.scope as scope
 
 class Parser:
     tokens: list[token.Token]
     cursor: int
+    scopes: list[scope.Scope]
     
     def __init__(self, tokens: list[token.Token], cursor: int):
         self.tokens = tokens
@@ -57,6 +59,8 @@ class Parser:
                     match t.value:
                         case "fn":
                             ast.append(self.parse_function_declaration())
+                        case "struct":
+                            ast.append(self.parse_struct_declaration())
                         case "class":
                             ast.append(self.parse_class_declaration())
                         case _:
@@ -68,6 +72,62 @@ class Parser:
                             
         
         return ast
+
+    def parse_struct_declaration(self) -> nodes.StructDeclaration:
+        self.expect(token.Identifier("struct"))
+        name = self.expect_type(token.Identifier).value
+        self.expect(token.LBrace())
+        
+        members = self.parse_struct_declaration_body(name)
+        
+        self.expect(token.RBrace())
+        
+        return nodes.StructDeclaration(
+            name,
+            members,
+            real_name = f"s_{name}"
+        )
+        
+    def parse_struct_declaration_body(self, struct_name: str) -> list[nodes.MemberDeclaration]:
+        members: list[nodes.MemberDeclaration] = []
+                
+        while self.cursor < len(self.tokens) and not self.tokens[self.cursor] == token.RBrace():
+            t = self.tokens[self.cursor]
+            
+            match t:
+                case token.Identifier():
+                    match t.value:
+                        case "val":
+                            members.append(self.parse_member_declaration(False, struct_name, len(members)))
+                        case "var":
+                            members.append(self.parse_member_declaration(True, struct_name, len(members)))
+                        case _:
+                            print(f"Invalid keyword in struct body {t.value}")
+                            exit(1)
+                case _:
+                    print(f"Invalid token found while parsing class declaration: {t}")
+                    exit(1)
+                            
+        return members
+    
+    def parse_member_declaration(self, mutable: bool, struct_name: str, member_idx) -> nodes.MemberDeclaration:
+        if mutable:
+            self.expect(token.Identifier("var"))
+        else:
+            self.expect(token.Identifier("val"))
+        
+        name = self.expect_type(token.Identifier).value
+        
+        self.expect(token.Colon())
+        typ = self.parse_type(False)
+        
+        return nodes.MemberDeclaration(
+            name,
+            mutable,
+            typ,
+            real_name = f"s_m_{struct_name}_{member_idx}_{name}",
+            real_idx=member_idx
+        )
     
     def parse_class_declaration(self) -> nodes.ClassDeclaration:
         self.expect(token.Identifier("class"))
@@ -95,7 +155,7 @@ class Parser:
                 case token.Identifier():
                     match t.value:
                         case "fn":
-                            methods.append(self.parse_function_declaration(False))
+                            methods.append(self.parse_function_declaration())
                         case "val":
                             members.append(self.parse_value_declaration(False))
                         case "var":
@@ -116,14 +176,14 @@ class Parser:
         
         args: dict[str, values.Value] = {}
         while self.cursor < len(self.tokens) and not self.current(token.RParen()):
-            name = self.expect_type(token.Identifier).value
-            if name in args:
-                print(f"Cannot define argument {name} twice")
+            arg_name = self.expect_type(token.Identifier).value
+            if arg_name in args:
+                print(f"Cannot define argument {arg_name} twice")
                 exit(1)
             
             self.expect(token.Colon())
             typ = self.parse_type(False)
-            args[name] = typ
+            args[arg_name] = typ
             
             if not self.current(token.Comma()):
                 break

@@ -5,12 +5,16 @@ from src.zelkelc.codegen.codegen import Codegen
 import rich
 
 source = """
+struct MyStruct {
+    val test: i64
+}
+
 //test
 class MyClass {
-    val immutable_value: i64
-    var mutable_value: String
+    val immutable_value: i64 = 12
+    var mutable_value: i64 = "sjdhfjsd"
     
-    fn function(test: i64, test2: String) -> void {
+    fn function(test: i64, test2: i64) -> void {
         return 0
     }
 }

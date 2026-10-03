@@ -25,7 +25,6 @@ class ValueInfo:
 
 @dataclass
 class Scope:
-    classes: nodes.ClassDeclaration
-    functions: nodes.FunctionDeclaration    
-    variables: nodes.ValueDeclaration
-    child: Scope | None
+    classes: nodes.ClassDeclaration # burde ikkje bruke node, fordi den har masse unødvendig info, trenger berre navn, real_name, real_idx, ..., args, static,mutable, type, osv
+    functions: nodes.FunctionDeclaration # burde ikkje bruke node, fordi den har masse unødvendig info, trenger berre navn, real_name, real_idx, ..., args, static,mutable, type, osv
+    variables: nodes.ValueDeclaration # burde ikkje bruke node, fordi den har masse unødvendig info, trenger berre navn, real_name, real_idx, ..., args, static,mutable, type, osv

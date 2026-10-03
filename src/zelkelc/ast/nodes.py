@@ -1,14 +1,29 @@
 from __future__ import annotations
+from typing import Optional
 
 from dataclasses import dataclass
 import src.zelkelc.ast.values as values
-import src.zelkelc.ast.scope as scope
 
 @dataclass
 class ClassDeclaration:
     name: str
     members: list[ValueDeclaration]
     methods: list[FunctionDeclaration]
+    real_name: str
+
+@dataclass
+class StructDeclaration:
+    name: str
+    members: list[ValueDeclaration]
+    real_name: str
+
+@dataclass
+class MemberDeclaration:
+    name: str
+    mutable: bool
+    typ: values.Value
+    real_name: str
+    real_idx: int
 
 @dataclass
 class ValueDeclaration:
@@ -16,6 +31,7 @@ class ValueDeclaration:
     mutable: bool
     typ: values.Value
     expr: Expression
+    real_name: str
     
 @dataclass
 class FunctionDeclaration:
@@ -23,6 +39,7 @@ class FunctionDeclaration:
     typ: values.Value
     args: dict[str, values.Value]
     body: list[Node]
+    real_name: str
     
 @dataclass
 class ReturnStatement:
