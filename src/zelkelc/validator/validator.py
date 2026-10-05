@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import src.zelkelc.ast.nodes as nodes
-import src.zelkelc.evaluator.scope as scope
+import src.zelkelc.validator.scope as scope
 
 
 class SemanticCheckFailed(Exception):
@@ -19,7 +19,7 @@ def validate_ast(tree: list[nodes.Node]) -> scope.Scope:
 	return global_scope
 
 
-class Evaluator:
+class Validator:
 	scope: scope.Scope
 
 	def __init__(self, tree: list[nodes.Node]):

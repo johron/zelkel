@@ -1,6 +1,6 @@
 from src.zelkelc.lexer.tokenizer import lex
 from src.zelkelc.ast.parser import Parser
-from src.zelkelc.evaluator.evaluator import Evaluator
+from src.zelkelc.validator.validator import Validator
 from src.zelkelc.codegen.codegen import Codegen
 
 import rich
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     ast = parser.parse()
     rich.print(ast)
     
-    Evaluator(ast)
+    Validator(ast)
     
     codegen = Codegen(ast)
     ir = codegen.generate()
