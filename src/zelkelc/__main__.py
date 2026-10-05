@@ -6,23 +6,8 @@ from src.zelkelc.codegen.codegen import Codegen
 import rich
 
 source = """
-struct MyStruct {
-    val test: i64
-}
-
-//test
-class MyClass {
-    val immutable_value: i64
-    var mutable_value: i64
-    
-    fn function(test: i64, test2: i64) -> i64 {
-        return 12 * "sd"
-    }
-}
-
 fn main() -> i64 {
-    val test: i64 = 16
-    var test2: i64 = test
+    val test: i64 = 10 + (5 * 5)
     return 0
 }
 """

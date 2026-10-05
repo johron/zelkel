@@ -1,5 +1,4 @@
-import src.zelkelc.ast.nodes as nodes
-import src.zelkelc.ast.values as values
+import src.zelkelc.ast.types as types
 
 class IRTable:
     structs: str
@@ -12,21 +11,23 @@ class IRTable:
         self.global_functions = ""
 
 class Codegen:
-    ast: list[nodes.FunctionDeclaration | nodes.ClassDeclaration]
+    ast: list[types.FunctionDeclaration | types.ClassDeclaration]
     ir: IRTable
+    temp_counter: int
     
-    def __init__(self, ast: list[nodes.FunctionDeclaration | nodes.ClassDeclaration]):
+    def __init__(self, ast: list[types.FunctionDeclaration | types.ClassDeclaration]):
         self.ast = ast
         self.ir = IRTable()
+        self.temp_counter = 0
         
     def generate(self):
         for node in self.ast:
             match node:
-                case nodes.StructDeclaration():
+                case types.StructDeclaration():
                     self.gen_struct_declaration(node)
-                case nodes.ClassDeclaration():
+                case types.ClassDeclaration():
                     self.gen_class_declaration(node)
-                case nodes.FunctionDeclaration():
+                case types.FunctionDeclaration():
                     self.ir.global_functions += self.gen_function_declaration(node)
                 case _:
                     print(f"Invalid node found during codegen {type(node)}")
@@ -34,14 +35,14 @@ class Codegen:
         
         return self.ir.structs + "\n" + self.ir.struct_functions + "\n" + self.ir.global_functions
     
-    def gen_struct_declaration(self, node: nodes.StructDeclaration):
+    def gen_struct_declaration(self, node: types.StructDeclaration):
         members_str = ""
         for i, m in enumerate(node.members):
             members_str += f"{", " if i != 0 else ""}{m.typ.to_llvm()}"
 
         self.ir.structs += f"\n%{node.real_name} = type " + "{ " + members_str + " }"
 
-    def gen_class_declaration(self, node: nodes.ClassDeclaration):
+    def gen_class_declaration(self, node: types.ClassDeclaration):
         members_str = ""
         for i, m in enumerate(node.members):
             members_str += f"{", " if i != 0 else ""}{m.typ.to_llvm()}"
@@ -51,7 +52,7 @@ class Codegen:
         for func in node.methods:
             self.ir.struct_functions += self.gen_function_declaration(func)
     
-    def gen_function_declaration(self, node: nodes.FunctionDeclaration) -> str:
+    def gen_function_declaration(self, node: types.FunctionDeclaration) -> str:
         args_str = ""
         for i, (name, typ) in enumerate(node.args.items()):
             args_str += f"{", " if i != 0 else ""}{typ.to_llvm()} %{name}"
@@ -61,20 +62,77 @@ class Codegen:
         
         for child_node in node.body:
             match child_node:
-                case nodes.ValueDeclaration():
+                case types.ValueDeclaration():
                     ir += self.gen_value_declaration(child_node)
                 case _:
                     continue
         
         return ir + "\n}"
     
-    def gen_value_declaration(self, node: nodes.ValueDeclaration) -> str:
-        ir = "\n"
+    def gen_value_declaration(self, node: types.ValueDeclaration) -> str:
+        ir = ""
         
-        if node.mutable == True: # TODO: both are hardcoded to just put int: 16
-            ir += f"%{node.real_name} = alloca {node.typ.to_llvm()}, align 8" # TODO: this would only work for i64s, just testing
-            ir += f"\nstore {node.typ.to_llvm()} 16, {node.typ.to_llvm()}* %{node.real_name}, align 8"
-        else:
-            ir += f"%{node.real_name} = add {node.typ.to_llvm()} 16, 0"
+        count, expr = self.gen_expression(node.expr)
+        ir += expr
+        
+        match node.typ:
+            case types.Integer64:
+                if node.mutable == True:
+                    ir += f"\n%{node.real_name} = alloca i64, align 8" # TODO: this would only work for i64s, just testing
+                    ir += f"\nstore i64 %{count}, i64* %{node.real_name}, align 8"
+                else:
+                    ir += f"\n%{node.real_name} = add i64 %{count}, 0" 
+            case _:
+                print(f"gen_value_declaration() for {type(node.typ)} is unimplemented")
+                exit(1)
             
         return ir
+    
+    def gen_expression(self, node: types.Expression) -> tuple[int, str]:
+        ir = ""
+        
+        match type(node):
+            case types.BinaryExpression:
+                left_count, left = self.gen_expression(node.left)
+                right_count, right = self.gen_expression(node.right)
+                
+                ir += left + right
+                        
+                #match type(node.left.): # TODO: need to know the value type of the expresison here...
+                #    case types.Integer64:
+                op = ""          
+                match node.op:
+                    case '+':
+                        op = "add"
+                    case '-':
+                        op = "sub"
+                    case '*':
+                        op = "mul"
+                    case '/':
+                        print("gen_expression() for BinaryExpression for operator '/' is unimplemented")
+                        exit(1)
+                    case _:
+                        print(f"gen_expression() for BinaryExpression for operator '{node.op}' is unimplemented")
+                        exit(1)
+                        
+                ir += f"\n%{self.temp_counter} = {op} i64 %{left_count}, %{right_count}"
+                self.temp_counter += 1
+                #    case _:
+                #        print(f"gen_expression() for PrimaryExpression for {type(node.value)}")
+                #        exit(1)
+            case types.UnaryExpression:
+                print("gen_expression() for UnaryExpression unimplemented")
+                exit(1)
+            case types.PrimaryExpression:
+                match type(node.value):
+                    case types.Integer64:
+                        ir += f"\n%{self.temp_counter} = add i64 {node.value.value}, 0"
+                        self.temp_counter += 1
+                    case _:
+                        print(f"gen_expression() for PrimaryExpression for {type(node.value)}")
+                        exit(1)
+            case _:
+                print(f"Invalid expression types found during codegen: {node}")
+                exit(1)
+
+        return self.temp_counter - 1, ir

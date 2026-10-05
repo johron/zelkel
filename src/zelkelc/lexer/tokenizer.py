@@ -15,13 +15,16 @@ def lex(source: str) -> list[token.Token]:
         elif c.isnumeric():
             i += 1
             
-            integer = int(c)
+            integer = c
             for _, integer_c in enumerate(source[i:]):
+                if integer_c == '_':
+                    i += 1
+                    continue
                 if not integer_c.isnumeric():
                     break
                 i += 1
-                integer += int(integer_c)
-            tokens.append(token.Integer(integer))
+                integer += integer_c
+            tokens.append(token.Integer(int(integer)))
         elif c.isalpha() or c == '_':
             i += 1
             

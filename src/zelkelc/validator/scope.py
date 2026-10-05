@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import src.zelkelc.ast.values as values
-import src.zelkelc.ast.nodes as nodes
+import src.zelkelc.ast.types as types
 from dataclasses import dataclass
 from typing import Optional
-
 
 @dataclass
 class SemanticError:
@@ -29,22 +27,22 @@ class FunctionSignature:
     name: str
     real_name: str
     static: bool
-    typ: values.Value
-    args: dict[str, values.Value]
+    typ: types.Value
+    args: dict[str, types.Value]
     
 @dataclass
-class ValueSignature:
+class typesignature:
     name: str
     real_name: str
     mutable: bool
-    typ: type[values.Integer64] | type[values.String] | type[values.Void]
+    typ: type[types.Integer64] | type[types.String] | type[types.Void]
     
 @dataclass
 class MemberSignature:
     name: str
     real_name: str
     mutable: bool
-    typ: type[values.Integer64] | type[values.String] | type[values.Void]
+    typ: type[types.Integer64] | type[types.String] | type[types.Void]
     member_idx: int
 
 
@@ -54,7 +52,7 @@ class Scope:
     classes: dict[str, ClassSignature]
     structs: dict[str, StructSignature]
     functions: dict[str, FunctionSignature]
-    variables: dict[str, ValueSignature]
+    variables: dict[str, typesignature]
 
     @staticmethod
     def root() -> Scope:
@@ -75,7 +73,7 @@ class Scope:
             variables = {},
         )
 
-    def resolve_variable(self, name: str) -> Optional[ValueSignature]:
+    def resolve_variable(self, name: str) -> Optional[typesignature]:
         current: Optional[Scope] = self
         while current is not None:
             if name in current.variables:
@@ -83,6 +81,30 @@ class Scope:
             current = current.parent
         return None
 
+    def resolve_function(self, scope_checker: ScopeChecker, name: str, args: list[types.Expression]) -> list[Optional[typesignature]]:
+        current: Optional[Scope] = self
+        while current is not None:
+            if name in current.functions:
+                func = current.functions[name]
+                arg_types = self.expr_args_to_arg_types(scope_checker, args)
+                if arg_types is None:
+                    return None
+                
+                if list(func.args.values()) == arg_types:
+                    return func
+            current = current.parent
+        return None
+
+    def expr_args_to_arg_types(self, scope_checker: ScopeChecker, args: list[types.Expression]) -> Optional[list[types.Value]]:
+        arg_types: list[types.Value] = []
+        for arg in args:
+            typ = scope_checker._infer_expression_type(arg, self)
+            if typ is None:
+                return None
+            
+            arg_types.append(typ)
+        
+        return arg_types
 
 class ScopeChecker:
     global_scope: Scope
@@ -92,27 +114,27 @@ class ScopeChecker:
         self.global_scope = Scope.root()
         self.errors = []
 
-    def check(self, tree: list[nodes.Node]) -> tuple[Scope, list[SemanticError]]:
+    def check(self, tree: list[types.Node]) -> tuple[Scope, list[SemanticError]]:
         self._collect_globals(tree)
 
         for top_level in tree:
             match top_level:
-                case nodes.FunctionDeclaration():
+                case types.FunctionDeclaration():
                     self._check_function(top_level, self.global_scope)
-                case nodes.ClassDeclaration():
+                case types.ClassDeclaration():
                     for method in top_level.methods:
                         self._check_function(method, self.global_scope)
-                case nodes.StructDeclaration():
+                case types.StructDeclaration():
                     continue
                 case _:
                     self._error(f"Unsupported top-level node: {type(top_level)}")
 
         return self.global_scope, self.errors
 
-    def _collect_globals(self, tree: list[nodes.Node]) -> None:
+    def _collect_globals(self, tree: list[types.Node]) -> None:
         for top_level in tree:
             match top_level:
-                case nodes.StructDeclaration(name=name, real_name=real_name, members=members):
+                case types.StructDeclaration(name=name, real_name=real_name, members=members):
                     if name in self.global_scope.structs:
                         self._error(f"Struct '{name}' is already declared")
                         continue
@@ -136,7 +158,7 @@ class ScopeChecker:
                         members=member_table,
                     )
 
-                case nodes.ClassDeclaration(name=name, real_name=real_name, members=members, methods=methods):
+                case types.ClassDeclaration(name=name, real_name=real_name, members=members, methods=methods):
                     if name in self.global_scope.classes:
                         self._error(f"Class '{name}' is already declared")
                         continue
@@ -174,7 +196,7 @@ class ScopeChecker:
                         methods = method_table,
                     )
 
-                case nodes.FunctionDeclaration(name=name, real_name=real_name, typ=typ, args=args):
+                case types.FunctionDeclaration(name=name, real_name=real_name, typ=typ, args=args):
                     if name in self.global_scope.functions:
                         self._error(f"Function '{name}' is already declared")
                         continue
@@ -190,14 +212,14 @@ class ScopeChecker:
                 case _:
                     self._error(f"Unsupported top-level node while collecting symbols: {type(top_level)}")
 
-    def _check_function(self, fn: nodes.FunctionDeclaration, enclosing_scope: Scope) -> None:
+    def _check_function(self, fn: types.FunctionDeclaration, enclosing_scope: Scope) -> None:
         function_scope = enclosing_scope.child()
 
         for arg_name, arg_type in fn.args.items():
             if arg_name in function_scope.variables:
                 self._error(f"Duplicate argument '{arg_name}' in function '{fn.name}'")
                 continue
-            function_scope.variables[arg_name] = ValueSignature(
+            function_scope.variables[arg_name] = typesignature(
                 name = arg_name,
                 real_name = arg_name,
                 mutable = False,
@@ -208,7 +230,7 @@ class ScopeChecker:
 
         for child in fn.body:
             match child:
-                case nodes.ValueDeclaration():
+                case types.ValueDeclaration():
                     if child.name in function_scope.variables:
                         self._error(f"Variable '{child.name}' is already defined in function '{fn.name}'")
                         continue
@@ -220,17 +242,17 @@ class ScopeChecker:
                             f"expected {self._type_name(child.typ)}, got {self._type_name(expression_type)}"
                         )
 
-                    function_scope.variables[child.name] = ValueSignature(
+                    function_scope.variables[child.name] = typesignature(
                         name = child.name,
                         real_name = child.real_name,
                         mutable = child.mutable,
                         typ = child.typ,
                     )
 
-                case nodes.ReturnStatement():
+                case types.ReturnStatement():
                     has_return = True
                     if child.expr is None:
-                        if fn.typ is not values.Void:
+                        if fn.typ is not types.Void:
                             self._error(f"Function '{fn.name}' must return {self._type_name(fn.typ)}")
                         continue
 
@@ -238,7 +260,7 @@ class ScopeChecker:
                     if return_type is None:
                         continue
 
-                    if fn.typ is values.Void:
+                    if fn.typ is types.Void:
                         self._error(f"Function '{fn.name}' returns a value, but return type is void")
                         continue
 
@@ -248,7 +270,7 @@ class ScopeChecker:
                             f"expected {self._type_name(fn.typ)}, got {self._type_name(return_type)}"
                         )
 
-                case nodes.FunctionDeclaration():
+                case types.FunctionDeclaration():
                     if child.name in function_scope.functions:
                         self._error(f"Nested function '{child.name}' is already defined in '{fn.name}'")
                     else:
@@ -264,32 +286,38 @@ class ScopeChecker:
                 case _:
                     self._error(f"Unsupported node in function '{fn.name}': {type(child)}")
 
-        if not has_return and fn.typ is not values.Void:
+        if not has_return and fn.typ is not types.Void:
             self._error(f"Function '{fn.name}' has no return statement")
 
-    def _infer_expression_type(self, expr: nodes.Expression, active_scope: Scope) -> Optional[type[values.Integer64] | type[values.String] | type[values.Void]]:
+    def _infer_expression_type(self, expr: types.Expression, active_scope: Scope) -> Optional[type[types.Integer64] | type[types.String] | type[types.Void]]:
         match expr:
-            case nodes.PrimaryExpression(value=values.Integer64()):
-                return values.Integer64
-            case nodes.PrimaryExpression(value=values.String()):
-                return values.String
-            case nodes.PrimaryExpression(value=values.Variable(name=name)):
+            case types.PrimaryExpression(types.Integer64()):
+                return types.Integer64
+            case types.PrimaryExpression(types.String()):
+                return types.String
+            case types.PrimaryExpression(types.VariableRef(name)):
                 signature = active_scope.resolve_variable(name)
                 if signature is None:
                     self._error(f"Unknown variable '{name}'")
                     return None
                 return signature.typ
-            case nodes.UnaryExpression(expr=inner_expr, sign=sign):
+            case types.PrimaryExpression(types.FunctionCall(name, args)):
+                signature = active_scope.resolve_function(self, name, args)
+                if signature is None:
+                    self._error(f"Unknown function '{name}' with given argument signature")
+                    return None
+                return signature.typ
+            case types.UnaryExpression(expr=inner_expr, sign=sign):
                 inner_type = self._infer_expression_type(inner_expr, active_scope)
                 if inner_type is None:
                     return None
-                if sign in ("+", "-") and inner_type is not values.Integer64:
+                if sign in ("+", "-") and inner_type is not types.Integer64:
                     self._error(
                         f"Unary operator '{sign}' expects i64, got {self._type_name(inner_type)}"
                     )
                     return None
                 return inner_type
-            case nodes.BinaryExpression(left=left, right=right, op=op):
+            case types.BinaryExpression(left=left, right=right, op=op):
                 left_type = self._infer_expression_type(left, active_scope)
                 right_type = self._infer_expression_type(right, active_scope)
                 if left_type is None or right_type is None:
@@ -300,12 +328,12 @@ class ScopeChecker:
                         f"{self._type_name(left_type)} vs {self._type_name(right_type)}"
                     )
                     return None
-                if left_type is not values.Integer64:
+                if left_type is not types.Integer64:
                     self._error(
                         f"Operator '{op}' currently only supports i64, got {self._type_name(left_type)}"
                     )
                     return None
-                return values.Integer64
+                return types.Integer64
             case _:
                 self._error(f"Unsupported expression type: {type(expr)}")
                 return None
@@ -314,11 +342,11 @@ class ScopeChecker:
         return self._type_token(left) == self._type_token(right)
 
     def _type_token(self, typ: object) -> str:
-        if typ is values.Integer64 or isinstance(typ, values.Integer64):
+        if typ is types.Integer64 or isinstance(typ, types.Integer64):
             return "i64"
-        if typ is values.String or isinstance(typ, values.String):
+        if typ is types.String or isinstance(typ, types.String):
             return "str"
-        if typ is values.Void or isinstance(typ, values.Void):
+        if typ is types.Void or isinstance(typ, types.Void):
             return "void"
         return str(typ)
 
