@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 
 from dataclasses import dataclass
 import src.zelkelc.ast.values as values
@@ -44,7 +43,7 @@ class FunctionDeclaration:
 class ReturnStatement:
     expr: Expression | None
 
-Node = ClassDeclaration | ValueDeclaration | FunctionDeclaration
+Node = ClassDeclaration | ValueDeclaration | FunctionDeclaration | StructDeclaration
 
 @dataclass
 class BinaryExpression:

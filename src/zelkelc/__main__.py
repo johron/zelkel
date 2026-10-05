@@ -1,5 +1,6 @@
 from src.zelkelc.lexer.tokenizer import lex
 from src.zelkelc.ast.parser import Parser
+from src.zelkelc.evaluator.evaluator import Evaluator
 from src.zelkelc.codegen.codegen import Codegen
 
 import rich
@@ -14,14 +15,14 @@ class MyClass {
     val immutable_value: i64
     var mutable_value: i64
     
-    fn function(test: i64, test2: i64) -> void {
-        return 0
+    fn function(test: i64, test2: i64) -> i64 {
+        return 12 * "sd"
     }
 }
 
 fn main() -> i64 {
     val test: i64 = 16
-    var test2: i64 = 2
+    var test2: i64 = test
     return 0
 }
 """
@@ -32,6 +33,8 @@ if __name__ == "__main__":
     parser = Parser(tokens, 0)
     ast = parser.parse()
     rich.print(ast)
+    
+    Evaluator(ast)
     
     codegen = Codegen(ast)
     ir = codegen.generate()

@@ -1,13 +1,11 @@
 import src.zelkelc.lexer.token as token
 import src.zelkelc.ast.nodes as nodes
 import src.zelkelc.ast.values as values
-import src.zelkelc.ast.scope as scope
 
 class Parser:
     tokens: list[token.Token]
     cursor: int
-    scopes: list[scope.Scope]
-    
+        
     def __init__(self, tokens: list[token.Token], cursor: int):
         self.tokens = tokens
         self.cursor = cursor
@@ -167,9 +165,6 @@ class Parser:
         args: dict[str, values.Value] = {}
         while self.cursor < len(self.tokens) and not self.current(token.RParen()):
             arg_name = self.expect_type(token.Identifier).value
-            if arg_name in args:
-                print(f"Cannot define argument {arg_name} twice")
-                exit(1)
             
             self.expect(token.Colon())
             typ = self.parse_type(False)
