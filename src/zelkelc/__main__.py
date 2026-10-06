@@ -6,8 +6,13 @@ from src.zelkelc.codegen.codegen import Codegen
 import rich
 
 source = """
+class String {
+    value: str
+}
+
 fn main() -> i64 {
-    val test: i64 = 10 + (5 * 5)
+    val a: i64 = 1
+    val test: i64 = 74 + 123 * (2+3 * 4)
     return 0
 }
 """

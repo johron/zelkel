@@ -1,6 +1,8 @@
 import src.zelkelc.lexer.token as token
 import src.zelkelc.ast.types as types
 
+from typing import Optional
+
 class Parser:
     tokens: list[token.Token]
     cursor: int
@@ -229,7 +231,12 @@ class Parser:
         self.expect(token.Identifier("return"))
         
         # TODO: if there is an expression then check for add it?
-        expr = self.parse_expression()
+    
+        expr: Optional[types.Expression] = None    
+        if not self.current(token.RBrace()):
+            expr = self.parse_expression()
+
+        print(expr)
         
         return types.ReturnStatement(
             expr
@@ -292,7 +299,7 @@ class Parser:
 
         return self.parse_primary_expression()
 
-    def parse_primary_expression(self) -> types.Expression:
+    def parse_primary_expression(self) -> Optional[types.Expression]:
         t = self.tokens[self.cursor]
 
         match t:
@@ -327,8 +334,7 @@ class Parser:
                 return expr
 
             case _:
-                print(f"Unexpected token in primary expression: {t}")
-                exit(1)
+                return None
 
     def _operator_precedence(self, op: str) -> int:
         table = {

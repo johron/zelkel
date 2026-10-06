@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 @dataclass
 class ClassDeclaration:
@@ -40,7 +41,7 @@ class FunctionDeclaration:
     
 @dataclass
 class ReturnStatement:
-    expr: Expression | None
+    expr: Optional[Expression]
 
 Node = ClassDeclaration | ValueDeclaration | FunctionDeclaration | StructDeclaration
 
